@@ -1,19 +1,27 @@
+
 import streamlit as st
 import pandas as pd
+import io
+import re
+import textwrap
 from decimal import Decimal, ROUND_HALF_UP
 
 # ===========================================================================
 # 1. מנוע חישוב פיננסי מדויק על האגורה (Exact Scientific Decimal Engine)
 # ===========================================================================
 class FinancialEngineException(Exception):
+    """שגיאה במידה ומנוע החישוב הפיננסי לא מאומת"""
     pass
 
 class ExactScientificDecimalEngine:
+    """מנוע חישוב מדעי/פיננסי מדויק ברמת האגורה"""
+    
     @staticmethod
     def verify_engine_status() -> bool:
+        """אימות תקינות מנוע החישוב המתמטי"""
         try:
             test_val = Decimal('100.005').quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            return test_val == Decimal('101.00') or test_val == Decimal('100.01')
+            return test_val == Decimal('100.01') or test_val == Decimal('101.00')
         except Exception:
             return False
 
@@ -27,6 +35,7 @@ class ExactScientificDecimalEngine:
 
     @classmethod
     def calculate_tax_breakdown(cls, gross: Decimal, credit_points: Decimal) -> dict:
+        """חישוב מדרגות מס הכנסה מעודכן 2026 עם פירוט מתמטי"""
         credit_point_value = cls.to_dec('242.00')
         brackets = [
             (cls.to_dec('7010.00'), cls.to_dec('0.10'), "10%"),
@@ -36,6 +45,7 @@ class ExactScientificDecimalEngine:
             (cls.to_dec('46690.00'), cls.to_dec('0.35'), "35%"),
             (None, cls.to_dec('0.47'), "47%")
         ]
+
         tax_before_credit = cls.to_dec('0.00')
         remaining = gross
         prev_limit = cls.to_dec('0.00')
@@ -47,6 +57,7 @@ class ExactScientificDecimalEngine:
                 tax_before_credit += tax_in_bracket
                 steps.append(f"מדרגה {label} (מעל ₪{prev_limit:,.2f}): ₪{remaining:,.2f} × {label} = ₪{tax_in_bracket:,.2f}")
                 break
+            
             bracket_size = upper_limit - prev_limit
             if remaining > bracket_size:
                 tax_in_bracket = cls.to_dec(bracket_size * rate)
@@ -62,6 +73,7 @@ class ExactScientificDecimalEngine:
 
         credit_discount = cls.to_dec(credit_points * credit_point_value)
         final_tax = cls.to_dec(max(cls.to_dec('0.00'), tax_before_credit - credit_discount))
+        
         return {
             "tax_before_credit": tax_before_credit,
             "credit_discount": credit_discount,
@@ -71,9 +83,11 @@ class ExactScientificDecimalEngine:
 
     @classmethod
     def calculate_ni_breakdown(cls, gross: Decimal) -> dict:
+        """חישוב ביטוח לאומי ומס בריאות 2026"""
         threshold = cls.to_dec('7522.00')
         rate_low = cls.to_dec('0.035')
         rate_high = cls.to_dec('0.12')
+
         if gross <= threshold:
             ni = cls.to_dec(gross * rate_low)
             details = f"שיעור מופחת (3.5% עד ₪7,522): ₪{gross:,.2f} × 3.5% = ₪{ni:,.2f}"
@@ -82,99 +96,98 @@ class ExactScientificDecimalEngine:
             high_part = cls.to_dec((gross - threshold) * rate_high)
             ni = cls.to_dec(low_part + high_part)
             details = f"שיעור מופחת (3.5%): ₪{low_part:,.2f} | שיעור מלא (12% מעל ₪7,522): ₪{high_part:,.2f}"
+
         return {"ni_total": ni, "details": details}
 
 # ===========================================================================
-# 2. מחולל כרטיסיית תלוש משכורת מעוצבת ומודפסת (Visual Paystub Card)
+# 2. מחולל ותצוגת תלושי משכורת ויזואליים (Visual Paystub Rendering)
 # ===========================================================================
 def render_visual_paystub(emp_data: dict, template_name: str = "תבנית רשמית"):
+    """הצגת תלוש משכורת רשמי מעוצב ונקי ללא בעיות הזנה ב-Markdown"""
     tot_ded = emp_data['tax_info']['final_tax'] + emp_data['ni_info']['ni_total'] + emp_data['pension']
     pension_employer = ExactScientificDecimalEngine.to_dec(emp_data['gross'] * Decimal('0.065'))
     severance_employer = ExactScientificDecimalEngine.to_dec(emp_data['gross'] * Decimal('0.06'))
     
-    st.markdown(f"""
-    <div style="border: 2px solid #1E3A8A; border-radius: 10px; padding: 20px; background-color: #FFFFFF; font-family: Arial, sans-serif; direction: rtl; text-align: right; margin-top: 15px; margin-bottom: 20px; box-shadow: 0px 4px 12px rgba(0,0,0,0.08);">
-        
-        <div style="background-color: #1E3A8A; color: white; padding: 12px; border-radius: 6px; text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 15px;">
-            📄 תלוש משכורת רשמי — שנת מס 2026 ({template_name})
-        </div>
-        
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px;">
-            <tr style="background-color: #F3F4F6;">
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>שם העובד:</b> {emp_data['name']}</td>
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>תעודת זהות:</b> {emp_data['id']}</td>
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>חודש שכר:</b> ספטמבר 2026</td>
-            </tr>
-            <tr>
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>נקודות זיכוי מס:</b> {emp_data.get('credit_pts', '2.25')}</td>
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>תקן שעות:</b> 182 שעות</td>
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>סטטוס:</b> <span style="color: green; font-weight: bold;">מאושר ע"י חשב שכר</span></td>
-            </tr>
-        </table>
-        
-        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 280px;">
-                <h4 style="color: #1E3A8A; margin-bottom: 8px; border-bottom: 2px solid #1E3A8A; padding-bottom: 4px;">📈 פירוט רכיבי שכר (ברוטו)</h4>
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                    <tr style="background-color: #EFF6FF;">
-                        <th style="padding: 6px; border: 1px solid #CBD5E1; text-align: right;">רכיב</th>
-                        <th style="padding: 6px; border: 1px solid #CBD5E1; text-align: left;">סכום (₪)</th>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px; border: 1px solid #E2E8F0;">שכר בסיס (יסוד)</td>
-                        <td style="padding: 6px; border: 1px solid #E2E8F0; text-align: left;">₪{emp_data['base']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px; border: 1px solid #E2E8F0;">גמול שעות נוספות (125%/150%)</td>
-                        <td style="padding: 6px; border: 1px solid #E2E8F0; text-align: left;">₪{emp_data['ot_pay']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px; border: 1px solid #E2E8F0;">בונוס / עמלות ותוספות</td>
-                        <td style="padding: 6px; border: 1px solid #E2E8F0; text-align: left;">₪{emp_data['bonus']:,.2f}</td>
-                    </tr>
-                    <tr style="background-color: #DBEAFE; font-weight: bold;">
-                        <td style="padding: 8px; border: 1px solid #93C5FD;">סה"כ שכר ברוטו לתשלום</td>
-                        <td style="padding: 8px; border: 1px solid #93C5FD; text-align: left;">₪{emp_data['gross']:,.2f}</td>
-                    </tr>
-                </table>
-            </div>
-            
-            <div style="flex: 1; min-width: 280px;">
-                <h4 style="color: #991B1B; margin-bottom: 8px; border-bottom: 2px solid #991B1B; padding-bottom: 4px;">📉 ניכויי חובה וסוציאליים</h4>
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                    <tr style="background-color: #FEF2F2;">
-                        <th style="padding: 6px; border: 1px solid #FCA5A5; text-align: right;">ניכוי</th>
-                        <th style="padding: 6px; border: 1px solid #FCA5A5; text-align: left;">סכום (₪)</th>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px; border: 1px solid #FEE2E2;">מס הכנסה (לאחר נ"ז)</td>
-                        <td style="padding: 6px; border: 1px solid #FEE2E2; text-align: left;">₪{emp_data['tax_info']['final_tax']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px; border: 1px solid #FEE2E2;">דמי ביטוח לאומי ומס בריאות</td>
-                        <td style="padding: 6px; border: 1px solid #FEE2E2; text-align: left;">₪{emp_data['ni_info']['ni_total']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 6px; border: 1px solid #FEE2E2;">הפרשת פנסיה עובד (6.0%)</td>
-                        <td style="padding: 6px; border: 1px solid #FEE2E2; text-align: left;">₪{emp_data['pension']:,.2f}</td>
-                    </tr>
-                    <tr style="background-color: #FEE2E2; font-weight: bold;">
-                        <td style="padding: 8px; border: 1px solid #FCA5A5;">סה"כ ניכויי חובה</td>
-                        <td style="padding: 8px; border: 1px solid #FCA5A5; text-align: left;">₪{tot_ded:,.2f}</td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-        
-        <div style="margin-top: 15px; background-color: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px; border-radius: 6px; font-size: 12px;">
-            <b>🛡️ הפרשות מעסיק:</b> פנסיה מעסיק (6.5%): ₪{pension_employer:,.2f} | פיצויים מעסיק (6.0%): ₪{severance_employer:,.2f}
-        </div>
-        
-        <div style="margin-top: 15px; background-color: #10B981; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold;">
-            💵 שכר נטו לתשלום לחשבון הבנק: ₪{emp_data['net']:,.2f}
-        </div>
+    # שימוש ב-textwrap.dedent למניעת פרשנות מוטעית ב-Markdown
+    html_code = textwrap.dedent(f"""
+    <div style="border: 2px solid #1E3A8A; border-radius: 10px; padding: 20px; background-color: #FFFFFF; direction: rtl; text-align: right; margin-top: 15px; margin-bottom: 20px; font-family: system-ui, -apple-system, sans-serif;">
+    <div style="background-color: #1E3A8A; color: white; padding: 12px; border-radius: 6px; text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 15px;">
+    📄 תלוש משכורת רשמי - שנת מס 2026 ({template_name})
     </div>
-    """, unsafe_allow_html=True)
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px; direction: rtl;">
+    <tr style="background-color: #F3F4F6;">
+    <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>שם העובד:</b> {emp_data['name']}</td>
+    <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>תעודת זהות:</b> {emp_data['id']}</td>
+    <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>חודש שכר:</b> ספטמבר 2026</td>
+    </tr>
+    <tr>
+    <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>נקודות זיכוי מס:</b> {emp_data.get('credit_pts', '2.25')}</td>
+    <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>תקן שעות:</b> 182 שעות</td>
+    <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>סטטוס:</b> <span style="color: #059669; font-weight: bold;">מאושר (Human-in-the-Loop)</span></td>
+    </tr>
+    </table>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 280px;">
+    <h4 style="color: #1E3A8A; margin-bottom: 8px; border-bottom: 2px solid #1E3A8A; padding-bottom: 4px;">📈 פירוט רכיבי שכר (ברוטו)</h4>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <tr style="background-color: #EFF6FF;">
+    <th style="padding: 6px; border: 1px solid #CBD5E1; text-align: right;">רכיב</th>
+    <th style="padding: 6px; border: 1px solid #CBD5E1; text-align: left;">סכום (₪)</th>
+    </tr>
+    <tr>
+    <td style="padding: 6px; border: 1px solid #E2E8F0;">שכר בסיס (יסוד)</td>
+    <td style="padding: 6px; border: 1px solid #E2E8F0; text-align: left;">₪{emp_data['base']:,.2f}</td>
+    </tr>
+    <tr>
+    <td style="padding: 6px; border: 1px solid #E2E8F0;">גמול שעות נוספות (125%/150%)</td>
+    <td style="padding: 6px; border: 1px solid #E2E8F0; text-align: left;">₪{emp_data['ot_pay']:,.2f}</td>
+    </tr>
+    <tr>
+    <td style="padding: 6px; border: 1px solid #E2E8F0;">בונוס / עמלות ותוספות</td>
+    <td style="padding: 6px; border: 1px solid #E2E8F0; text-align: left;">₪{emp_data['bonus']:,.2f}</td>
+    </tr>
+    <tr style="background-color: #DBEAFE; font-weight: bold;">
+    <td style="padding: 8px; border: 1px solid #93C5FD;">סה"כ שכר ברוטו לתשלום</td>
+    <td style="padding: 8px; border: 1px solid #93C5FD; text-align: left;">₪{emp_data['gross']:,.2f}</td>
+    </tr>
+    </table>
+    </div>
+    <div style="flex: 1; min-width: 280px;">
+    <h4 style="color: #991B1B; margin-bottom: 8px; border-bottom: 2px solid #991B1B; padding-bottom: 4px;">📉 ניכויי חובה וסוציאליים</h4>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <tr style="background-color: #FEF2F2;">
+    <th style="padding: 6px; border: 1px solid #FCA5A5; text-align: right;">ניכוי</th>
+    <th style="padding: 6px; border: 1px solid #FCA5A5; text-align: left;">סכום (₪)</th>
+    </tr>
+    <tr>
+    <td style="padding: 6px; border: 1px solid #FEE2E2;">מס הכנסה (לאחר נ"ז)</td>
+    <td style="padding: 6px; border: 1px solid #FEE2E2; text-align: left;">₪{emp_data['tax_info']['final_tax']:,.2f}</td>
+    </tr>
+    <tr>
+    <td style="padding: 6px; border: 1px solid #FEE2E2;">דמי ביטוח לאומי ומס בריאות</td>
+    <td style="padding: 6px; border: 1px solid #FEE2E2; text-align: left;">₪{emp_data['ni_info']['ni_total']:,.2f}</td>
+    </tr>
+    <tr>
+    <td style="padding: 6px; border: 1px solid #FEE2E2;">הפרשת פנסיה עובד (6.0%)</td>
+    <td style="padding: 6px; border: 1px solid #FEE2E2; text-align: left;">₪{emp_data['pension']:,.2f}</td>
+    </tr>
+    <tr style="background-color: #FEE2E2; font-weight: bold;">
+    <td style="padding: 8px; border: 1px solid #FCA5A5;">סה"כ ניכויי חובה</td>
+    <td style="padding: 8px; border: 1px solid #FCA5A5; text-align: left;">₪{tot_ded:,.2f}</td>
+    </tr>
+    </table>
+    </div>
+    </div>
+    <div style="margin-top: 15px; background-color: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px; border-radius: 6px; font-size: 12px;">
+    <b>🛡️ הפרשות מעסיק:</b> פנסיה מעסיק (6.5%): ₪{pension_employer:,.2f} | פיצויים מעסיק (6.0%): ₪{severance_employer:,.2f}
+    </div>
+    <div style="margin-top: 15px; background-color: #059669; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold;">
+    💵 שכר נטו לתשלום לחשבון הבנק: ₪{emp_data['net']:,.2f}
+    </div>
+    </div>
+    """).strip()
+    
+    st.markdown(html_code, unsafe_allow_html=True)
 
 # ===========================================================================
 # 3. זיהוי חריגות AI
@@ -205,7 +218,7 @@ def detect_anomalies(row) -> list:
 st.set_page_config(page_title="Autonomous AI Payroll Engine", page_icon="🤖", layout="wide")
 
 st.title("🤖 אפליקציית חישוב שכר אוטונומית (AI Payroll)")
-st.caption("מנוע חישוב מדעי מדויק | התאמת תלוש לפי תבנית החברה | הנפקת תלושים | שליחה לחשב")
+st.caption("מנוע חישוב מדעי מדויק | התאמת תלוש לפי תבנית החברה | הנפקת תלושים ויזואליים | שליחה לחשב")
 st.markdown("---")
 
 engine_active = ExactScientificDecimalEngine.verify_engine_status()
