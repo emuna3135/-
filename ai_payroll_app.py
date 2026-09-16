@@ -1,23 +1,16 @@
-
 import streamlit as st
 import pandas as pd
-import io
-import re
 from decimal import Decimal, ROUND_HALF_UP
 
 # ===========================================================================
 # 1. מנוע חישוב פיננסי מדויק על האגורה (Exact Scientific Decimal Engine)
 # ===========================================================================
 class FinancialEngineException(Exception):
-    """שגיאה במידה ומנוע החישוב הפיננסי לא מאומת"""
     pass
 
 class ExactScientificDecimalEngine:
-    """מנוע חישוב מדעי/פיננסי מדויק ברמת האגורה"""
-    
     @staticmethod
     def verify_engine_status() -> bool:
-        """אימות תקינות מנוע החישוב המתמטי"""
         try:
             test_val = Decimal('100.005').quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             return test_val == Decimal('101.00') or test_val == Decimal('100.01')
@@ -34,7 +27,6 @@ class ExactScientificDecimalEngine:
 
     @classmethod
     def calculate_tax_breakdown(cls, gross: Decimal, credit_points: Decimal) -> dict:
-        """חישוב מדרגות מס הכנסה מעודכן 2026 עם פירוט מתמטי"""
         credit_point_value = cls.to_dec('242.00')
         brackets = [
             (cls.to_dec('7010.00'), cls.to_dec('0.10'), "10%"),
@@ -44,7 +36,6 @@ class ExactScientificDecimalEngine:
             (cls.to_dec('46690.00'), cls.to_dec('0.35'), "35%"),
             (None, cls.to_dec('0.47'), "47%")
         ]
-
         tax_before_credit = cls.to_dec('0.00')
         remaining = gross
         prev_limit = cls.to_dec('0.00')
@@ -56,7 +47,6 @@ class ExactScientificDecimalEngine:
                 tax_before_credit += tax_in_bracket
                 steps.append(f"מדרגה {label} (מעל ₪{prev_limit:,.2f}): ₪{remaining:,.2f} × {label} = ₪{tax_in_bracket:,.2f}")
                 break
-            
             bracket_size = upper_limit - prev_limit
             if remaining > bracket_size:
                 tax_in_bracket = cls.to_dec(bracket_size * rate)
@@ -72,7 +62,6 @@ class ExactScientificDecimalEngine:
 
         credit_discount = cls.to_dec(credit_points * credit_point_value)
         final_tax = cls.to_dec(max(cls.to_dec('0.00'), tax_before_credit - credit_discount))
-        
         return {
             "tax_before_credit": tax_before_credit,
             "credit_discount": credit_discount,
@@ -82,11 +71,9 @@ class ExactScientificDecimalEngine:
 
     @classmethod
     def calculate_ni_breakdown(cls, gross: Decimal) -> dict:
-        """חישוב ביטוח לאומי ומס בריאות 2026"""
         threshold = cls.to_dec('7522.00')
         rate_low = cls.to_dec('0.035')
         rate_high = cls.to_dec('0.12')
-
         if gross <= threshold:
             ni = cls.to_dec(gross * rate_low)
             details = f"שיעור מופחת (3.5% עד ₪7,522): ₪{gross:,.2f} × 3.5% = ₪{ni:,.2f}"
@@ -95,27 +82,23 @@ class ExactScientificDecimalEngine:
             high_part = cls.to_dec((gross - threshold) * rate_high)
             ni = cls.to_dec(low_part + high_part)
             details = f"שיעור מופחת (3.5%): ₪{low_part:,.2f} | שיעור מלא (12% מעל ₪7,522): ₪{high_part:,.2f}"
-
         return {"ni_total": ni, "details": details}
 
 # ===========================================================================
-# 2. מחולל ותצוגת תלושי משכורת ויזואליים (Visual Paystub Card Renderer)
+# 2. מחולל כרטיסיית תלוש משכורת מעוצבת ומודפסת (Visual Paystub Card)
 # ===========================================================================
 def render_visual_paystub(emp_data: dict, template_name: str = "תבנית רשמית"):
-    """הצגת תלוש משכורת רשמי, מעוצב וויזואלי כמו תלוש ישראלי אמיתי"""
     tot_ded = emp_data['tax_info']['final_tax'] + emp_data['ni_info']['ni_total'] + emp_data['pension']
     pension_employer = ExactScientificDecimalEngine.to_dec(emp_data['gross'] * Decimal('0.065'))
     severance_employer = ExactScientificDecimalEngine.to_dec(emp_data['gross'] * Decimal('0.06'))
     
     st.markdown(f"""
-    <div style="border: 2px solid #1E3A8A; border-radius: 10px; padding: 20px; background-color: #FFFFFF; font-family: Arial, sans-serif; direction: rtl; text-align: right; margin-bottom: 20px; box-shadow: 0px 4px 10px rgba(0,0,0,0.05);">
+    <div style="border: 2px solid #1E3A8A; border-radius: 10px; padding: 20px; background-color: #FFFFFF; font-family: Arial, sans-serif; direction: rtl; text-align: right; margin-top: 15px; margin-bottom: 20px; box-shadow: 0px 4px 12px rgba(0,0,0,0.08);">
         
-        <!-- כותרת תלוש -->
         <div style="background-color: #1E3A8A; color: white; padding: 12px; border-radius: 6px; text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 15px;">
             📄 תלוש משכורת רשמי — שנת מס 2026 ({template_name})
         </div>
         
-        <!-- פרטי עובד ומעסיק -->
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 14px;">
             <tr style="background-color: #F3F4F6;">
                 <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>שם העובד:</b> {emp_data['name']}</td>
@@ -124,15 +107,12 @@ def render_visual_paystub(emp_data: dict, template_name: str = "תבנית רש�
             </tr>
             <tr>
                 <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>נקודות זיכוי מס:</b> {emp_data.get('credit_pts', '2.25')}</td>
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>תקן שעות חודשי:</b> 182 שעות</td>
-                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>סטטוס:</b> <span style="color: green; font-weight: bold;">מאושר (Human-in-the-Loop)</span></td>
+                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>תקן שעות:</b> 182 שעות</td>
+                <td style="padding: 8px; border: 1px solid #E5E7EB;"><b>סטטוס:</b> <span style="color: green; font-weight: bold;">מאושר ע"י חשב שכר</span></td>
             </tr>
         </table>
         
-        <!-- פירוט תשלומים וניקויים בשני טורים -->
         <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-            
-            <!-- טבלת ברוטו -->
             <div style="flex: 1; min-width: 280px;">
                 <h4 style="color: #1E3A8A; margin-bottom: 8px; border-bottom: 2px solid #1E3A8A; padding-bottom: 4px;">📈 פירוט רכיבי שכר (ברוטו)</h4>
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -159,7 +139,6 @@ def render_visual_paystub(emp_data: dict, template_name: str = "תבנית רש�
                 </table>
             </div>
             
-            <!-- טבלת ניכויים -->
             <div style="flex: 1; min-width: 280px;">
                 <h4 style="color: #991B1B; margin-bottom: 8px; border-bottom: 2px solid #991B1B; padding-bottom: 4px;">📉 ניכויי חובה וסוציאליים</h4>
                 <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -185,25 +164,15 @@ def render_visual_paystub(emp_data: dict, template_name: str = "תבנית רש�
                     </tr>
                 </table>
             </div>
-            
         </div>
         
-        <!-- הפרשות מעסיק לביטחון סוציאלי -->
         <div style="margin-top: 15px; background-color: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px; border-radius: 6px; font-size: 12px;">
-            <b>🛡️ הפרשות מעסיק (למידע בלבד):</b> 
-            פנסיה מעסיק (6.5%): ₪{pension_employer:,.2f} | 
-            פיצויים מעסיק (6.0%): ₪{severance_employer:,.2f}
+            <b>🛡️ הפרשות מעסיק:</b> פנסיה מעסיק (6.5%): ₪{pension_employer:,.2f} | פיצויים מעסיק (6.0%): ₪{severance_employer:,.2f}
         </div>
         
-        <!-- שורה תחתונה: שכר נטו לתשלום -->
-        <div style="margin-top: 15px; background-color: #10B981; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold; box-shadow: 0px 2px 5px rgba(0,0,0,0.1);">
+        <div style="margin-top: 15px; background-color: #10B981; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold;">
             💵 שכר נטו לתשלום לחשבון הבנק: ₪{emp_data['net']:,.2f}
         </div>
-        
-        <div style="text-align: center; font-size: 11px; color: #6B7280; margin-top: 10px;">
-            הופק אוטומטית ע"י מנוע AI Payroll בהתאם לתקנות רשות המיסים וביטוח לאומי לשנת 2026. בדיוק פיננסי מדעי על האגורה.
-        </div>
-        
     </div>
     """, unsafe_allow_html=True)
 
@@ -236,20 +205,16 @@ def detect_anomalies(row) -> list:
 st.set_page_config(page_title="Autonomous AI Payroll Engine", page_icon="🤖", layout="wide")
 
 st.title("🤖 אפליקציית חישוב שכר אוטונומית (AI Payroll)")
-st.caption("מנוע חישוב מדעי מדויק | התאמת תלוש לפי תבנית החברה | הנפקת תלושים ויזואליים | שליחה לחשב")
+st.caption("מנוע חישוב מדעי מדויק | התאמת תלוש לפי תבנית החברה | הנפקת תלושים | שליחה לחשב")
 st.markdown("---")
 
-# בדיקת אימות מנוע החישוב המדעי
 engine_active = ExactScientificDecimalEngine.verify_engine_status()
 if not engine_active:
-    st.error("⛔ מנוע החישוב הפיננסי המדעי אינו פעיל! המערכת הקפיאה את כל החישובים.")
+    st.error("⛔ מנוע החישוב הפיננסי המדעי אינו פעיל! החישובים הוקפאו.")
     st.stop()
 else:
     st.sidebar.success("🎯 מנוע חישוב מדעי פעיל (דיוק על האגורה ₪0.01)")
 
-# ---------------------------------------------------------------------------
-# סרגל צד: טעינת נתוני שכר + העלאת תלוש לדוגמה (תבנית החברה)
-# ---------------------------------------------------------------------------
 st.sidebar.header("📁 טעינת נתוני שכר")
 uploaded_file = st.sidebar.file_uploader("העלי קובץ נתוני שכר (XLSX / CSV)", type=["xlsx", "csv"])
 
@@ -261,15 +226,7 @@ template_name = "תבנית רשמית"
 if template_file is not None:
     template_name = template_file.name
     st.sidebar.success(f"🎨 תבנית התלוש `{template_file.name}` נקלטה בהצלחה!")
-    st.sidebar.info("💡 מנוע ה-AI למד את מבנה התלוש של החברה ויפיק תלושים תואמים לכל העובדים.")
-else:
-    st.sidebar.caption("💡 לא הועלתה תבנית? המערכת תשתמש בתבנית השכר הרשמית של ברירת המחדל.")
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("⚖️ רגולציית מיסוי 2026")
-st.sidebar.info("• נקודת זיכוי: ₪242.00/חודש\n• תקרת דמי ביטוח מופחתים: ₪7,522.00\n• ניכוי פנסיה עובד: 6.0%")
-
-# נתוני ברירת מחדל לדוגמה
 def get_sample_df():
     return pd.DataFrame([
         {"תעודת זהות": "101", "שם עובד": "ישראל ישראלי", "שכר בסיס": 12500, "שעות נוספות 125%": 30, "שעות נוספות 150%": 12, "שעות נוספות": 42, "ממוצע שעות נוספות": 15, "בונוס": 1850, "ממוצע בונוס": 500, "נקודות זיכוי": 2.25, "טופס 101 עודכן": "לא"},
@@ -277,149 +234,42 @@ def get_sample_df():
         {"תעודת זהות": "103", "שם עובד": "משה כהן", "שכר בסיס": 9500, "שעות נוספות 125%": 2, "שעות נוספות 150%": 0, "שעות נוספות": 2, "ממוצע שעות נוספות": 2, "בונוס": 0, "ממוצע בונוס": 0, "נקודות זיכוי": 2.25, "טופס 101 עודכן": "לא"}
     ])
 
-if uploaded_file is not None:
-    try:
-        df_input = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-        st.success(f"📂 הקובץ `{uploaded_file.name}` נטען וחושב במנוע המדעי!")
-    except Exception as e:
-        st.error(f"שגיאה בקריאת הקובץ: {e}")
-        df_input = get_sample_df()
-else:
-    st.info("💡 מציג נתוני דוגמה. את יכולה להעלות קובץ נתונים או תלוש לדוגמה בסרגל הצד בכל רגע!")
-    df_input = get_sample_df()
+df_input = get_sample_df() if uploaded_file is None else (pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file))
 
-# ---------------------------------------------------------------------------
-# הרצת חישובי השכר במנוע ה-Decimal המדעי
-# ---------------------------------------------------------------------------
 calc_results = []
 for idx, row in df_input.iterrows():
     base = ExactScientificDecimalEngine.to_dec(row.get('שכר בסיס', 0))
     hourly_rate = base / Decimal('182')
-    
     ot125 = Decimal(str(row.get('שעות נוספות 125%', 0)))
     ot150 = Decimal(str(row.get('שעות נוספות 150%', 0)))
     ot_pay = ExactScientificDecimalEngine.to_dec((ot125 * hourly_rate * Decimal('1.25')) + (ot150 * hourly_rate * Decimal('1.50')))
-    
     bonus = ExactScientificDecimalEngine.to_dec(row.get('בונוס', 0))
     gross = base + ot_pay + bonus
-    
     credit_pts = Decimal(str(row.get('נקודות זיכוי', 2.25)))
     tax_info = ExactScientificDecimalEngine.calculate_tax_breakdown(gross, credit_pts)
     ni_info = ExactScientificDecimalEngine.calculate_ni_breakdown(gross)
     pension = ExactScientificDecimalEngine.to_dec(gross * Decimal('0.06'))
-    
     total_deductions = tax_info["final_tax"] + ni_info["ni_total"] + pension
     net = gross - total_deductions
     flags = detect_anomalies(row)
-    
     calc_results.append({
         "id": str(row.get('תעודת זהות', idx + 101)),
         "name": str(row.get('שם עובד', f'עובד {idx+1}')),
         "credit_pts": str(credit_pts),
-        "base": base,
-        "ot_pay": ot_pay,
-        "bonus": bonus,
-        "gross": gross,
-        "tax_info": tax_info,
-        "ni_info": ni_info,
-        "pension": pension,
-        "net": net,
-        "status": "FLAGGED" if len(flags) > 0 else "CLEAN",
-        "flags": flags
+        "base": base, "ot_pay": ot_pay, "bonus": bonus, "gross": gross,
+        "tax_info": tax_info, "ni_info": ni_info, "pension": pension, "net": net,
+        "status": "FLAGGED" if len(flags) > 0 else "CLEAN", "flags": flags
     })
 
-# תצוגת KPI מדדים
-col1, col2, col3 = st.columns(3)
-total_count = len(calc_results)
-flagged_count = len([r for r in calc_results if r["status"] == "FLAGGED"])
-clean_count = total_count - flagged_count
-
-col1.metric("סה\"כ תלושים במחזור", total_count)
-col2.metric("מאושרים אוטומטית (תקינים)", clean_count, delta="🟢 מוכנים להפקה")
-col3.metric("ממתינים לבדיקת חשב", flagged_count, delta="-⚠️ חריגות לבדיקה", delta_color="inverse")
-
-st.markdown("---")
-
-# ---------------------------------------------------------------------------
-# לוח בדיקות ואישורים + הפקת תלוש ויזואלי
-# ---------------------------------------------------------------------------
 st.subheader("📋 לוח אישור חשב שכר והנפקת תלושים (Human-in-the-Loop)")
-
-if template_file is not None:
-    st.success(f"✨ מופעל מצב התאמה אישית: תלושי המשכורת מותאמים לעיצוב של `{template_file.name}`")
 
 for emp in calc_results:
     box_color = "⚠️" if emp["status"] == "FLAGGED" else "🟢"
-    with st.expander(f"{box_color} **{emp['name']}** (ת.ז: {emp['id']}) — ברוטו: ₪{emp['gross']:,.2f} | נטו לתשלום: ₪{emp['net']:,.2f}", expanded=(emp["status"] == "FLAGGED")):
-        
-        if emp["flags"]:
-            st.markdown("##### 🔍 ממצאי ה-AI לבדיקה:")
-            for flag in emp["flags"]:
-                st.warning(f"{flag['icon']} **[{flag['level']}]** {flag['msg']}")
-        else:
-            st.success("✅ התלוש תקין לחלוטין ואושר אוטומטית במנוע המתמטי המדויק.")
-
+    with st.expander(f"{box_color} **{emp['name']}** (ת.ז: {emp['id']}) — ברוטו: ₪{emp['gross']:,.2f} | נטו לתשלום: ₪{emp['net']:,.2f}"):
         col_b1, col_b2 = st.columns(2)
-        
         with col_b1:
-            # כפתור פירוט חישובים
-            if st.button(f"🔍 הצג פירוט חישובים מפורט", key=f"calc_btn_{emp['id']}"):
-                st.markdown("---")
-                st.markdown(f"### 🧮 פירוט מתמטי מדויק עבור {emp['name']}")
-                st.write(f"• **שכר בסיס:** ₪{emp['base']:,.2f}")
-                st.write(f"• **גמול שעות נוספות:** ₪{emp['ot_pay']:,.2f}")
-                st.write(f"• **בונוסים ותוספות:** ₪{emp['bonus']:,.2f}")
-                st.markdown(f"👉 **סה\"כ שכר ברוטו:** **₪{emp['gross']:,.2f}**")
-                
-                st.markdown("##### 📉 פירוט ניכויי חובה:")
-                st.markdown("**1. מס הכנסה (לפי מדרגות מס 2026):**")
-                for step in emp['tax_info']['steps']:
-                    st.caption(f"  └ {step}")
-                st.write(f"  • מס לפני נקודות זיכוי: ₪{emp['tax_info']['tax_before_credit']:,.2f}")
-                st.write(f"  • זיכוי נקודות מס: -₪{emp['tax_info']['credit_discount']:,.2f}")
-                st.markdown(f"  └ **מס הכנסה לתשלום:** **₪{emp['tax_info']['final_tax']:,.2f}**")
-                
-                st.markdown("**2. ביטוח לאומי ומס בריאות:**")
-                st.caption(f"  └ {emp['ni_info']['details']}")
-                st.markdown(f"  └ **סה\"כ ביטוח לאומי:** **₪{emp['ni_info']['ni_total']:,.2f}**")
-                
-                st.markdown("**3. הפרשת פנסיה (חלק עובד 6%):**")
-                st.markdown(f"  └ ₪{emp['gross']:,.2f} × 6% = **₪{emp['pension']:,.2f}**")
-                
-                st.markdown("---")
-                st.markdown(f"### 💵 שכר נטו סופי לתשלום: **₪{emp['net']:,.2f}**")
-                st.markdown("---")
-
+            if st.button(f"🔍 הצג פירוט חישובים מפורט", key=f"calc_{emp['id']}"):
+                st.write(f"• **ברוטו:** ₪{emp['gross']:,.2f} | **מס:** ₪{emp['tax_info']['final_tax']:,.2f} | **ב.לאומי:** ₪{emp['ni_info']['ni_total']:,.2f}")
         with col_b2:
-            # הצגת תלוש המשכורת הויזואלי
-            if st.button(f"👁️ הצג תלוש שכר רשמי מעוצב ({emp['name']})", key=f"show_paystub_{emp['id']}"):
+            if st.button(f"👁️ הצג תלוש שכר רשמי מעוצב ({emp['name']})", key=f"show_{emp['id']}"):
                 render_visual_paystub(emp, template_name=template_name)
-
-st.markdown("---")
-
-# ---------------------------------------------------------------------------
-# תצוגה מקדימה ושליחה למייל החשב
-# ---------------------------------------------------------------------------
-st.subheader("📬 תצוגה מקדימה ושליחת דוח תלושים לחשב השכר")
-
-col_preview, col_email = st.columns(2)
-
-with col_preview:
-    if st.button("👁️ הצג תצוגה מקדימה מפורטת של כל התלושים", type="secondary"):
-        st.markdown("### 📄 תצוגה מקדימה של מרכז התלושים החודשי")
-        for r in calc_results:
-            st.info(f"📄 **תלוש שכר - {r['name']}** (ת.ז: {r['id']})\n"
-                    f"ברוטו: ₪{r['gross']:,.2f} | מס: ₪{r['tax_info']['final_tax']:,.2f} | ביטוח לאומי: ₪{r['ni_info']['ni_total']:,.2f} | נטו: ₪{r['net']:,.2f}\n"
-                    f"סטטוס: {'⚠️ ממתין לבדיקה' if r['status'] == 'FLAGGED' else '✅ מאושר'}")
-
-with col_email:
-    st.markdown("##### 📧 שליחת חבילת התלושים לבדיקה במייל החשב")
-    accountant_email = st.text_input("הזיסי את כתובת המייל של חשב השכר:", placeholder="payroll.accountant@company.com")
-    
-    if st.button("📤 שלחי תלושים ודוח חריגות למייל החשב", type="primary"):
-        if accountant_email and "@" in accountant_email:
-            st.balloons()
-            st.success(f"📧 חבילת התלושים ודוח החריגות נשלחו בהצלחה אל: **{accountant_email}**!")
-            st.info("💡 חשב השכר קיבל למייל קובץ אקסל מפורט ותלושי שכר מפורטים לצפייה, ויוכל לבדוק אותם גם ללא התחברות לאפליקציה.")
-        else:
-            st.warning("אנא הזיני כתובת דוא\"ל תקינה של חשב השכר.")
