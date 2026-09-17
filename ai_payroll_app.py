@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,8 +11,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ===========================================================================
-# 🤖 אפליקציית חישוב שכר אוטונומית (v7.0 - שליחת תלוש HTML מעוצב במייל)
-# Autonomous AI Payroll App: Formatted HTML Paystub Email Delivery
+# 🤖 אפליקציית חישוב שכר אוטונומית (v8.0 - ללא אישור אוטומטי, אישור חשב בלבד)
+# Autonomous AI Payroll App: Strict Human-in-the-Loop (Zero Auto-Approval)
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
@@ -23,6 +24,12 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ניהול מצב אישורים/דחיות בזיכרון האפליקציה
+if "approved_stubs" not in st.session_state:
+    st.session_state.approved_stubs = set()
+if "rejected_stubs" not in st.session_state:
+    st.session_state.rejected_stubs = set()
 
 # ---------------------------------------------------------------------------
 # 2. מנוע חישוב פיננסי מדויק (Exact Decimal Financial Math Engine)
@@ -71,7 +78,7 @@ class AnomalyFlag:
     current_value: str
 
 class AIAnomalyDetector:
-    """סורק AI לזיהוי חריגות בשכר ובשעות נוספות לפני אישור החשב"""
+    """סורק AI לזיהוי חריגות בשכר ובשעות נוספות להצגה לחשב בלבד"""
     @staticmethod
     def scan_employee_payroll(emp_data: dict, historical_avg: dict) -> List[AnomalyFlag]:
         flags = []
@@ -232,7 +239,6 @@ def send_real_email(recipient_email: str, stub: CalculatedPaystub, sender_email:
         msg['To'] = recipient_email
         msg['Subject'] = f"📄 תלוש משכורת רשמי — {stub.emp_name} — ספטמבר 2026"
 
-        # גרסת HTML מעוצבת למציג המיילים (Gmail / Outlook)
         html_body = f"""
         <!DOCTYPE html>
         <html dir="rtl" lang="he">
@@ -255,7 +261,7 @@ def send_real_email(recipient_email: str, stub: CalculatedPaystub, sender_email:
                     <tr>
                         <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>נקודות זיכוי מס:</b> {stub.credit_points} נ"ז</td>
                         <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>תקן שעות:</b> 182 שעות</td>
-                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>סטטוס:</b> <span style="color: green; font-weight: bold;">מאושר AI</span></td>
+                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>אישור:</b> <span style="color: green; font-weight: bold;">אושר ע"י חשב שכר מוסמך</span></td>
                     </tr>
                 </table>
 
@@ -380,7 +386,7 @@ st.sidebar.success("🟢 מסונכרן לרגולציית 2026")
 # ===========================================================================
 
 st.title("🤖 אפליקציית חישוב שכר אוטונומית (AI Payroll)")
-st.caption("מערכת שכר חכמה: סורק ומחשבון בסרגל הצד | תלושים מעוצבים, חישוב מפורט לכל עובד ושליחה במייל במרכז")
+st.caption("המערכת מציגה ומחשבת בלבד — אישור כל תלוש מבוצע אך ורק ע\"י חשב שכר מוסמך (Human-in-the-Loop)")
 st.markdown("---")
 
 processor = PayrollProcessor()
@@ -417,14 +423,57 @@ historical_averages = {
 paystubs = [processor.process_employee(e, historical_averages.get(e["id"], {})) for e in sample_employees]
 
 # תמונת מצב חודשית (Dashboard KPIs)
-col1, col2, col3 = st.columns(3)
 total_count = len(paystubs)
-flagged_stubs = [p for p in paystubs if p.flags]
-clean_stubs = [p for p in paystubs if not p.flags]
+approved_count = len([p for p in paystubs if p.emp_id in st.session_state.approved_stubs])
+rejected_count = len([p for p in paystubs if p.emp_id in st.session_state.rejected_stubs])
+pending_count = total_count - approved_count - rejected_count
 
+col1, col2, col3, col4 = st.columns(4)
 col1.metric("סה\"כ תלושים במחזור", total_count)
-col2.metric("מאושרים אוטומטית (תקינים)", len(clean_stubs), delta="🟢 מוכנים לסגירה")
-col3.metric("ממתינים לבדיקת חשב", len(flagged_stubs), delta="-⚠️ חריגות לבדיקה", delta_color="inverse")
+col2.metric("ממתינים לבדיקת חשב", pending_count, delta="⏳ דורש בדיקה", delta_color="off")
+col3.metric("אושרו ע\"י החשב", approved_count, delta="✅ אושר מוסמך")
+col4.metric("נדחו / לתיקון", rejected_count, delta="-❌ נדחה", delta_color="inverse")
+
+st.markdown("---")
+
+# ---------------------------------------------------------------------------
+# 📋 לוח בדיקות ואישורים של חשב שכר (Human-in-the-Loop בלבד - אפס אישור אוטומטי!)
+# ---------------------------------------------------------------------------
+st.subheader("📋 לוח בדיקות ואישורים של חשב שכר מוסמך")
+st.info("📌 **מדיניות המערכת:** המערכת אינה מאשרת אף תלוש בעצמה! כל התלושים ממתינים לבדיקה ואישור אקטיבי של חשב השכר.")
+
+for p in paystubs:
+    status_label = "⏳ ממתין לבדיקה"
+    if p.emp_id in st.session_state.approved_stubs:
+        status_label = "✅ אושר ע\"י החשב"
+    elif p.emp_id in st.session_state.rejected_stubs:
+        status_label = "❌ נדחה / הועבר לתיקון"
+
+    with st.expander(f"📄 **{p.emp_name}** (ת.ז: {p.emp_id}) — ברוטו: ₪{p.gross_salary:,.2f} | נטו: ₪{p.net_salary:,.2f} | סטטוס: {status_label}", expanded=(p.emp_id not in st.session_state.approved_stubs and p.emp_id not in st.session_state.rejected_stubs)):
+        
+        if p.flags:
+            st.markdown("##### 🔍 ממצאי סורק ה-AI לבדיקת החשב:")
+            for flag in p.flags:
+                if flag.risk_level == "HIGH":
+                    st.error(f"🔴 **[HIGH RISK]** {flag.message_hebrew} (ממוצע: {flag.historical_baseline} ⬅️ חודשי: {flag.current_value})")
+                elif flag.risk_level == "MEDIUM":
+                    st.warning(f"🟠 **[MEDIUM RISK]** {flag.message_hebrew} (ממוצע: {flag.historical_baseline} ⬅️ חודשי: {flag.current_value})")
+                else:
+                    st.info(f"🟡 **[LOW RISK]** {flag.message_hebrew}")
+        else:
+            st.success("🟢 הנתונים הפיננסיים חושבו ונמצאו תקינים אריתמטית. כעת נדרשת החלטת החשב המוסמך.")
+
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            if st.button(f"✅ אשר תלוש (חשב מוסמך)", key=f"app_{p.emp_id}"):
+                st.session_state.approved_stubs.add(p.emp_id)
+                st.session_state.rejected_stubs.discard(p.emp_id)
+                st.rerun()
+        with btn_col2:
+            if st.button(f"❌ דחה / העבר לתיקון", key=f"rej_{p.emp_id}"):
+                st.session_state.rejected_stubs.add(p.emp_id)
+                st.session_state.approved_stubs.discard(p.emp_id)
+                st.rerun()
 
 st.markdown("---")
 
@@ -440,6 +489,9 @@ selected_emp_name = st.selectbox(
 )
 
 selected_stub = next(p for p in paystubs if p.emp_name == selected_emp_name)
+
+is_selected_approved = selected_stub.emp_id in st.session_state.approved_stubs
+approval_status_html = '<span style="color: green; font-weight: bold;">✅ אושר ע"י חשב שכר</span>' if is_selected_approved else '<span style="color: orange; font-weight: bold;">⏳ ממתין לאישור חשב שכר</span>'
 
 paystub_html = f"""
 <div style="font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; text-align: right; border: 2px solid #1E3A8A; border-radius: 12px; padding: 20px; background-color: #FFFFFF; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px;">
@@ -457,7 +509,7 @@ paystub_html = f"""
         <tr>
             <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>נקודות זיכוי מס:</b> {selected_stub.credit_points} נ"ז</td>
             <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>תקן שעות:</b> 182 שעות</td>
-            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>סטטוס בקרת AI:</b> <span style="color: green; font-weight: bold;">מאושר בדיוק פיננסי</span></td>
+            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>סטטוס אישור:</b> {approval_status_html}</td>
         </tr>
     </table>
 
@@ -548,6 +600,8 @@ with email_col2:
 if st.button("📧 שלח תלוש במייל עכשיו", type="primary", use_container_width=True):
     if not sender_password:
         st.warning("⚠️ יש להזין סיסמת אפליקציה בשדה ההגדרות כדי להתחבר לשרת הדוא\"ל ולשלוח.")
+    elif selected_stub.emp_id not in st.session_state.approved_stubs:
+        st.error("❌ לא ניתן לשלוח תלוש שלא אושר ע\"י חשב שכר! יש לאשר את התלוש בלוח הבדיקות תחילה.")
     else:
         with st.spinner("מתחבר לשרת הדוא\"ל ושולח את התלוש המעוצב ב-HTML..."):
             success, msg = send_real_email(target_email, selected_stub, sender_email, sender_password)
@@ -595,36 +649,10 @@ for p in paystubs:
 
 st.markdown("---")
 
-# ---------------------------------------------------------------------------
-# 📋 לוח בדיקות ואישורים (Human-in-the-Loop)
-# ---------------------------------------------------------------------------
-st.subheader("📋 לוח בדיקות ואישורים (Human-in-the-Loop)")
-st.write("מנגנון ה-AI חישב את השכר וסרק אנומליות. החלטת האישור הסופית נשארת בידי חשב השכר:")
-
-for p in paystubs:
-    if p.flags:
-        with st.expander(f"⚠️ **{p.emp_name}** (ת.ז: {p.emp_id}) — ברוטו: ₪{p.gross_salary:,.2f} | נטו לתשלום: ₪{p.net_salary:,.2f}", expanded=True):
-            st.markdown("##### 🔍 ממצאי ה-AI לבדיקת החשב:")
-            for flag in p.flags:
-                if flag.risk_level == "HIGH":
-                    st.error(f"🔴 **[HIGH RISK]** {flag.message_hebrew} (ממוצע: {flag.historical_baseline} ⬅️ חודשי: {flag.current_value})")
-                elif flag.risk_level == "MEDIUM":
-                    st.warning(f"🟠 **[MEDIUM RISK]** {flag.message_hebrew} (ממוצע: {flag.historical_baseline} ⬅️ חודשי: {flag.current_value})")
-                else:
-                    st.info(f"🟡 **[LOW RISK]** {flag.message_hebrew}")
-            
-            btn_col1, btn_col2 = st.columns(2)
-            with btn_col1:
-                if st.button(f"✅ אשר תלוש", key=f"approve_{p.emp_id}"):
-                    st.success(f"תלוש השכר של {p.emp_name} אושר בהצלחה!")
-            with btn_col2:
-                if st.button(f"❌ דחה / תחקור", key=f"reject_{p.emp_id}"):
-                    st.error(f"התלוש של {p.emp_name} הועבר לתיקון מול מנהל המחלקה.")
-    else:
-        st.success(f"🟢 **{p.emp_name}** (ת.ז: {p.emp_id}) — ברוטו: ₪{p.gross_salary:,.2f} | נטו לתשלום: ₪{p.net_salary:,.2f} (✅ התלוש תקין לחלוטין ואושר אוטומטית במנוע החישוב)")
-
-st.markdown("---")
-
-if st.button("🚀 אישור גורף לכל התלושים התקינים והפקת תלושים", type="primary"):
+if st.button("🚀 אישור גורף של חשב השכר לכל התלושים הממתינים", type="primary"):
+    for p in paystubs:
+        st.session_state.approved_stubs.add(p.emp_id)
+        st.session_state.rejected_stubs.discard(p.emp_id)
     st.balloons()
-    st.success("כל התלושים התקינים נסגרו, הופקו ונשלחו אוטומטית לעובדים במייל!")
+    st.success("כל התלושים במחזור אושרו אקטיבית ע\"י חשב השכר המוסמך ומוכנים למשלוח!")
+    st.rerun()
