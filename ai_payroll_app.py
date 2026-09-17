@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -11,8 +10,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ===========================================================================
-# 🤖 אפליקציית חישוב שכר אוטונומית (v8.0 - ללא אישור אוטומטי, אישור חשב בלבד)
-# Autonomous AI Payroll App: Strict Human-in-the-Loop (Zero Auto-Approval)
+# 🤖 אפליקציית חישוב שכר אוטונומית (v9.0 - כפתור אישור/דחייה פרטני לכל עובד)
+# Autonomous AI Payroll App: Granular Individual Approval Per Employee
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
@@ -25,7 +24,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ניהול מצב אישורים/דחיות בזיכרון האפליקציה
+# ניהול מצב אישורים/דחיות בזיכרון האפליקציה (אישי לכל עובד)
 if "approved_stubs" not in st.session_state:
     st.session_state.approved_stubs = set()
 if "rejected_stubs" not in st.session_state:
@@ -386,7 +385,7 @@ st.sidebar.success("🟢 מסונכרן לרגולציית 2026")
 # ===========================================================================
 
 st.title("🤖 אפליקציית חישוב שכר אוטונומית (AI Payroll)")
-st.caption("המערכת מציגה ומחשבת בלבד — אישור כל תלוש מבוצע אך ורק ע\"י חשב שכר מוסמך (Human-in-the-Loop)")
+st.caption("המערכת מציגה ומחשבת בלבד — לכל עובד ועובד יש כפתור אישור/דחייה פרטני עבור חשב השכר")
 st.markdown("---")
 
 processor = PayrollProcessor()
@@ -437,10 +436,10 @@ col4.metric("נדחו / לתיקון", rejected_count, delta="-❌ נדחה", de
 st.markdown("---")
 
 # ---------------------------------------------------------------------------
-# 📋 לוח בדיקות ואישורים של חשב שכר (Human-in-the-Loop בלבד - אפס אישור אוטומטי!)
+# 📋 לוח בדיקות ואישורים פרטני לכל עובד (כפתורים ייעודיים לכל שם ונתונים!)
 # ---------------------------------------------------------------------------
-st.subheader("📋 לוח בדיקות ואישורים של חשב שכר מוסמך")
-st.info("📌 **מדיניות המערכת:** המערכת אינה מאשרת אף תלוש בעצמה! כל התלושים ממתינים לבדיקה ואישור אקטיבי של חשב השכר.")
+st.subheader("📋 לוח בדיקות ואישורים פרטני לכל עובד (Human-in-the-Loop)")
+st.info("📌 **החלטה פרטנית בלבד:** לכל עובד מופיעים הנתונים שלו וכפתורי אישור/דחייה אישיים. אין כפתור אישור גורף!")
 
 for p in paystubs:
     status_label = "⏳ ממתין לבדיקה"
@@ -449,7 +448,10 @@ for p in paystubs:
     elif p.emp_id in st.session_state.rejected_stubs:
         status_label = "❌ נדחה / הועבר לתיקון"
 
-    with st.expander(f"📄 **{p.emp_name}** (ת.ז: {p.emp_id}) — ברוטו: ₪{p.gross_salary:,.2f} | נטו: ₪{p.net_salary:,.2f} | סטטוס: {status_label}", expanded=(p.emp_id not in st.session_state.approved_stubs and p.emp_id not in st.session_state.rejected_stubs)):
+    with st.expander(f"👤 **{p.emp_name}** (ת.ז: {p.emp_id}) — ברוטו: ₪{p.gross_salary:,.2f} | נטו: ₪{p.net_salary:,.2f} | סטטוס: {status_label}", expanded=(p.emp_id not in st.session_state.approved_stubs and p.emp_id not in st.session_state.rejected_stubs)):
+        
+        st.markdown(f"**נתוני שכר מחושבים עבור {p.emp_name}:**")
+        st.write(f"• שכר בסיס: ₪{p.base_salary:,.2f} | • שעות נוספות: ₪{p.overtime_pay:,.2f} | • בונוסים: ₪{p.bonus:,.2f} | • ניכויים: ₪{p.total_deductions:,.2f}")
         
         if p.flags:
             st.markdown("##### 🔍 ממצאי סורק ה-AI לבדיקת החשב:")
@@ -463,14 +465,15 @@ for p in paystubs:
         else:
             st.success("🟢 הנתונים הפיננסיים חושבו ונמצאו תקינים אריתמטית. כעת נדרשת החלטת החשב המוסמך.")
 
+        st.markdown(f"**החלטת חשב שכר עבור {p.emp_name}:**")
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
-            if st.button(f"✅ אשר תלוש (חשב מוסמך)", key=f"app_{p.emp_id}"):
+            if st.button(f"✅ אשר תלוש עבור {p.emp_name}", key=f"app_panel_{p.emp_id}"):
                 st.session_state.approved_stubs.add(p.emp_id)
                 st.session_state.rejected_stubs.discard(p.emp_id)
                 st.rerun()
         with btn_col2:
-            if st.button(f"❌ דחה / העבר לתיקון", key=f"rej_{p.emp_id}"):
+            if st.button(f"❌ דחה תלוש עבור {p.emp_name}", key=f"rej_panel_{p.emp_id}"):
                 st.session_state.rejected_stubs.add(p.emp_id)
                 st.session_state.approved_stubs.discard(p.emp_id)
                 st.rerun()
@@ -601,7 +604,7 @@ if st.button("📧 שלח תלוש במייל עכשיו", type="primary", use_c
     if not sender_password:
         st.warning("⚠️ יש להזין סיסמת אפליקציה בשדה ההגדרות כדי להתחבר לשרת הדוא\"ל ולשלוח.")
     elif selected_stub.emp_id not in st.session_state.approved_stubs:
-        st.error("❌ לא ניתן לשלוח תלוש שלא אושר ע\"י חשב שכר! יש לאשר את התלוש בלוח הבדיקות תחילה.")
+        st.error(f"❌ לא ניתן לשלוח תלוש של {selected_stub.emp_name} כיוון שטרם אושר ע\"י חשב שכר! יש לאשר את התלוש הספציפי שלו תחילה.")
     else:
         with st.spinner("מתחבר לשרת הדוא\"ל ושולח את התלוש המעוצב ב-HTML..."):
             success, msg = send_real_email(target_email, selected_stub, sender_email, sender_password)
@@ -616,11 +619,15 @@ st.markdown("---")
 # ---------------------------------------------------------------------------
 # 🧮 רובריקה במרכז: החישוב המדויק של כל הפרטים עבור כל עובד (עד רמת האגורה)
 # ---------------------------------------------------------------------------
-st.subheader("🧮 החישוב המדויק של כל הפרטים עבור כל עובד (פירוט אריתמטי שקוף)")
-st.write("לחיצה על שם העובד תציג את הפירוט הפיננסי המלא והאגורתי של כל רכיב שכר, מס וניכוי:")
+st.subheader("🧮 החישוב המדויק של כל הפרטים עבור כל עובד (עם כפתור החלטה אישי)")
+st.write("לחיצה על שם העובד תציג את הפירוט הפיננסי המלא והאגורתי, יחד עם כפתורי אישור/דחייה ייעודיים עבורו:")
 
 for p in paystubs:
-    with st.expander(f"🔍 פירוט חישוב מיועד עבור: **{p.emp_name}** (ת.ז: {p.emp_id}) — נטו: ₪{p.net_salary:,.2f}", expanded=(p.emp_name == selected_emp_name)):
+    p_approved = p.emp_id in st.session_state.approved_stubs
+    p_rejected = p.emp_id in st.session_state.rejected_stubs
+    p_status = "✅ מאושר" if p_approved else ("❌ נדחה" if p_rejected else "⏳ ממתין")
+
+    with st.expander(f"🔍 פירוט חישוב ואישור אישי עבור: **{p.emp_name}** (ת.ז: {p.emp_id}) — סטטוס: [{p_status}] — נטו: ₪{p.net_salary:,.2f}", expanded=(p.emp_name == selected_emp_name)):
         c_a, c_b = st.columns(2)
         with c_a:
             st.markdown(f"""
@@ -647,12 +654,18 @@ for p in paystubs:
             * **💰 שכר נטו לתשלום לחשבון הבנק:** **₪{p.net_salary:,.2f}**
             """)
 
-st.markdown("---")
+        st.markdown(f"**אישור/דחייה פרטני עבור {p.emp_name}:**")
+        d_col1, d_col2 = st.columns(2)
+        with d_col1:
+            if st.button(f"✅ אשר תלוש {p.emp_name}", key=f"app_detail_{p.emp_id}"):
+                st.session_state.approved_stubs.add(p.emp_id)
+                st.session_state.rejected_stubs.discard(p.emp_id)
+                st.rerun()
+        with d_col2:
+            if st.button(f"❌ דחה תלוש {p.emp_name}", key=f"rej_detail_{p.emp_id}"):
+                st.session_state.rejected_stubs.add(p.emp_id)
+                st.session_state.approved_stubs.discard(p.emp_id)
+                st.rerun()
 
-if st.button("🚀 אישור גורף של חשב השכר לכל התלושים הממתינים", type="primary"):
-    for p in paystubs:
-        st.session_state.approved_stubs.add(p.emp_id)
-        st.session_state.rejected_stubs.discard(p.emp_id)
-    st.balloons()
-    st.success("כל התלושים במחזור אושרו אקטיבית ע\"י חשב השכר המוסמך ומוכנים למשלוח!")
-    st.rerun()
+st.markdown("---")
+st.caption("🔒 מערכת AI Payroll מופעלת במודל Human-in-the-Loop מלא: כל החלטה פיננסית מתקבלת פרטנית על ידי חשב השכר המוסמך.")
