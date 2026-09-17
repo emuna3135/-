@@ -1,15 +1,16 @@
+
 import streamlit as st
 import pandas as pd
 import io
 import re
+import textwrap
 from decimal import Decimal, ROUND_HALF_UP
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 1. מנוע חישוב פיננסי מדויק על האגורה (Exact Scientific Decimal Engine)
+# 1. Exact Scientific Decimal Engine (מנוע חישוב פיננסי מדויק)
 # ===========================================================================
 class FinancialEngineException(Exception):
-    """שגיאה במידה ומנוע החישוב הפיננסי לא מאומת"""
     pass
 
 class ExactScientificDecimalEngine:
@@ -96,151 +97,143 @@ class ExactScientificDecimalEngine:
         return {"ni_total": ni, "details": details}
 
 # ===========================================================================
-# 2. מנוע התאמת תבניות עיצוב דינמיות לפי תבנית העסק (Custom Dynamic Template Engine)
+# 2. מנוע התאמת תלוש ויזואלי ברכיב מבודד נקי (Component HTML)
 # ===========================================================================
 def render_visual_paystub(emp_data: dict, template_name: str = "תבנית רשמית", primary_color: str = "#1E3A8A"):
-    """הנפקת תלוש משכורת רשמי המותאם אישית למבנה ולעיצוב של העסק/המשרד"""
+    """הנפקת תלוש משכורת רשמי ממוסגר ומעוצב ברכיב HTML סטרילי וללא בעיות הזחה"""
     tot_ded = emp_data['tax_info']['final_tax'] + emp_data['ni_info']['ni_total'] + emp_data['pension'] + emp_data['tardiness_deduction']
     pension_employer = ExactScientificDecimalEngine.to_dec(emp_data['gross'] * Decimal('0.065'))
     severance_employer = ExactScientificDecimalEngine.to_dec(emp_data['gross'] * Decimal('0.06'))
+    company_title = emp_data.get('company_name', 'חברה / משרד / עסק')
     
-    company_title = emp_data.get('company_name', 'חברה / משרד עורכי דין / עסק')
-    
-    html_content = f"""
-    <!DOCTYPE html>
-    <html dir="rtl" lang="he">
-    <head>
-    <meta charset="utf-8">
-    <style>
-        body {{ font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background-color: #FAFAFA; margin: 0; padding: 10px; direction: rtl; }}
-        .paystub-card {{ border: 2px solid {primary_color}; border-radius: 10px; padding: 20px; background-color: #FFFFFF; box-shadow: 0px 4px 12px rgba(0,0,0,0.08); max-width: 900px; margin: 0 auto; }}
-        .header {{ display: flex; justify-content: space-between; align-items: center; background-color: {primary_color}; color: white; padding: 12px 18px; border-radius: 6px; margin-bottom: 15px; }}
-        .title {{ font-size: 18px; font-weight: bold; }}
-        .print-btn {{ background-color: #10B981; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; }}
-        .print-btn:hover {{ background-color: #059669; }}
-        table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 15px; }}
-        th, td {{ padding: 8px; border: 1px solid #E5E7EB; text-align: right; }}
-        th {{ background-color: #EFF6FF; color: {primary_color}; }}
-        .flex-container {{ display: flex; gap: 15px; flex-wrap: wrap; }}
-        .flex-box {{ flex: 1; min-width: 280px; }}
-        .gross-header {{ color: {primary_color}; border-bottom: 2px solid {primary_color}; padding-bottom: 4px; margin-bottom: 8px; font-size: 15px; font-weight: bold; }}
-        .deduct-header {{ color: #991B1B; border-bottom: 2px solid #991B1B; padding-bottom: 4px; margin-bottom: 8px; font-size: 15px; font-weight: bold; }}
-        .employer-sec {{ background-color: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px; border-radius: 6px; font-size: 12px; margin-top: 10px; }}
-        .net-banner {{ margin-top: 15px; background-color: #059669; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold; }}
-        .badge {{ background-color: #DBEAFE; color: #1E40AF; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: normal; }}
-    </style>
-    </head>
-    <body>
-    <div class="paystub-card">
-        <div class="header">
-            <div>
-                <span class="title">📄 תלוש משכורת רשמי — {company_title}</span><br>
-                <span style="font-size: 12px; opacity: 0.9;">מותאם אישית לתבנית העסק: {template_name} (שנת מס 2026)</span>
-            </div>
-            <button class="print-btn" onclick="window.print()">🖨️ הדפס תלוש זה</button>
-        </div>
-        
-        <table>
-            <tr style="background-color: #F3F4F6;">
-                <td><b>שם העובד:</b> {emp_data['name']}</td>
-                <td><b>תעודת זהות:</b> {emp_data['id']}</td>
-                <td><b>חודש שכר:</b> ספטמבר 2026</td>
-            </tr>
-            <tr>
-                <td><b>תעריף שעתי:</b> ₪{emp_data['hourly_rate']:,.2f}</td>
-                <td><b>נקודות זיכוי מס:</b> {emp_data.get('credit_pts', '2.25')}</td>
-                <td><b>מקור נתונים:</b> <span class="badge">{emp_data.get('source_type', 'סנכרון מרובה מקורות')}</span></td>
-            </tr>
-        </table>
-        
-        <div class="flex-container">
-            <div class="flex-box">
-                <div class="gross-header">📈 פירוט רכיבי שכר ותוספות (ברוטו)</div>
-                <table>
-                    <tr style="background-color: #EFF6FF;">
-                        <th>רכיב</th>
-                        <th style="text-align: center;">כמות / חישוב</th>
-                        <th style="text-align: left;">סכום (₪)</th>
-                    </tr>
-                    <tr>
-                        <td>שכר בסיס (תקן)</td>
-                        <td style="text-align: center;">182 שעות × ₪{emp_data['hourly_rate']:,.2f}</td>
-                        <td style="text-align: left;">₪{emp_data['base']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td>שעות נוספות 125%</td>
-                        <td style="text-align: center;">{emp_data['ot125_hours']} ש' × 125% × ₪{emp_data['hourly_rate']:,.2f}</td>
-                        <td style="text-align: left;">₪{emp_data['ot125_pay']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td>שעות נוספות 150%</td>
-                        <td style="text-align: center;">{emp_data['ot150_hours']} ש' × 150% × ₪{emp_data['hourly_rate']:,.2f}</td>
-                        <td style="text-align: left;">₪{emp_data['ot150_pay']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td>בונוס / עמלות מכירה</td>
-                        <td style="text-align: center;">מענק ביצועים חודשי</td>
-                        <td style="text-align: left;">₪{emp_data['bonus']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td>החזר נסיעות / תוספת רווחה</td>
-                        <td style="text-align: center;">חופשי חודשי / תוספת קבועה</td>
-                        <td style="text-align: left;">₪{emp_data['travel_allowance']:,.2f}</td>
-                    </tr>
-                    <tr style="background-color: #DBEAFE; font-weight: bold;">
-                        <td colspan="2">סה"כ שכר ברוטו לתשלום</td>
-                        <td style="text-align: left;">₪{emp_data['gross']:,.2f}</td>
-                    </tr>
-                </table>
-            </div>
-            
-            <div class="flex-box">
-                <div class="deduct-header">📉 ניכויי חובה, איחורים וסוציאליים</div>
-                <table>
-                    <tr style="background-color: #FEF2F2;">
-                        <th>ניכוי</th>
-                        <th style="text-align: center;">פירוט / היקף</th>
-                        <th style="text-align: left;">סכום (₪)</th>
-                    </tr>
-                    <tr>
-                        <td>ניכוי איחורים / שעות חיסור</td>
-                        <td style="text-align: center;">{emp_data['tardiness_hours']} שעות חיסור × ₪{emp_data['hourly_rate']:,.2f}</td>
-                        <td style="text-align: left; color: #DC2626;">-₪{emp_data['tardiness_deduction']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td>מס הכנסה (לאחר נ"ז)</td>
-                        <td style="text-align: center;">לפי מדרגות מס 2026</td>
-                        <td style="text-align: left;">₪{emp_data['tax_info']['final_tax']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td>דמי ביטוח לאומי ומס בריאות</td>
-                        <td style="text-align: center;">שיעור מופחת/מלא 2026</td>
-                        <td style="text-align: left;">₪{emp_data['ni_info']['ni_total']:,.2f}</td>
-                    </tr>
-                    <tr>
-                        <td>הפרשת פנסיה עובד (6.0%)</td>
-                        <td style="text-align: center;">6% משכר ברוטו</td>
-                        <td style="text-align: left;">₪{emp_data['pension']:,.2f}</td>
-                    </tr>
-                    <tr style="background-color: #FEE2E2; font-weight: bold;">
-                        <td colspan="2">סה"כ ניכויי חובה וחיסורים</td>
-                        <td style="text-align: left;">₪{tot_ded:,.2f}</td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-        
-        <div class="employer-sec">
-            <b>🛡️ הפרשות מעסיק לביטחון סוציאלי:</b> פנסיה מעסיק (6.5%): ₪{pension_employer:,.2f} | פיצויים מעסיק (6.0%): ₪{severance_employer:,.2f}
-        </div>
-        
-        <div class="net-banner">
-            💵 שכר נטו לתשלום לחשבון הבנק: ₪{emp_data['net']:,.2f}
-        </div>
-    </div>
-    </body>
-    </html>
-    """
+    html_content = f"""<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<style>
+body {{ font-family: system-ui, -apple-system, sans-serif; background-color: #FAFAFA; margin: 0; padding: 10px; direction: rtl; text-align: right; }}
+.paystub-card {{ border: 2px solid {primary_color}; border-radius: 10px; padding: 20px; background-color: #FFFFFF; box-shadow: 0px 4px 12px rgba(0,0,0,0.08); max-width: 880px; margin: 0 auto; }}
+.header {{ display: flex; justify-content: space-between; align-items: center; background-color: {primary_color}; color: white; padding: 12px 18px; border-radius: 6px; margin-bottom: 15px; }}
+.title {{ font-size: 18px; font-weight: bold; }}
+.print-btn {{ background-color: #10B981; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 14px; }}
+.print-btn:hover {{ background-color: #059669; }}
+table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 15px; }}
+th, td {{ padding: 8px; border: 1px solid #E5E7EB; text-align: right; }}
+th {{ background-color: #EFF6FF; color: {primary_color}; }}
+.flex-container {{ display: flex; gap: 15px; flex-wrap: wrap; }}
+.flex-box {{ flex: 1; min-width: 280px; }}
+.gross-header {{ color: {primary_color}; border-bottom: 2px solid {primary_color}; padding-bottom: 4px; margin-bottom: 8px; font-size: 15px; font-weight: bold; }}
+.deduct-header {{ color: #991B1B; border-bottom: 2px solid #991B1B; padding-bottom: 4px; margin-bottom: 8px; font-size: 15px; font-weight: bold; }}
+.employer-sec {{ background-color: #F8FAFC; border: 1px solid #E2E8F0; padding: 10px; border-radius: 6px; font-size: 12px; margin-top: 10px; }}
+.net-banner {{ margin-top: 15px; background-color: #059669; color: white; padding: 15px; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold; }}
+.badge {{ background-color: #DBEAFE; color: #1E40AF; padding: 3px 8px; border-radius: 12px; font-size: 11px; }}
+</style>
+</head>
+<body>
+<div class="paystub-card">
+<div class="header">
+<div>
+<span class="title">📄 תלוש משכורת רשמי — {company_title}</span><br>
+<span style="font-size: 12px; opacity: 0.9;">מותאם אישית לתבנית העסק: {template_name} (שנת מס 2026)</span>
+</div>
+<button class="print-btn" onclick="window.print()">🖨️ הדפס תלוש זה</button>
+</div>
+<table>
+<tr style="background-color: #F3F4F6;">
+<td><b>שם העובד:</b> {emp_data['name']}</td>
+<td><b>תעודת זהות:</b> {emp_data['id']}</td>
+<td><b>חודש שכר:</b> ספטמבר 2026</td>
+</tr>
+<tr>
+<td><b>תעריף שעתי:</b> ₪{emp_data['hourly_rate']:,.2f}</td>
+<td><b>נקודות זיכוי מס:</b> {emp_data.get('credit_pts', '2.25')}</td>
+<td><b>מקור נתונים:</b> <span class="badge">{emp_data.get('source_type', 'סנכרון מרובה מקורות')}</span></td>
+</tr>
+</table>
+<div class="flex-container">
+<div class="flex-box">
+<div class="gross-header">📈 פירוט רכיבי שכר ותוספות (ברוטו)</div>
+<table>
+<tr style="background-color: #EFF6FF;">
+<th>רכיב</th>
+<th style="text-align: center;">כמות / חישוב</th>
+<th style="text-align: left;">סכום (₪)</th>
+</tr>
+<tr>
+<td>שכר בסיס (תקן)</td>
+<td style="text-align: center;">182 שעות × ₪{emp_data['hourly_rate']:,.2f}</td>
+<td style="text-align: left;">₪{emp_data['base']:,.2f}</td>
+</tr>
+<tr>
+<td>שעות נוספות 125%</td>
+<td style="text-align: center;">{emp_data['ot125_hours']} ש' × 125% × ₪{emp_data['hourly_rate']:,.2f}</td>
+<td style="text-align: left;">₪{emp_data['ot125_pay']:,.2f}</td>
+</tr>
+<tr>
+<td>שעות נוספות 150%</td>
+<td style="text-align: center;">{emp_data['ot150_hours']} ש' × 150% × ₪{emp_data['hourly_rate']:,.2f}</td>
+<td style="text-align: left;">₪{emp_data['ot150_pay']:,.2f}</td>
+</tr>
+<tr>
+<td>בונוס / עמלות מכירה</td>
+<td style="text-align: center;">מענק ביצועים חודשי</td>
+<td style="text-align: left;">₪{emp_data['bonus']:,.2f}</td>
+</tr>
+<tr>
+<td>החזר נסיעות / תוספת רווחה</td>
+<td style="text-align: center;">חופשי חודשי / תוספת קבועה</td>
+<td style="text-align: left;">₪{emp_data['travel_allowance']:,.2f}</td>
+</tr>
+<tr style="background-color: #DBEAFE; font-weight: bold;">
+<td colspan="2">סה"כ שכר ברוטו לתשלום</td>
+<td style="text-align: left;">₪{emp_data['gross']:,.2f}</td>
+</tr>
+</table>
+</div>
+<div class="flex-box">
+<div class="deduct-header">📉 ניכויי חובה, איחורים וסוציאליים</div>
+<table>
+<tr style="background-color: #FEF2F2;">
+<th>ניכוי</th>
+<th style="text-align: center;">פירוט / היקף</th>
+<th style="text-align: left;">סכום (₪)</th>
+</tr>
+<tr>
+<td>ניכוי איחורים / שעות חיסור</td>
+<td style="text-align: center;">{emp_data['tardiness_hours']} שעות חיסור × ₪{emp_data['hourly_rate']:,.2f}</td>
+<td style="text-align: left; color: #DC2626;">-₪{emp_data['tardiness_deduction']:,.2f}</td>
+</tr>
+<tr>
+<td>מס הכנסה (לאחר נ"ז)</td>
+<td style="text-align: center;">לפי מדרגות מס 2026</td>
+<td style="text-align: left;">₪{emp_data['tax_info']['final_tax']:,.2f}</td>
+</tr>
+<tr>
+<td>דמי ביטוח לאומי ומס בריאות</td>
+<td style="text-align: center;">שיעור מופחת/מלא 2026</td>
+<td style="text-align: left;">₪{emp_data['ni_info']['ni_total']:,.2f}</td>
+</tr>
+<tr>
+<td>הפרשת פנסיה עובד (6.0%)</td>
+<td style="text-align: center;">6% משכר ברוטו</td>
+<td style="text-align: left;">₪{emp_data['pension']:,.2f}</td>
+</tr>
+<tr style="background-color: #FEE2E2; font-weight: bold;">
+<td colspan="2">סה"כ ניכויי חובה וחיסורים</td>
+<td style="text-align: left;">₪{tot_ded:,.2f}</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="employer-sec">
+<b>🛡️ הפרשות מעסיק לביטחון סוציאלי:</b> פנסיה מעסיק (6.5%): ₪{pension_employer:,.2f} | פיצויים מעסיק (6.0%): ₪{severance_employer:,.2f}
+</div>
+<div class="net-banner">
+💵 שכר נטו לתשלום לחשבון הבנק: ₪{emp_data['net']:,.2f}
+</div>
+</div>
+</body>
+</html>"""
     components.html(html_content, height=640, scrolling=True)
 
 # ===========================================================================
@@ -271,12 +264,12 @@ def detect_anomalies(row) -> list:
     return flags
 
 # ===========================================================================
-# 4. ממשק אפליקציית Streamlit
+# 4. ממשק אפליקציית Streamlit (עם סרגל צד מעודכן הכולל את 3 הרובריקות בצד)
 # ===========================================================================
 st.set_page_config(page_title="Autonomous AI Payroll Engine", page_icon="🤖", layout="wide")
 
 st.title("🤖 אפליקציית חישוב שכר אוטונומית (AI Payroll)")
-st.caption("קליטת נתונים מרובת רובריקות (צילומי מסך, אקסל, שעוני נוכחות) | התאמת תלוש לתבנית העסק | מנוע חישוב מדעי")
+st.caption("מנוע חישוב מדעי מדויק | קליטת רובריקות בסרגל הצד (אקסל, צילומי מסך, שעוני נוכחות) | התאמת תלוש לעסק")
 st.markdown("---")
 
 engine_active = ExactScientificDecimalEngine.verify_engine_status()
@@ -287,18 +280,36 @@ else:
     st.sidebar.success("🎯 מנוע חישוב מדעי פעיל (דיוק על האגורה ₪0.01)")
 
 # ---------------------------------------------------------------------------
-# סרגל צד: תבנית תלוש ייעודית של העסק + הגדרות עיצוב
+# סרגל צד (SIDEBAR): 3 רובריקות העלאה בצד + תבנית העסק
 # ---------------------------------------------------------------------------
+st.sidebar.header("📥 רובריקות העלאת נתונים (בצד)")
+
+# רובריקה 1: אקסל
+st.sidebar.subheader("📊 1. קובץ אקסל (XLSX/CSV)")
+uploaded_excel = st.sidebar.file_uploader("העלי קובץ אקסל:", type=["xlsx", "csv"], key="sidebar_excel")
+
+# רובריקה 2: צילומי מסך
+st.sidebar.subheader("📷 2. צילומי מסך ותמונות")
+uploaded_img = st.sidebar.file_uploader("העלי צילומי מסך:", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="sidebar_img")
+if uploaded_img:
+    st.sidebar.success(f"📷 נקלטו {len(uploaded_img)} צילומי מסך!")
+
+# רובריקה 3: שעון נוכחות
+st.sidebar.subheader("⏱️ 3. תדפיס שעון נוכחות")
+uploaded_clock = st.sidebar.file_uploader("העלי דוח שעון נוכחות:", type=["pdf", "png", "jpg", "jpeg"], key="sidebar_clock")
+if uploaded_clock:
+    st.sidebar.success(f"⏱️ שעון נוכחות נטען: `{uploaded_clock.name}`")
+
+st.sidebar.markdown("---")
 st.sidebar.header("🎨 תבנית תלוש ייעודית של העסק")
-template_file = st.sidebar.file_uploader("🖼️ העלי תלוש לדוגמה של העסק (PDF / תמונה)", type=["pdf", "png", "jpg", "jpeg", "xlsx"])
+template_file = st.sidebar.file_uploader("🖼️ העלי תלוש לדוגמה של העסק:", type=["pdf", "png", "jpg", "jpeg", "xlsx"], key="sidebar_template")
 
 template_name = "תבנית רשמית"
 primary_color = "#1E3A8A"
 
 if template_file is not None:
     template_name = template_file.name
-    st.sidebar.success(f"🎨 תבנית העסק `{template_file.name}` נקלטה בהצלחה!")
-    st.sidebar.info("💡 מנוע ה-AI ניתח את מבנה התלוש של העסק ויפיק תלושים תואמים בדיוק למבנה וללוגו!")
+    st.sidebar.success(f"🎨 תבנית העסק `{template_file.name}` נקלטה!")
 
 style_option = st.sidebar.selectbox(
     "סגנון עיצוב התלוש:",
@@ -314,58 +325,26 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚖️ רגולציית מיסוי 2026")
 st.sidebar.info("• נקודת זיכוי: ₪242.00/חודש\n• תקרת דמי ביטוח מופחתים: ₪7,522.00\n• ניכוי פנסיה עובד: 6.0%")
 
-# ---------------------------------------------------------------------------
-# 3 רובריקות קליטת נתונים מרובות (Multi-Rubric Data Ingestion)
-# ---------------------------------------------------------------------------
-st.subheader("📥 קליטת נתוני שכר - בחרי רובריקה להעלאת קבצים:")
-
-tab_excel, tab_screenshots, tab_clock = st.tabs([
-    "📊 1. טבלת אקסל (XLSX / CSV)",
-    "📷 2. צילומי מסך / תמונות (Screenshots)",
-    "⏱️ 3. צילומי שעון נוכחות / דוחות נוכחות"
-])
-
-uploaded_excel = None
-uploaded_img = None
-uploaded_clock = None
-
-with tab_excel:
-    st.markdown("##### 📊 העלאת נתוני שכר מקובץ אקסל")
-    uploaded_excel = st.file_uploader("בחרי קובץ אקסל:", type=["xlsx", "csv"], key="excel_uploader")
-    st.caption("💡 תומך בכל מבנה עמודות של אקסל — מנוע ה-AI ממפה אוטומטית את העמודות (PRISM AI Mapping).")
-
-with tab_screenshots:
-    st.markdown("##### 📷 העלאת צילומי מסך של הודעות, הסכמים או דיווחי שכר")
-    uploaded_img = st.file_uploader("בחרי צילום מסך (PNG / JPG / JPEG):", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="img_uploader")
-    if uploaded_img:
-        st.success(f"📷 נלטו {len(uploaded_img)} צילומי מסך! מנוע ה-AI (Vision OCR) מחלץ את הנתונים והשעות.")
-
-with tab_clock:
-    st.markdown("##### ⏱️ העלאת צילום או תדפיס של שעון נוכחות")
-    uploaded_clock = st.file_uploader("בחרי תדפיס שעון נוכחות (PDF / תמונה):", type=["pdf", "png", "jpg", "jpeg"], key="clock_uploader")
-    if uploaded_clock:
-        st.success(f"⏱️ דוח שעון הנוכחות `{uploaded_clock.name}` פוענח בהצלחה! השעות והאיחורים סונכרנו לחישוב.")
-
-# נתוני ברירת מחדל לדוגמה במידה ולא הועלו קבצים
+# נתוני ברירת מחדל לדוגמה
 def get_sample_df():
     return pd.DataFrame([
         {
             "תעודת זהות": "101", "שם עובד": "ישראל ישראלי", "שכר בסיס": 12500,
             "שעות נוספות 125%": 30, "שעות נוספות 150%": 12, "שעות נוספות": 42, "ממוצע שעות נוספות": 15,
             "שעות איחור/חיסור": 3.5, "בונוס": 1850, "נסיעות/תוספות": 450, "ממוצע בונוס": 500, "נקודות זיכוי": 2.25,
-            "טופס 101 עודכן": "לא", "מקור נתונים": "אקסל + שעון נוכחות"
+            "טופס 101 עודכן": "לא", "מקור נתונים": "אקסל + שעון נוכחות (סרגל צד)"
         },
         {
             "תעודת זהות": "102", "שם עובד": "דנה לוי", "שכר בסיס": 16000,
             "שעות נוספות 125%": 5, "שעות נוספות 150%": 0, "שעות נוספות": 5, "ממוצע שעות נוספות": 4,
             "שעות איחור/חיסור": 0, "בונוס": 4500, "נסיעות/תוספות": 600, "ממוצע בונוס": 1500, "נקודות זיכוי": 2.75,
-            "טופס 101 עודכן": "כן", "מקור נתונים": "צילום מסך + אקסל"
+            "טופס 101 עודכן": "כן", "מקור נתונים": "צילום מסך + אקסל (סרגל צד)"
         },
         {
             "תעודת זהות": "103", "שם עובד": "משה כהן", "שכר בסיס": 9500,
             "שעות נוספות 125%": 2, "שעות נוספות 150%": 0, "שעות נוספות": 2, "ממוצע שעות נוספות": 2,
             "שעות איחור/חיסור": 6, "בונוס": 0, "נסיעות/תוספות": 350, "ממוצע בונוס": 0, "נקודות זיכוי": 2.25,
-            "טופס 101 עודכן": "לא", "מקור נתונים": "תדפיס שעון נוכחות"
+            "טופס 101 עודכן": "לא", "מקור נתונים": "תדפיס שעון נוכחות (סרגל צד)"
         }
     ])
 
@@ -415,11 +394,11 @@ for idx, row in df_input.iterrows():
         "bonus": bonus, "travel_allowance": travel_allowance,
         "gross": gross,
         "tax_info": tax_info, "ni_info": ni_info, "pension": pension, "net": net,
-        "source_type": row.get('מקור נתונים', 'סנכרון מרובה מקורות'),
+        "source_type": row.get('מקור נתונים', 'קליטה מסרגל הצד'),
         "status": "FLAGGED" if len(flags) > 0 else "CLEAN", "flags": flags
     })
 
-# תצוגת KPI מדדים
+# תצוגת KPI מדדים במרכז המסך
 col1, col2, col3 = st.columns(3)
 total_count = len(calc_results)
 flagged_count = len([r for r in calc_results if r["status"] == "FLAGGED"])
@@ -437,7 +416,7 @@ st.markdown("---")
 st.subheader("📋 לוח אישור חשב שכר והנפקת תלושים (Human-in-the-Loop)")
 
 if template_file is not None:
-    st.success(f"✨ מופעל מצב התאמה אישית: תלושי המשכורת מותאמים במדויק לתבנית העסק של `{template_file.name}`")
+    st.success(f"✨ מופעל מצב התאמה אישית: תלושי המשכורת מותאמים לעיצוב של `{template_file.name}`")
 
 for emp in calc_results:
     box_color = "⚠️" if emp["status"] == "FLAGGED" else "🟢"
