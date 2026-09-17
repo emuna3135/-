@@ -424,7 +424,7 @@ components.html(paystub_html, height=520, scrolling=True)
 # ---------------------------------------------------------------------------
 st.subheader("📧 שליחת תלוש השכר המעוצב למייל")
 
-email_col1, email_col2 = st.columns([1, 2])
+email_col1, email_col2 = st.columns(2)
 
 with email_col1:
     user_email = st.text_input(
@@ -483,7 +483,7 @@ for p in paystubs:
                 else:
                     st.info(f"🟡 **[LOW RISK]** {flag.message_hebrew}")
             
-            btn_col1, btn_col2, btn_col3 = st.columns([2, 3])
+            btn_col1, btn_col2 = st.columns(2)
             with btn_col1:
                 if st.button(f"✅ אשר תלוש", key=f"approve_{p.emp_id}"):
                     st.success(f"תלוש השכר של {p.emp_name} אושר בהצלחה!")
