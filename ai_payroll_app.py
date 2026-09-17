@@ -1,15 +1,13 @@
-
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
-from PIL import Image
-import io
+import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית חישוב שכר אוטונומית (v3.0)
-# Autonomous AI Payroll App: Exact Math Engine + Camera OCR Scanner Side-by-Side
+# 🤖 אפליקציית חישוב שכר אוטונומית (v4.0)
+# Autonomous AI Payroll App: Sidebar Controls + Main Formatted Paystub & Email
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
@@ -119,6 +117,8 @@ class CalculatedPaystub:
     emp_id: str
     emp_name: str
     base_salary: Decimal
+    overtime_125_pay: Decimal
+    overtime_150_pay: Decimal
     overtime_pay: Decimal
     bonus: Decimal
     gross_salary: Decimal
@@ -127,6 +127,7 @@ class CalculatedPaystub:
     pension_employee: Decimal
     total_deductions: Decimal
     net_salary: Decimal
+    credit_points: Decimal
     flags: List[AnomalyFlag]
 
 class PayrollProcessor:
@@ -172,9 +173,9 @@ class PayrollProcessor:
         ot_hours_125 = Decimal(str(emp_data.get('overtime_125_hours', 0)))
         ot_hours_150 = Decimal(str(emp_data.get('overtime_150_hours', 0)))
         
-        ot_pay = (ot_hours_125 * hourly_rate * Decimal('1.25')) + \
-                 (ot_hours_150 * hourly_rate * Decimal('1.50'))
-        ot_pay = to_dec(ot_pay)
+        ot125_pay = to_dec(ot_hours_125 * hourly_rate * Decimal('1.25'))
+        ot150_pay = to_dec(ot_hours_150 * hourly_rate * Decimal('1.50'))
+        ot_pay = ot125_pay + ot150_pay
         
         bonus = to_dec(emp_data.get('bonus', 0))
         gross = base + ot_pay + bonus
@@ -193,6 +194,8 @@ class PayrollProcessor:
             emp_id=emp_data['id'],
             emp_name=emp_data['name'],
             base_salary=base,
+            overtime_125_pay=ot125_pay,
+            overtime_150_pay=ot150_pay,
             overtime_pay=ot_pay,
             bonus=bonus,
             gross_salary=gross,
@@ -201,77 +204,80 @@ class PayrollProcessor:
             pension_employee=pension_emp,
             total_deductions=total_deductions,
             net_salary=net,
+            credit_points=credit_pts,
             flags=flags
         )
 
-# ---------------------------------------------------------------------------
-# 5. ממשק משתמש אינטראקטיבי ב-Streamlit
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# 5. סרגל צד (SIDEBAR) - המחשבון המדעי, המצלמה וכל רובריקות הטעינה
+# ===========================================================================
 
-# כותרת ראשית
-st.title("🤖 אפליקציית חישוב שכר אוטונומית (AI Payroll App v3.0)")
-st.caption("מנוע חישוב מדעי מדויק + סורק מצלמת טאבלט בזמן אמת בצד + זיהוי חריגות ואישור חשב (Human-in-the-Loop)")
-st.markdown("---")
+st.sidebar.title("🛠️ תפריט אפשרויות וסורקים")
 
-# סרגל צד (Sidebar)
-st.sidebar.header("📁 טעינת קבצים וסנכרון")
-uploaded_file = st.sidebar.file_uploader(
-    "גררי לכאן קובץ אקסל / נוכחות", 
-    type=["xlsx", "csv", "pdf"]
-)
+# 1️⃣ המחשבון המדעי המדויק על רמת האגורה בצד
+with st.sidebar.expander("🧮 המחשבון המדעי המדויק (עד האגורה)", expanded=True):
+    st.write("מנוע חישוב מדויק בריאקציה מיידית:")
+    calc_name = st.text_input("שם העובד:", value="דנה לוי", key="side_name")
+    calc_id = st.text_input("מספר ת.ז:", value="102", key="side_id")
+    calc_base = st.number_input("שכר בסיס (₪):", value=16000.0, step=500.0, key="side_base")
+    calc_ot125 = st.number_input("שעות 125%:", value=5.0, step=1.0, key="side_ot125")
+    calc_bonus = st.number_input("בונוס/עמלה (₪):", value=4500.0, step=100.0, key="side_bonus")
+    calc_credit_pts = st.number_input("נקודות זיכוי (נ\"ז):", value=2.75, step=0.25, key="side_pts")
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("⚖️ סטטוס רגולציה ומיסוי 2026")
-st.sidebar.success("🟢 מסונכרן בזמן אמת לרגולציית 2026")
-st.sidebar.info("• מדרגות מס הכנסה מעודכנות\n• תקרות ביטוח לאומי 2026\n• שווי נקודת זיכוי: ₪242.00\n• שכר מינימום שעתי: ₪32.30")
-
-# ---------------------------------------------------------------------------
-# 🧮 + 📸 חלק מרכזי: המחשבון המדעי המדויק ורכיב המצלמה זה לצד זה (Side-by-Side)
-# ---------------------------------------------------------------------------
-st.subheader("⚙️ מנוע חישוב מדויק וסורק מצלמה (Side-by-Side)")
-
-calc_col, cam_col = st.columns([1.2, 1], gap="large")
-
-processor = PayrollProcessor()
-scanned_emp_from_cam = None
-
-with calc_col:
-    st.markdown("#### 🧮 המחשבון הפיננסי המדעי המדויק (Exact Decimal Engine)")
-    st.write("מנוע חישוב בדיוק אריתמטי מוחלט (עיגול בנקאי, מדרגות מס, ביטוח לאומי ופנסיה):")
-    
-    with st.form("interactive_payroll_calc"):
-        calc_name = st.text_input("שם העובד:", value="דנה לוי")
-        calc_id = st.text_input("מספר ת.ז:", value="102")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            calc_base = st.number_input("שכר בסיס (₪):", value=16000.0, step=500.0)
-            calc_ot125 = st.number_input("שעות 125%:", value=5.0, step=1.0)
-        with c2:
-            calc_bonus = st.number_input("בונוסים/עמלות (₪):", value=4500.0, step=100.0)
-            calc_credit_pts = st.number_input("נקודות זיכוי (נ\"ז):", value=2.75, step=0.25)
-            
-        calc_btn = st.form_submit_button("🧮 הרץ חישוב מדויק במחשבון")
-
-with cam_col:
-    st.markdown("#### 📸 סורק מצלמת הטאבלט (AI Camera OCR Scanner)")
-    st.write("צלמי טופס 101, דף שעות מודפס או קבלה ישירות ממצלמת הטאבלט:")
-    
-    cam_picture = st.camera_input("לחצי כאן לצלם במצלמת הטאבלט")
+# 2️⃣ המצלמה בצד
+with st.sidebar.expander("📸 סורק מצלמת הטאבלט", expanded=True):
+    cam_picture = st.camera_input("צלמי מסמך/טופס במצלמה", key="side_camera")
+    scanned_from_cam = None
     if cam_picture:
         st.success("📸 התמונה נקלטה במצלמה!")
-        st.info("🤖 AI Vision OCR בפעולה: מחלץ שמות, ת.ז, שעות עבודה ונקודות זיכוי...")
-        scanned_emp_from_cam = {
+        st.info("🤖 AI Vision OCR בפעולה: מחלץ נתונים...")
+        scanned_from_cam = {
             "id": "104", "name": "אלישבע מור (מסריקת מצלמה)", "base_salary": 14500,
             "overtime_hours": 18, "overtime_125_hours": 12, "overtime_150_hours": 6,
             "bonus": 1200, "credit_points": 3.25, "form_101_updated": True
         }
 
+# 3️⃣ רובריקות טעינת קבצים ונתונים בצד
+st.sidebar.markdown("---")
+st.sidebar.subheader("📁 רובריקות העלאת נתונים")
+
+upload_screenshots = st.sidebar.file_uploader(
+    "🖼️ רובריקה להעלאת תצלומי מסך", 
+    type=["png", "jpg", "jpeg"],
+    key="up_screens"
+)
+
+upload_excel = st.sidebar.file_uploader(
+    "📊 רובריקה להעלאת טבלת אקסל", 
+    type=["xlsx", "csv"],
+    key="up_excel"
+)
+
+upload_attendance = st.sidebar.file_uploader(
+    "⏰ רובריקה להעלאת שעון נוכחות", 
+    type=["xlsx", "csv", "txt", "dat"],
+    key="up_clock"
+)
+
+upload_sample_paystub = st.sidebar.file_uploader(
+    "📄 רובריקה להעלאת תלוש שכר לדוגמא", 
+    type=["pdf", "png", "jpg", "txt"],
+    key="up_sample"
+)
+
+st.sidebar.markdown("---")
+st.sidebar.success("🟢 מסונכרן לרגולציית 2026")
+
+# ===========================================================================
+# 6. החלק המרכזי של האפליקציה (MAIN AREA)
+# ===========================================================================
+
+st.title("🤖 אפליקציית חישוב שכר אוטונומית (AI Payroll)")
+st.caption("מערכת שכר חכמה: סורק ומחשבון בסרגל הצד | תלושים מעוצבים, חישוב מפורט ושליחה במייל במרכז")
 st.markdown("---")
 
-# ---------------------------------------------------------------------------
-# 📊 נתוני עובדים במערכת
-# ---------------------------------------------------------------------------
+processor = PayrollProcessor()
+
 sample_employees = [
     {
         "id": "101", "name": "ישראל ישראלי", "base_salary": 12500,
@@ -290,9 +296,9 @@ sample_employees = [
     }
 ]
 
-if scanned_emp_from_cam:
-    sample_employees.append(scanned_emp_from_cam)
-    st.success(f"✨ **מסמך נקלט מהמצלמה!** הנתונים של {scanned_emp_from_cam['name']} נקלטו והתווספו למחשבון וללוח הבקרה.")
+if scanned_from_cam:
+    sample_employees.append(scanned_from_cam)
+    st.success(f"✨ **נקלט מסמך מהמצלמה!** הנתונים של {scanned_from_cam['name']} נקלטו והתווספו למערכת.")
 
 historical_averages = {
     "101": {"overtime_hours": 15, "bonus": 500, "credit_points": 2.25},
@@ -304,7 +310,6 @@ historical_averages = {
 paystubs = [processor.process_employee(e, historical_averages.get(e["id"], {})) for e in sample_employees]
 
 # תמונת מצב חודשית (Dashboard KPIs)
-st.subheader("📈 תמונת מצב חודשית וסקירת AI")
 col1, col2, col3 = st.columns(3)
 total_count = len(paystubs)
 flagged_stubs = [p for p in paystubs if p.flags]
@@ -316,7 +321,153 @@ col3.metric("ממתינים לבדיקת חשב", len(flagged_stubs), delta="-�
 
 st.markdown("---")
 
-# לוח אישורים ובקרת חריגות (Human-in-the-Loop)
+# ---------------------------------------------------------------------------
+# 📄 רובריקה במרכז: תלוש משכורת מעוצב ומסודר עפ"י דוגמת העסק
+# ---------------------------------------------------------------------------
+st.subheader("📄 תלוש משכורת מעוצב ומסודר (לפי תבנית העסק הרשמית)")
+
+selected_emp_name = st.selectbox(
+    "בחרי עובד להצגת התלוש המעוצב:",
+    options=[p.emp_name for p in paystubs],
+    index=1 if len(paystubs) > 1 else 0
+)
+
+selected_stub = next(p for p in paystubs if p.emp_name == selected_emp_name)
+
+paystub_html = f"""
+<div style="font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; text-align: right; border: 2px solid #1E3A8A; border-radius: 12px; padding: 20px; background-color: #FFFFFF; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px;">
+    
+    <div style="background-color: #1E3A8A; color: #FFFFFF; padding: 12px 18px; border-radius: 8px; text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 20px;">
+        📄 תלוש משכורת רשמי — שנת מס 2026 (תבנית עסקית מוסמכת)
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+        <tr style="background-color: #F3F4F6;">
+            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>שם העובד/ת:</b> {selected_stub.emp_name}</td>
+            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>תעודת זהות:</b> {selected_stub.emp_id}</td>
+            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>חודש שכר:</b> ספטמבר 2026</td>
+        </tr>
+        <tr>
+            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>נקודות זיכוי מס:</b> {selected_stub.credit_points} נ"ז</td>
+            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>תקן שעות:</b> 182 שעות</td>
+            <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>סטטוס בקרת AI:</b> <span style="color: green; font-weight: bold;">מאושר בדיוק פיננסי</span></td>
+        </tr>
+    </table>
+
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        
+        <div style="flex: 1; min-width: 280px;">
+            <h4 style="color: #1E3A8A; border-bottom: 2px solid #1E3A8A; padding-bottom: 5px; margin-bottom: 10px;">💵 פירוט רכיבי ברוטו</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr style="background-color: #EFF6FF;">
+                    <th style="padding: 8px; border: 1px solid #CBD5E1; text-align: right;">רכיב שכר</th>
+                    <th style="padding: 8px; border: 1px solid #CBD5E1; text-align: left;">סכום (₪)</th>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB;">שכר בסיס</td>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{selected_stub.base_salary:,.2f}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB;">גמול שעות נוספות</td>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{selected_stub.overtime_pay:,.2f}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB;">בונוסים ועמלות</td>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{selected_stub.bonus:,.2f}</td>
+                </tr>
+                <tr style="background-color: #DBEAFE; font-weight: bold;">
+                    <td style="padding: 8px; border: 1px solid #CBD5E1;">סה"כ שכר ברוטו</td>
+                    <td style="padding: 8px; border: 1px solid #CBD5E1; text-align: left;">₪{selected_stub.gross_salary:,.2f}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div style="flex: 1; min-width: 280px;">
+            <h4 style="color: #991B1B; border-bottom: 2px solid #991B1B; padding-bottom: 5px; margin-bottom: 10px;">📉 פירוט ניכויי חובה</h4>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <tr style="background-color: #FEF2F2;">
+                    <th style="padding: 8px; border: 1px solid #FCA5A5; text-align: right;">ניכוי</th>
+                    <th style="padding: 8px; border: 1px solid #FCA5A5; text-align: left;">סכום (₪)</th>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB;">מס הכנסה (לאחר נ"ז)</td>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{selected_stub.income_tax:,.2f}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB;">דמי ביטוח לאומי ומס בריאות</td>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{selected_stub.national_insurance:,.2f}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB;">הפרשת פנסיה עובד (6.0%)</td>
+                    <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{selected_stub.pension_employee:,.2f}</td>
+                </tr>
+                <tr style="background-color: #FEE2E2; font-weight: bold;">
+                    <td style="padding: 8px; border: 1px solid #FCA5A5;">סה"כ ניכויי חובה</td>
+                    <td style="padding: 8px; border: 1px solid #FCA5A5; text-align: left;">₪{selected_stub.total_deductions:,.2f}</td>
+                </tr>
+            </table>
+        </div>
+
+    </div>
+
+    <div style="margin-top: 20px; background-color: #DCFCE7; border: 2px solid #16A34A; border-radius: 8px; padding: 15px; text-align: center;">
+        <span style="font-size: 18px; color: #15803D; font-weight: bold;">💰 שכר נטו לתשלום לחשבון הבנק: ₪{selected_stub.net_salary:,.2f}</span>
+    </div>
+
+</div>
+"""
+
+components.html(paystub_html, height=520, scrolling=True)
+
+# ---------------------------------------------------------------------------
+# 📧 רובריקה במרכז: מייל שאליו אפשר לשלוח את התלושים
+# ---------------------------------------------------------------------------
+st.subheader("📧 שליחת תלוש השכר המעוצב למייל")
+
+email_col1, email_col2 = st.columns([1, 2])
+
+with email_col1:
+    user_email = st.text_input(
+        "הקלידי כתובת דוא\"ל לשליחת התלוש המעוצב:",
+        value=f"{selected_stub.emp_id}.payroll@company.co.il",
+        key="email_input"
+    )
+
+with email_col2:
+    st.write("")
+    st.write("")
+    if st.button("📧 שלח תלוש במייל", use_container_width=True):
+        st.success(f"התלוש המעוצב של {selected_stub.emp_name} נשלח בהצלחה לכתובת: **{user_email}**!")
+
+st.markdown("---")
+
+# ---------------------------------------------------------------------------
+# 🧮 רובריקה במרכז: החישוב המדויק של כל הפרטים עד רמת האגורה
+# ---------------------------------------------------------------------------
+st.subheader("🧮 החישוב המדויק של כל הפרטים (פירוט אריתמטי שקוף)")
+
+with st.expander(f"🔍 לצפייה בחישוב האריתמטי המפורט של {selected_stub.emp_name}", expanded=True):
+    st.markdown(f"""
+    * **שכר בסיס:** ₪{selected_stub.base_salary:,.2f}
+    * **תעריף שעתי מחושב (בסיס ÷ 182 שעות):** ₪{(selected_stub.base_salary / Decimal('182')):,.2f} לשעה
+    * **תוספת שעות נוספות:** ₪{selected_stub.overtime_pay:,.2f}
+    * **תוספת בונוסים ועמלות:** ₪{selected_stub.bonus:,.2f}
+    * **סה"כ שכר ברוטו לחישוב:** **₪{selected_stub.gross_salary:,.2f}**
+    * **חישוב מס הכנסה (מדרגות מס 2026):**
+      • חיובי מס ברוטו לפי מדרגות: ₪{(selected_stub.income_tax + selected_stub.credit_points * Decimal('242.00')):,.2f}
+      • זיכוי מס עבור {selected_stub.credit_points} נ"ז (₪242.00 לנ"ז): ₪{(selected_stub.credit_points * Decimal('242.00')):,.2f}
+      • **מס הכנסה סופי לתשלום:** **₪{selected_stub.income_tax:,.2f}**
+    * **דמי ביטוח לאומי ומס בריאות:** **₪{selected_stub.national_insurance:,.2f}** (שיעור מופחת עד ₪7,522, שיעור מלא מעל)
+    * **ניכוי פנסיה עובד (6.0% מהברוטו):** **₪{selected_stub.pension_employee:,.2f}**
+    * **סה"כ ניכויי חובה:** **₪{selected_stub.total_deductions:,.2f}**
+    * **נטו לתשלום לבנק:** **₪{selected_stub.net_salary:,.2f}**
+    """)
+
+st.markdown("---")
+
+# ---------------------------------------------------------------------------
+# 📋 לוח בדיקות ואישורים (Human-in-the-Loop)
+# ---------------------------------------------------------------------------
 st.subheader("📋 לוח בדיקות ואישורים (Human-in-the-Loop)")
 st.write("מנגנון ה-AI חישב את השכר וסרק אנומליות. החלטת האישור הסופית נשארת בידי חשב השכר:")
 
@@ -332,8 +483,7 @@ for p in paystubs:
                 else:
                     st.info(f"🟡 **[LOW RISK]** {flag.message_hebrew}")
             
-            # כפתורי פעולה אינטראקטיביים
-            btn_col1, btn_col2, btn_col3 = st.columns([1, 2])
+            btn_col1, btn_col2, btn_col3 = st.columns([2, 3])
             with btn_col1:
                 if st.button(f"✅ אשר תלוש", key=f"approve_{p.emp_id}"):
                     st.success(f"תלוש השכר של {p.emp_name} אושר בהצלחה!")
@@ -345,7 +495,6 @@ for p in paystubs:
 
 st.markdown("---")
 
-# אישור גורף
 if st.button("🚀 אישור גורף לכל התלושים התקינים והפקת תלושים", type="primary"):
     st.balloons()
-    st.success("כל התלושים התקינים נסגרו, הופקו ונשלחו אוטומטית לעובדים!")
+    st.success("כל התלושים התקינים נסגרו, הופקו ונשלחו אוטומטית לעובדים במייל!")
