@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -11,8 +10,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ===========================================================================
-# 🤖 אפליקציית חישוב שכר אוטונומית (v6.0 - גרסה מלאה ללא חסרים)
-# Autonomous AI Payroll App: Full Detailed Calculation for ALL Employees
+# 🤖 אפליקציית חישוב שכר אוטונומית (v7.0 - שליחת תלוש HTML מעוצב במייל)
+# Autonomous AI Payroll App: Formatted HTML Paystub Email Delivery
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
@@ -224,40 +223,94 @@ class PayrollProcessor:
         )
 
 # ---------------------------------------------------------------------------
-# פונקציית שליחת מיילים אמיתית ב-SMTP
+# פונקציית שליחת תלוש מעוצב ב-HTML במייל
 # ---------------------------------------------------------------------------
 def send_real_email(recipient_email: str, stub: CalculatedPaystub, sender_email: str, sender_pass: str):
     try:
-        msg = MIMEMultipart()
+        msg = MIMEMultipart('alternative')
         msg['From'] = sender_email
         msg['To'] = recipient_email
-        msg['Subject'] = f"📄 תלוש משכורת רשמי עבור {stub.emp_name} - ספטמבר 2026"
+        msg['Subject'] = f"📄 תלוש משכורת רשמי — {stub.emp_name} — ספטמבר 2026"
 
-        body = f"""שלום {stub.emp_name},
+        # גרסת HTML מעוצבת למציג המיילים (Gmail / Outlook)
+        html_body = f"""
+        <!DOCTYPE html>
+        <html dir="rtl" lang="he">
+        <head>
+            <meta charset="utf-8">
+        </head>
+        <body style="font-family: Arial, 'Segoe UI', sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; direction: rtl; text-align: right;">
+            <div style="max-width: 650px; margin: 0 auto; background-color: #ffffff; border: 2px solid #1E3A8A; border-radius: 12px; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                
+                <div style="background-color: #1E3A8A; color: #ffffff; padding: 16px; border-radius: 8px; text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 20px;">
+                    📄 תלוש משכורת רשמי — שנת מס 2026
+                </div>
 
-מצורף תלוש המשכורת הרשמי שלך לחודש ספטמבר 2026:
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+                    <tr style="background-color: #F3F4F6;">
+                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>שם העובד/ת:</b> {stub.emp_name}</td>
+                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>תעודת זהות:</b> {stub.emp_id}</td>
+                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>חודש שכר:</b> ספטמבר 2026</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>נקודות זיכוי מס:</b> {stub.credit_points} נ"ז</td>
+                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>תקן שעות:</b> 182 שעות</td>
+                        <td style="padding: 10px; border: 1px solid #E5E7EB;"><b>סטטוס:</b> <span style="color: green; font-weight: bold;">מאושר AI</span></td>
+                    </tr>
+                </table>
 
-• שכר בסיס: ₪{stub.base_salary:,.2f}
-• גמול שעות נוספות (125% + 150%): ₪{stub.overtime_pay:,.2f}
-• בונוסים ועמלות: ₪{stub.bonus:,.2f}
-------------------------------------
-• סה"כ שכר ברוטו: ₪{stub.gross_salary:,.2f}
-------------------------------------
-• ניכוי מס הכנסה (לאחר נ"ז): ₪{stub.income_tax:,.2f}
-• ניכוי ביטוח לאומי ומס בריאות: ₪{stub.national_insurance:,.2f}
-• הפרשת פנסיה עובד (6%): ₪{stub.pension_employee:,.2f}
-------------------------------------
-💰 שכר נטו לתשלום לבנק: ₪{stub.net_salary:,.2f}
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+                    <thead>
+                        <tr style="background-color: #1E3A8A; color: #ffffff;">
+                            <th style="padding: 10px; border: 1px solid #CBD5E1; text-align: right;">פירוט ברוטו</th>
+                            <th style="padding: 10px; border: 1px solid #CBD5E1; text-align: left;">סכום (₪)</th>
+                            <th style="padding: 10px; border: 1px solid #CBD5E1; text-align: right;">ניכויי חובה</th>
+                            <th style="padding: 10px; border: 1px solid #CBD5E1; text-align: left;">סכום (₪)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB;">שכר בסיס</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{stub.base_salary:,.2f}</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB;">מס הכנסה (לאחר נ"ז)</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{stub.income_tax:,.2f}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB;">גמול שעות נוספות</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{stub.overtime_pay:,.2f}</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB;">ביטוח לאומי ומס בריאות</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{stub.national_insurance:,.2f}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB;">בונוסים ועמלות</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{stub.bonus:,.2f}</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB;">פנסיה עובד (6.0%)</td>
+                            <td style="padding: 8px; border: 1px solid #E5E7EB; text-align: left;">₪{stub.pension_employee:,.2f}</td>
+                        </tr>
+                        <tr style="font-weight: bold; background-color: #F3F4F6;">
+                            <td style="padding: 10px; border: 1px solid #CBD5E1;">סה"כ ברוטו</td>
+                            <td style="padding: 10px; border: 1px solid #CBD5E1; text-align: left; color: #1E3A8A;">₪{stub.gross_salary:,.2f}</td>
+                            <td style="padding: 10px; border: 1px solid #CBD5E1;">סה"כ ניכויים</td>
+                            <td style="padding: 10px; border: 1px solid #CBD5E1; text-align: left; color: #991B1B;">₪{stub.total_deductions:,.2f}</td>
+                        </tr>
+                    </tbody>
+                </table>
 
-תלוש זה חושב ואושר בדיוק פיננסי מלא ע"י מערכת AI Payroll.
-"""
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+                <div style="background-color: #DCFCE7; border: 2px solid #16A34A; border-radius: 8px; padding: 16px; text-align: center; margin-top: 20px;">
+                    <span style="font-size: 20px; color: #15803D; font-weight: bold;">💰 שכר נטו לתשלום לבנק: ₪{stub.net_salary:,.2f}</span>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
         server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
         server.login(sender_email, sender_pass)
         server.send_message(msg)
         server.quit()
-        return True, "התלוש נשלח בהצלחה לתיבת המייל!"
+        return True, f"תלוש מעוצב ומאורגן ב-HTML נשלח בהצלחה למייל {recipient_email}!"
     except Exception as e:
         return False, f"שגיאה בהתחברות לשרת המייל: {str(e)}"
 
@@ -496,7 +549,7 @@ if st.button("📧 שלח תלוש במייל עכשיו", type="primary", use_c
     if not sender_password:
         st.warning("⚠️ יש להזין סיסמת אפליקציה בשדה ההגדרות כדי להתחבר לשרת הדוא\"ל ולשלוח.")
     else:
-        with st.spinner("מתחבר לשרת הדוא\"ל ושולח את התלוש..."):
+        with st.spinner("מתחבר לשרת הדוא\"ל ושולח את התלוש המעוצב ב-HTML..."):
             success, msg = send_real_email(target_email, selected_stub, sender_email, sender_password)
             if success:
                 st.balloons()
