@@ -251,7 +251,7 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
                 first_name_col = col
             elif 'שם משפחה' in c_clean or 'last' in c_clean:
                 last_name_col = col
-            elif ('שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean) and not full_name_col and 'מס' not in c_clean and 'תז' not in c_clean and 'ת.ז' in c_clean:
+            elif ('שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean) and not full_name_col and 'מס' not in c_clean and 'תז' not in c_clean and 'ת.ז' not in c_clean:
                 full_name_col = col
             elif ('שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean) and not full_name_col and 'מס' not in c_clean and 'תז' not in c_clean:
                 full_name_col = col
@@ -554,7 +554,7 @@ elif st.session_state.step == 5:
     calculated_data = [engine.process(e) for e in current_employees_input]
 
     template_label = st.session_state.sample_template_name or 'תבנית ארגונית רשמית'
-    company_name = template_label.split('.').replace('_', ' ').replace('-', ' ')
+    company_name = template_label.split('.')[0].replace('_', ' ').replace('-', ' ')
 
     st.info(f"✨ **התלושים מופקים בהתאמה לתבנית הארגון:** `{template_label}`")
 
