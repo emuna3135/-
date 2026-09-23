@@ -8,7 +8,7 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (פענוח חכם ל-100% מהנתונים והשמות)
+# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (תיקון פונט אייקונים 100% עברית)
 # ===========================================================================
 
 st.set_page_config(
@@ -18,22 +18,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# עיצוב CSS מודרני: RTL מלא, טיפוגרפיה נקייה וכרטיסים אווריריים
+# עיצוב CSS מודרני: RTL מלא, תוך הגנה על הפונט של האייקונים (Material Icons)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
     
+    /* הגדרת גופן עברי כללי */
     html, body, [data-testid="stAppViewContainer"], .main, .stApp {
         direction: rtl;
         text-align: right;
-        font-family: 'Rubik', sans-serif !important;
+        font-family: 'Rubik', sans-serif;
         background-color: #F8FAFC;
     }
     
-    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, label, div, span, caption {
+    /* החלת Rubik רק על טקסטים ולא על אייקונים מובנים של Streamlit */
+    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, label, caption {
         direction: rtl !important;
         text-align: right !important;
         font-family: 'Rubik', sans-serif !important;
+    }
+    
+    /* מניעת דריסת הפונט של אייקוני החצים (מונע הופעת keyboard_arrow_down כטקסט) */
+    [data-testid="stExpanderToggleIcon"], .material-symbols-outlined, [class*="material-"] {
+        font-family: 'Material Symbols Outlined', 'Material Icons' !important;
+        direction: ltr !important;
     }
     
     .clean-card {
@@ -201,12 +209,10 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
             df = df_raw
             best_row_idx = 0
         elif filename.endswith(('.xlsx', '.xls')):
-            # קריאה ללא כותרות כדי לאתר את שורת הכותרת האמיתית
             df_raw = pd.read_excel(io.BytesIO(file_bytes), header=None)
             if df_raw.empty:
                 return []
             
-            # איתור מבוסס ניקוד לשורת הכותרות (מונע תפיסת כותרת הדו"ח בשורה 0)
             best_row_idx = 0
             max_score = -1
             keywords = ['שם', 'עובד', 'name', 'תז', 'ת.ז', 'id', 'בסיס', 'salary', 'משכורת', 'ברוטו', 'תפקיד', 'מחלקה', 'בונוס', 'bonus', 'שעות']
@@ -214,7 +220,7 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
             for r_idx in range(min(20, len(df_raw))):
                 row_vals = [str(v).strip() for v in df_raw.iloc[r_idx].values if pd.notna(v) and str(v).strip() != '']
                 if len(row_vals) < 2:
-                    continue  # שורה ריקה או כותרת עליונה בודדת
+                    continue
                 row_str_lower = ' '.join(row_vals).lower()
                 matches = sum(1 for k in keywords if k in row_str_lower)
                 text_cols = sum(1 for v in row_vals if not str(v).replace('.', '').replace('-', '').replace('₪', '').strip().isdigit())
@@ -223,7 +229,6 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
                     max_score = score
                     best_row_idx = r_idx
 
-            # טעינת הטבלה מתוך שורת הכותרת האמיתית
             df = pd.read_excel(io.BytesIO(file_bytes), header=best_row_idx)
         else:
             return []
@@ -231,7 +236,6 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
         df = df.dropna(how='all')
         df.columns = [str(c).strip() for c in df.columns]
 
-        # זיהוי עמודות
         full_name_col = None
         first_name_col = None
         last_name_col = None
@@ -269,7 +273,6 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
             elif ('זיכוי' in c_clean or 'credit' in c_clean or 'נז' in c_clean or 'נ"ז' in c_clean) and not credit_col:
                 credit_col = col
 
-        # סורק גיבוי למציאת עמודת שמות עבריים
         if not full_name_col and not (first_name_col and last_name_col):
             for col in df.columns:
                 if 'unnamed' in str(col).lower(): continue
@@ -287,7 +290,6 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
             except Exception:
                 return default
 
-        # קריאת כל העובדים שורה אחר שורה
         for idx, row in df.iterrows():
             emp_name = ""
             if first_name_col and last_name_col:
@@ -300,7 +302,6 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
                 if pd.notna(val) and str(val).strip() and str(val).strip().lower() != 'nan':
                     emp_name = str(val).strip()
 
-            # סינון שורות סיכום וסה"כ
             if not emp_name or emp_name.lower() == 'nan' or any(k in emp_name for k in ['סה"כ', 'סיכום', 'עובדים', 'סה״כ']):
                 continue
 
@@ -391,7 +392,6 @@ if st.session_state.step == 1:
         if cam_image:
             st.success("📸 המסמך צולם בהצלחה ופוענח במערכת!")
 
-    # תצוגה מקדימה נקייה בעברית של הקובץ שהועלה
     if st.session_state.uploaded_employees_data:
         st.markdown(f"### 📋 נקלטו {len(st.session_state.uploaded_employees_data)} עובדים מתוך הקובץ:")
         df_preview = get_hebrew_display_df(st.session_state.uploaded_employees_data)
@@ -470,7 +470,7 @@ elif st.session_state.step == 3:
         is_rej = emp['id'] in st.session_state.rejected_stubs
         status_text = "✅ אושר" if is_app else ("❌ נדחה" if is_rej else "⏳ ממתין לבדיקה")
 
-        with st.expander(f"👤 **{emp['name']}** (ת.ז {emp['id']}) — סטטוס: [{status_text}] — 💰 נטו לבנק: ₪{emp['net']:,.2f}", expanded=(not is_app and not is_rej)):
+        with st.expander(f"👤 {emp['name']} (ת.ז {emp['id']}) — סטטוס: [{status_text}] — 💰 נטו לבנק: ₪{emp['net']:,.2f}", expanded=(not is_app and not is_rej)):
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown(f"""
@@ -554,7 +554,7 @@ elif st.session_state.step == 5:
     calculated_data = [engine.process(e) for e in current_employees_input]
 
     template_label = st.session_state.sample_template_name or 'תבנית ארגונית רשמית'
-    company_name = template_label.split('.')[0].replace('_', ' ').replace('-', ' ')
+    company_name = template_label.split('.').replace('_', ' ').replace('-', ' ')
 
     st.info(f"✨ **התלושים מופקים בהתאמה לתבנית הארגון:** `{template_label}`")
 
