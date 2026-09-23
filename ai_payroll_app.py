@@ -1,6 +1,6 @@
-
 import streamlit as st
 import pandas as pd
+import io
 from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
@@ -8,7 +8,7 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (פענוח אקסל חכם, 100% עברית ועיצוב אוורירי)
+# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (פענוח חכם ל-100% מהנתונים והשמות)
 # ===========================================================================
 
 st.set_page_config(
@@ -180,49 +180,61 @@ class EasyPayrollEngine:
         }
 
 # ===========================================================================
-# 🧠 פונקציית קליטה ופענוח אקסל משודרגת (פותרת 100% מבעיות השמות ו-NaN)
+# 🧠 פונקציית קליטה ופענוח אקסל מתוחכמת (קוראת 100% מהשמות והנתונים)
 # ===========================================================================
 def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     parsed_records = []
     try:
         filename = uploaded_file.name.lower()
-        df_raw = None
+        file_bytes = uploaded_file.getvalue()
         
         if filename.endswith('.csv'):
-            try:
-                df_raw = pd.read_csv(uploaded_file)
-            except Exception:
-                uploaded_file.seek(0)
-                df_raw = pd.read_csv(uploaded_file, encoding='cp1255')
-        elif filename.endswith(('.xlsx', '.xls')):
-            df_raw = pd.read_excel(uploaded_file, header=None)
-        else:
-            return []
-
-        if df_raw is None or df_raw.empty:
-            return []
-
-        # 1. איתור חכם של שורת הכותרות (Header Row Auto-Detection)
-        header_row_idx = 0
-        if filename.endswith(('.xlsx', '.xls')):
-            for r_idx in range(min(15, len(df_raw))):
-                row_vals = [str(v).strip().lower() for v in df_raw.iloc[r_idx].values if pd.notna(v)]
-                row_str = " ".join(row_vals)
-                if any(k in row_str for k in ['שם', 'עובד', 'name', 'תז', 'ת.ז', 'id', 'בסיס', 'salary']):
-                    header_row_idx = r_idx
+            df_raw = None
+            for enc in ['utf-8-sig', 'utf-8', 'cp1255', 'iso-8859-8']:
+                try:
+                    df_raw = pd.read_csv(io.BytesIO(file_bytes), encoding=enc)
                     break
-            
-            uploaded_file.seek(0)
-            df = pd.read_excel(uploaded_file, header=header_row_idx)
-        else:
+                except Exception:
+                    continue
+            if df_raw is None:
+                return []
             df = df_raw
+            best_row_idx = 0
+        elif filename.endswith(('.xlsx', '.xls')):
+            # קריאה ללא כותרות כדי לאתר את שורת הכותרת האמיתית
+            df_raw = pd.read_excel(io.BytesIO(file_bytes), header=None)
+            if df_raw.empty:
+                return []
+            
+            # איתור מבוסס ניקוד לשורת הכותרות (מונע תפיסת כותרת הדו"ח בשורה 0)
+            best_row_idx = 0
+            max_score = -1
+            keywords = ['שם', 'עובד', 'name', 'תז', 'ת.ז', 'id', 'בסיס', 'salary', 'משכורת', 'ברוטו', 'תפקיד', 'מחלקה', 'בונוס', 'bonus', 'שעות']
+            
+            for r_idx in range(min(20, len(df_raw))):
+                row_vals = [str(v).strip() for v in df_raw.iloc[r_idx].values if pd.notna(v) and str(v).strip() != '']
+                if len(row_vals) < 2:
+                    continue  # שורה ריקה או כותרת עליונה בודדת
+                row_str_lower = ' '.join(row_vals).lower()
+                matches = sum(1 for k in keywords if k in row_str_lower)
+                text_cols = sum(1 for v in row_vals if not str(v).replace('.', '').replace('-', '').replace('₪', '').strip().isdigit())
+                score = matches * 10 + text_cols
+                if score > max_score and matches >= 1:
+                    max_score = score
+                    best_row_idx = r_idx
 
+            # טעינת הטבלה מתוך שורת הכותרת האמיתית
+            df = pd.read_excel(io.BytesIO(file_bytes), header=best_row_idx)
+        else:
+            return []
+
+        df = df.dropna(how='all')
         df.columns = [str(c).strip() for c in df.columns]
 
-        # 2. זיהוי גמיש של שדות הטבלה
+        # זיהוי עמודות
+        full_name_col = None
         first_name_col = None
         last_name_col = None
-        full_name_col = None
         id_col = None
         base_col = None
         ot125_col = None
@@ -239,10 +251,12 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
                 first_name_col = col
             elif 'שם משפחה' in c_clean or 'last' in c_clean:
                 last_name_col = col
-            elif ('שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean or 'שמות' in c_clean) and not full_name_col:
+            elif ('שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean) and not full_name_col and 'מס' not in c_clean and 'תז' not in c_clean and 'ת.ז' in c_clean:
                 full_name_col = col
-            
-            if ('תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean or 'מספר' in c_clean or 'זהות' in c_clean) and not id_col:
+            elif ('שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean) and not full_name_col and 'מס' not in c_clean and 'תז' not in c_clean:
+                full_name_col = col
+
+            if ('תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean or 'זהות' in c_clean or 'מס' in c_clean) and not id_col:
                 id_col = col
             elif ('בסיס' in c_clean or 'base' in c_clean or 'שכר' in c_clean or 'salary' in c_clean or 'יסוד' in c_clean) and not base_col:
                 base_col = col
@@ -255,17 +269,25 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
             elif ('זיכוי' in c_clean or 'credit' in c_clean or 'נז' in c_clean or 'נ"ז' in c_clean) and not credit_col:
                 credit_col = col
 
-        # גיבוי (Fallback): אם לא נמצאה עמודת שם, מציאת עמודת הטקסט העברית הראשונה
+        # סורק גיבוי למציאת עמודת שמות עבריים
         if not full_name_col and not (first_name_col and last_name_col):
             for col in df.columns:
-                if 'unnamed' in str(col).lower():
-                    continue
+                if 'unnamed' in str(col).lower(): continue
                 sample_vals = df[col].dropna().astype(str).tolist()
                 if any(any('\u0590' <= ch <= '\u05ff' for ch in s) for s in sample_vals[:10]):
                     full_name_col = col
                     break
 
-        # 3. חילוץ וניקוי הנתונים שורה אחר שורה
+        def clean_num(v, default=0.0):
+            if pd.isna(v) or v == '' or v is None:
+                return default
+            try:
+                s = str(v).replace('₪', '').replace(',', '').strip()
+                return float(s)
+            except Exception:
+                return default
+
+        # קריאת כל העובדים שורה אחר שורה
         for idx, row in df.iterrows():
             emp_name = ""
             if first_name_col and last_name_col:
@@ -277,11 +299,10 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
                 val = row.get(full_name_col)
                 if pd.notna(val) and str(val).strip() and str(val).strip().lower() != 'nan':
                     emp_name = str(val).strip()
-            
-            if not emp_name or emp_name.lower() == 'nan':
-                if row.dropna().empty:
-                    continue
-                emp_name = f"עובד {idx + 1}"
+
+            # סינון שורות סיכום וסה"כ
+            if not emp_name or emp_name.lower() == 'nan' or any(k in emp_name for k in ['סה"כ', 'סיכום', 'עובדים', 'סה״כ']):
+                continue
 
             emp_id = ""
             if id_col:
@@ -291,23 +312,17 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
                     if id_str.endswith('.0'):
                         id_str = id_str[:-2]
                     emp_id = id_str
-            if not emp_id:
+            if not emp_id or 'סה' in emp_id:
                 emp_id = str(idx + 101)
-
-            base_val = row.get(base_col, 0) if base_col else 0
-            ot125_val = row.get(ot125_col, 0) if ot125_col else 0
-            ot150_val = row.get(ot150_col, 0) if ot150_col else 0
-            bonus_val = row.get(bonus_col, 0) if bonus_col else 0
-            credit_val = row.get(credit_col, 2.25) if credit_col else 2.25
 
             record = {
                 'id': emp_id,
                 'name': emp_name,
-                'base_salary': base_val,
-                'ot_125': ot125_val,
-                'ot_150': ot150_val,
-                'bonus': bonus_val,
-                'credit_points': credit_val
+                'base_salary': clean_num(row.get(base_col, 0)),
+                'ot_125': clean_num(row.get(ot125_col, 0)),
+                'ot_150': clean_num(row.get(ot150_col, 0)),
+                'bonus': clean_num(row.get(bonus_col, 0)),
+                'credit_points': clean_num(row.get(credit_col, 2.25), default=2.25)
             }
             parsed_records.append(record)
 
@@ -378,9 +393,9 @@ if st.session_state.step == 1:
 
     # תצוגה מקדימה נקייה בעברית של הקובץ שהועלה
     if st.session_state.uploaded_employees_data:
-        st.markdown("### 📋 תצוגה מקדימה של נתוני העובדים שנקלטו:")
+        st.markdown(f"### 📋 נקלטו {len(st.session_state.uploaded_employees_data)} עובדים מתוך הקובץ:")
         df_preview = get_hebrew_display_df(st.session_state.uploaded_employees_data)
-        st.dataframe(df_preview, use_container_width=True)
+        st.dataframe(df_preview, use_container_width=True, height=400)
 
     st.markdown("---")
     if st.button("➡️ המשך לשלב החישוב", type="primary", use_container_width=True):
@@ -539,7 +554,7 @@ elif st.session_state.step == 5:
     calculated_data = [engine.process(e) for e in current_employees_input]
 
     template_label = st.session_state.sample_template_name or 'תבנית ארגונית רשמית'
-    company_name = template_label.split('.')[0].replace('_', ' ').replace('-', ' ')
+    company_name = template_label.split('.').replace('_', ' ').replace('-', ' ')
 
     st.info(f"✨ **התלושים מופקים בהתאמה לתבנית הארגון:** `{template_label}`")
 
