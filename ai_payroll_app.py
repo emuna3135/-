@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -7,7 +8,7 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים (גרסת PDF/HTML יציבה 100%)
+# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים (ללא הגבלת עובדים + הורדה יציבה)
 # ===========================================================================
 
 st.set_page_config(
@@ -162,6 +163,7 @@ class EasyPayrollEngine:
             'credit_pts': pts
         }
 
+# פונקציית קריאה מלאה ללא הגבלת שורות
 def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     parsed_records = []
     try:
@@ -208,7 +210,7 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     return parsed_records
 
 # --- כותרת וסרגל התקדמות ---
-st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (הורדה יציבה)")
+st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (ללא הגבלת עובדים)")
 st.caption("מערכת שכר אוטונומית לחשבי שכר | קליטה, חישוב, סקירה והורדה ישירה למחשב")
 
 progress_val = st.session_state.step / 5
@@ -237,7 +239,7 @@ if st.session_state.step == 1:
                     all_records.extend(records)
             if all_records:
                 st.session_state.uploaded_employees_data = all_records
-                st.success(f"✨ נקלטו בהצלחה {len(all_records)} עובדים מתוך הקבצים שהועלו!")
+                st.success(f"✨ נקלטו בהצלחה {len(all_records)} עובדים מתוך הקבצים שהועלו! המערכת תחשב את כולם.")
 
     with up_col2:
         st.write("📸 **צילום טפסים בלייב במצלמה:**")
@@ -408,7 +410,6 @@ elif st.session_state.step == 5:
     selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש והורדה:", options=[e['name'] for e in calculated_data])
     emp = next(e for e in calculated_data if e['name'] == selected_name)
 
-    # בילד קובץ תלוש מעוצב בפורמט HTML להורדה ישירה ולשמירה כ-PDF בכל מחשב/טאבלט
     paystub_doc = f"""<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
