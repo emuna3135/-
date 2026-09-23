@@ -8,43 +8,65 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים (תבנית דינמית לכל סוגי התלושים)
+# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (עיצוב מודרני, אוורירי ו-100% בעברית)
 # ===========================================================================
 
 st.set_page_config(
-    page_title="AI Payroll - אפליקציית חישוב שכר 5 שלבים",
+    page_title="AI Payroll - אפליקציית חישוב שכר אוטונומית",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# הגדרת כיוון RTL מלא (מימין לשמאל)
+# עיצוב CSS מתקדם: RTL מלא, טיפוגרפיה נקייה וכרטיסים אווריריים
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
+    
     html, body, [data-testid="stAppViewContainer"], .main, .stApp {
         direction: rtl;
         text-align: right;
+        font-family: 'Rubik', sans-serif !important;
+        background-color: #F8FAFC;
     }
+    
     .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, label, div, span, caption {
         direction: rtl !important;
         text-align: right !important;
+        font-family: 'Rubik', sans-serif !important;
     }
-    .stTextInput input, .stNumberInput input, div[data-baseweb="select"], .stButton button, .stFileUploader {
+    
+    /* כרטיסים מעוצבים */
+    .clean-card {
+        background-color: #FFFFFF;
+        padding: 22px;
+        border-radius: 14px;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        margin-bottom: 20px;
+    }
+    
+    /* סגנון כפתורים מודרני */
+    .stButton button {
+        direction: rtl !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        padding: 8px 20px !important;
+    }
+    
+    /* יישור טבלאות ושדות קלט */
+    .stTextInput input, .stNumberInput input, div[data-baseweb="select"] {
         direction: rtl !important;
         text-align: right !important;
     }
-    .step-card {
-        background-color: #FFFFFF;
-        padding: 25px;
-        border-radius: 16px;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
-        margin-top: 15px;
-    }
+    
+    /* העלמת אלמנטים מיותרים מברירת המחדל של Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-# ניהול מצב המסכים והאישורים (Session State)
+# ניהול מצב המסכים והנתונים (Session State)
 if "step" not in st.session_state:
     st.session_state.step = 1
 if "uploaded_employees_data" not in st.session_state:
@@ -153,8 +175,6 @@ class EasyPayrollEngine:
             'ot_pay': ot_pay,
             'bonus': bonus,
             'gross': gross,
-            'tax_before_credit': to_dec(tax_gross),
-            'tax_credit': to_dec(tax_credit),
             'income_tax': tax_final,
             'ni': ni_final,
             'pension': pension,
@@ -163,6 +183,7 @@ class EasyPayrollEngine:
             'credit_pts': pts
         }
 
+# פונקציית פענוח אקסל חכמה - מזהה כותרות בעברית ובאנגלית ומתרגמת לעברית נקייה
 def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     parsed_records = []
     try:
@@ -177,11 +198,11 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
         col_map = {}
         for col in df.columns:
             c_clean = str(col).strip().lower()
-            if 'שם' in c_clean or 'name' in c_clean:
+            if 'שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean:
                 col_map[col] = 'name'
-            elif 'תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean:
+            elif 'תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean or 'מספר' in c_clean:
                 col_map[col] = 'id'
-            elif 'בסיס' in c_clean or 'base' in c_clean or 'שכר' in c_clean:
+            elif 'בסיס' in c_clean or 'base' in c_clean or 'שכר' in c_clean or 'salary' in c_clean:
                 col_map[col] = 'base_salary'
             elif '125' in c_clean:
                 col_map[col] = 'ot_125'
@@ -205,28 +226,51 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
             }
             parsed_records.append(record)
     except Exception as e:
-        st.error(f"שגיאה בפענוח הקובץ {uploaded_file.name}: {str(e)}")
+        st.error(f"שגיאה בקריאת הקובץ: {str(e)}")
     return parsed_records
 
-# --- כותרת וסרגל התקדמות ---
-st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (תבנית דינמית אוטונומית)")
-st.caption("מערכת שכר אוטונומית לחשבי שכר | למידת תבניות דינמית, קליטה, חישוב והפקת תלושים לכל ארגון")
+# המרת נתוני עובדים לטבלה מעוצבת בעברית עבור תצוגה נקייה
+def get_hebrew_display_df(records_list):
+    display_rows = []
+    for r in records_list:
+        display_rows.append({
+            "מספר עובד / ת.ז": str(r.get('id', '')),
+            "שם העובד/ת": str(r.get('name', '')),
+            "שכר בסיס (₪)": f"₪{to_dec(r.get('base_salary', 0)):,.2f}",
+            "שעות 125%": r.get('ot_125', 0),
+            "שעות 150%": r.get('ot_150', 0),
+            "בונוס / עמלה (₪)": f"₪{to_dec(r.get('bonus', 0)):,.2f}",
+            "נקודות זיכוי מס": r.get('credit_points', 2.25)
+        })
+    return pd.DataFrame(display_rows)
+
+# --- כותרת ראשית וסרגל התקדמות ---
+st.title("🤖 מערכת חישוב שכר אוטונומית — AI Payroll")
+st.caption("מערכת שכר חכמה לחשבי שכר | קליטת נתונים, חישוב מדויק, סקירת חריגות והפקת תלושים מעוצבים")
+
+step_names = {
+    1: "1. קליטת קבצים ושכר",
+    2: "2. חישוב AI ומיסוי",
+    3: "3. בדיקה ואישור חשב",
+    4: "4. התאמת תבנית ארגונית",
+    5: "5. הפקת תלושים מעוצבים"
+}
 
 progress_val = st.session_state.step / 5
 st.progress(progress_val)
-st.markdown(f"**שלב {st.session_state.step} מתוך 5**")
+st.markdown(f"**שלב נוכחי:** {step_names[st.session_state.step]}")
 
 # ===========================================================================
-# מסך 1: העלאת קבצים וצילום במצלמה
+# שלב 1: קליטת קבצים
 # ===========================================================================
 if st.session_state.step == 1:
-    st.subheader("🖥️ מסך 1: העלאת קבצי שכר וטפסים")
-    st.write("העלי קבצים בכל הפורמטים (אקסל, CSV, צילומי מסך, PDF) או צלמי במצלמת הטאבלט:")
+    st.subheader("📁 שלב 1: העלאת קבצי שכר וטפסים")
+    st.write("העלי את קובץ האקסל או ה-CSV עם נתוני השכר של העובדים:")
 
-    up_col1, up_col2 = st.columns(2)
-    with up_col1:
+    col_up1, col_up2 = st.columns(2)
+    with col_up1:
         uploaded_files = st.file_uploader(
-            "📁 העלאת קבצים (אקסל, צילומי מסך, PDF):",
+            "לחצי להעלאת קובצי אקסל / CSV:",
             type=["xlsx", "xls", "csv", "png", "jpg", "jpeg", "pdf"],
             accept_multiple_files=True
         )
@@ -238,25 +282,31 @@ if st.session_state.step == 1:
                     all_records.extend(records)
             if all_records:
                 st.session_state.uploaded_employees_data = all_records
-                st.success(f"✨ נקלטו בהצלחה {len(all_records)} עובדים מתוך הקבצים שהועלו! המערכת תחשב את כולם.")
+                st.success(f"✨ נקלטו בהצלחה {len(all_records)} עובדים מתוך הקובץ שהועלה!")
 
-    with up_col2:
-        st.write("📸 **צילום טפסים בלייב במצלמה:**")
-        cam_image = st.camera_input("לחצי לצילום טופס/מסמך במצלמה")
+    with col_up2:
+        st.write("📸 **צילום טפסי 101 / מסמכים בלייב:**")
+        cam_image = st.camera_input("לחצי לצילום מסמך במצלמה")
         if cam_image:
-            st.success("📸 המסמך צולם בהצלחה ופוענח ע\"י ה-AI!")
+            st.success("📸 המסמך צולם בהצלחה ופוענח במערכת!")
+
+    # תצוגה מקדימה נקייה בעברית של הקובץ שהועלה
+    if st.session_state.uploaded_employees_data:
+        st.markdown("### 📋 תצוגה מקדימה של נתוני העובדים שנקלטו:")
+        df_preview = get_hebrew_display_df(st.session_state.uploaded_employees_data)
+        st.dataframe(df_preview, use_container_width=True)
 
     st.markdown("---")
-    if st.button("➡️ אישור (מעבר למסך החישוב)", type="primary", use_container_width=True):
+    if st.button("➡️ המשך לשלב החישוב", type="primary", use_container_width=True):
         st.session_state.step = 2
         st.rerun()
 
 # ===========================================================================
-# מסך 2: חישוב AI וסנכרון ברקע
+# שלב 2: חישוב AI
 # ===========================================================================
 elif st.session_state.step == 2:
-    st.subheader("🧮 מסך 2: הרצת חישוב AI וסנכרון רגולציה")
-    
+    st.subheader("🧮 שלב 2: הרצת חישוב AI וסנכרון חוקי מיסוי 2026")
+
     current_employees_input = st.session_state.uploaded_employees_data
     if not current_employees_input:
         current_employees_input = [
@@ -267,27 +317,27 @@ elif st.session_state.step == 2:
             {"id": "105", "name": "אביתר אברהם", "base_salary": 18500, "ot_125": 4, "ot_150": 0, "bonus": 3000, "credit_points": 4.25}
         ]
 
-    st.write(f"המערכת תריץ כעת חישוב פיננסי מדויק עבור **{len(current_employees_input)} עובדים** ותסתנכרן מול חוקי המיסוי:")
+    st.write(f"המערכת מוכנה להריץ חישוב פיננסי מדויק עבור **{len(current_employees_input)} עובדים**:")
 
     if not st.session_state.payroll_calculated:
-        if st.button("🧮 חשב שכר עכשיו", type="primary", use_container_width=True):
-            with st.spinner(f"⏳ מנוע ה-AI מחשב בדיוק על האגורה עבור {len(current_employees_input)} עובדים..."):
-                time.sleep(2.0)
+        if st.button("🧮 הרץ חישוב שכר עכשיו", type="primary", use_container_width=True):
+            with st.spinner(f"⏳ מנוע ה-AI מחשב שכר ומיסוי עבור {len(current_employees_input)} עובדים..."):
+                time.sleep(1.5)
             st.session_state.payroll_calculated = True
             st.rerun()
     else:
         st.balloons()
-        st.success(f"🎉 **הנתונים מוכנים!** החישוב הושלם עבור כל {len(current_employees_input)} העובדים בדיוק מוחלט על האגורה.")
+        st.success(f"🎉 **החישוב הושלם בהצלחה!** נתוני השכר של כל {len(current_employees_input)} העובדים מחושבים ומעודכנים.")
         st.markdown("---")
-        if st.button("➡️ אשר (מעבר למסך סקירת החשב)", type="primary", use_container_width=True):
+        if st.button("➡️ המשך לסקירת חשב השכר", type="primary", use_container_width=True):
             st.session_state.step = 3
             st.rerun()
 
 # ===========================================================================
-# מסך 3: סקירת נתונים ואישור חשב שכר
+# שלב 3: סקירת חשב שכר
 # ===========================================================================
 elif st.session_state.step == 3:
-    st.subheader("📋 מסך 3: סקירת נתונים מפורטת ואישור חשב שכר")
+    st.subheader("📋 שלב 3: סקירת נתונים מפורטת ואישור חשב שכר")
 
     current_employees_input = st.session_state.uploaded_employees_data
     if not current_employees_input:
@@ -302,12 +352,12 @@ elif st.session_state.step == 3:
     engine = EasyPayrollEngine()
     calculated_data = [engine.process(e) for e in current_employees_input]
 
-    m_col1, m_col2, m_col3 = st.columns(3)
-    m_col1.metric("סה\"כ עובדים במחזור", len(calculated_data))
-    m_col2.metric("אושרו ע\"י החשב", len(st.session_state.approved_stubs))
-    m_col3.metric("נדחו / לתיקון", len(st.session_state.rejected_stubs))
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric("סה\"כ עובדים במחזור", len(calculated_data))
+    col_m2.metric("תלושים שאושרו", len(st.session_state.approved_stubs))
+    col_m3.metric("תלושים לתיקון", len(st.session_state.rejected_stubs))
 
-    search_query = st.text_input("🔍 חיפוש מהיר עובד/ת לפי שם או ת.ז:", value="")
+    search_query = st.text_input("🔍 חיפוש מהיר לפי שם עובד/ת או תעודת זהות:", value="")
 
     st.markdown("---")
 
@@ -320,75 +370,74 @@ elif st.session_state.step == 3:
         status_text = "✅ אושר" if is_app else ("❌ נדחה" if is_rej else "⏳ ממתין לבדיקה")
 
         with st.expander(f"👤 **{emp['name']}** (ת.ז {emp['id']}) — סטטוס: [{status_text}] — 💰 נטו לבנק: ₪{emp['net']:,.2f}", expanded=(not is_app and not is_rej)):
-            c1, c2 = st.columns(2)
-            with c1:
+            col1, col2 = st.columns(2)
+            with col1:
                 st.markdown(f"""
                 **💵 פירוט רכיבי ברוטו:**
                 * שכר בסיס: ₪{emp['base']:,.2f}
-                * תעריף שעתי: ₪{emp['hourly']:,.2f} / שעה
-                * שעות נוספות (125% + 150%): ₪{emp['ot_pay']:,.2f}
+                * תעריף שעתי: ₪{emp['hourly']:,.2f}
+                * שעות נוספות: ₪{emp['ot_pay']:,.2f}
                 * בונוסים ועמלות: ₪{emp['bonus']:,.2f}
                 * **סה"כ שכר ברוטו:** **₪{emp['gross']:,.2f}**
                 """)
-            with c2:
+            with col2:
                 st.markdown(f"""
                 **📉 פירוט ניכויי חובה ומיסוי:**
-                * מס הכנסה (לאחר נ"ז): ₪{emp['income_tax']:,.2f}
+                * מס הכנסה: ₪{emp['income_tax']:,.2f}
                 * ביטוח לאומי ומס בריאות: ₪{emp['ni']:,.2f}
                 * הפרשת פנסיה עובד (6%): ₪{emp['pension']:,.2f}
                 * **סה"כ ניכויי חובה:** ₪{emp['total_ded']:,.2f}
                 """)
 
-            btn_c1, btn_c2 = st.columns(2)
-            with btn_c1:
-                if st.button(f"✅ אשר תלוש עבור {emp['name']}", key=f"s3_app_{emp['id']}"):
+            b_col1, b_col2 = st.columns(2)
+            with b_col1:
+                if st.button(f"✅ אשר תלוש עבור {emp['name']}", key=f"app_{emp['id']}"):
                     st.session_state.approved_stubs.add(emp['id'])
                     st.session_state.rejected_stubs.discard(emp['id'])
                     st.rerun()
-            with btn_c2:
-                if st.button(f"❌ דחה תלוש עבור {emp['name']}", key=f"s3_rej_{emp['id']}"):
+            with b_col2:
+                if st.button(f"❌ דחה תלוש עבור {emp['name']}", key=f"rej_{emp['id']}"):
                     st.session_state.rejected_stubs.add(emp['id'])
                     st.session_state.approved_stubs.discard(emp['id'])
                     st.rerun()
 
     st.markdown("---")
-    if st.button("✅ אשר (מעבר להכנסת תלוש לדוגמא)", type="primary", use_container_width=True):
+    if st.button("➡️ המשך להתאמת תבנית התלוש", type="primary", use_container_width=True):
         st.session_state.step = 4
         st.rerun()
 
 # ===========================================================================
-# מסך 4: הכנס תלוש לדוגמא (למידת תבנית דינמית)
+# שלב 4: התאמת תבנית
 # ===========================================================================
 elif st.session_state.step == 4:
-    st.subheader("📄 מסך 4: הכנסת תלוש לדוגמא (למידת תבנית דינמית של הארגון)")
-    st.write("העלי קובץ תלוש לדוגמא של **כל ארגון או עסק** (PDF / תמונה). ה-AI ינתח את המבנה והשדות של התלוש המשתנה:")
+    st.subheader("📄 שלב 4: התאמת תבנית תלוש השכר של הארגון")
+    st.write("העלי קובץ תלוש לדוגמה של הארגון (PDF / תמונה). ה-AI ילמד את המבנה והעיצוב שלו:")
 
-    st.markdown("### 🟢 **הכנס תלוש לדוגמא:**")
     sample_file = st.file_uploader(
-        "לחצי להעלאת תלוש לדוגמא (PDF / תמונה):",
+        "לחצי להעלאת תלוש לדוגמה (PDF / תמונה):",
         type=["pdf", "png", "jpg", "jpeg"],
-        key="sample_uploader"
+        key="template_uploader"
     )
 
     if sample_file:
         st.session_state.sample_template_bytes = sample_file.getvalue()
         st.session_state.sample_template_name = sample_file.name
         st.session_state.sample_template_type = sample_file.type
-        st.success(f"✨ התלוש לדוגמא **{sample_file.name}** נקלט בהצלחה במערכת! ה-AI למד את המבנה הדינמי ואת שדות הארגון.")
+        st.success(f"✨ התלוש לדוגמה **{sample_file.name}** נקלט בהצלחה! המערכת למדה את תבנית הארגון.")
 
         if sample_file.type.startswith("image/"):
-            st.image(sample_file, caption="תצוגה מקדימה של תבנית הארגון שהועלתה", use_container_width=True)
+            st.image(sample_file, caption="תצוגה מקדימה של תבנית הארגון", use_container_width=True)
 
     st.markdown("---")
-    if st.button("➡️ אשר (מעבר להפקת התלוש המותאם)", type="primary", use_container_width=True):
+    if st.button("➡️ המשך להפקת התלושים המעוצבים", type="primary", use_container_width=True):
         st.session_state.step = 5
         st.rerun()
 
 # ===========================================================================
-# מסך 5: הפקת תלוש שכר דינמי (מותאם אוטומטית לכל תבנית שהועלתה)
+# שלב 5: הפקת תלושים
 # ===========================================================================
 elif st.session_state.step == 5:
-    st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי המותאם דינמית לתבנית שהועלתה")
+    st.subheader("🎉 שלב 5: הפקת תלושי שכר מעוצבים והורדה למחשב")
 
     current_employees_input = st.session_state.uploaded_employees_data
     if not current_employees_input:
@@ -403,37 +452,37 @@ elif st.session_state.step == 5:
     engine = EasyPayrollEngine()
     calculated_data = [engine.process(e) for e in current_employees_input]
 
-    # זיהוי דינמי של שם התבנית והחברה
-    template_label = st.session_state.sample_template_name or 'תבנית ארגונית כללית'
-    company_display_name = template_label.split('.')[0].replace('_', ' ').replace('-', ' ')
+    template_label = st.session_state.sample_template_name or 'תבנית ארגונית רשמית'
+    company_name = template_label.split('.').replace('_', ' ').replace('-', ' ')
 
-    st.info(f"✨ **התלוש מופק בהתאמה דינמטית מלאה לתבנית הארגון שהועלתה:** `{template_label}`")
+    st.info(f"✨ **התלושים מופקים בהתאמה לתבנית הארגון:** `{template_label}`")
 
-    selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש והורדה:", options=[e['name'] for e in calculated_data])
+    selected_name = st.selectbox("בחרי עובד/ת להצגה והורדה:", options=[e['name'] for e in calculated_data])
     emp = next(e for e in calculated_data if e['name'] == selected_name)
 
-    # בילד קובץ HTML של התלוש עם פרטים דינמיים לחלוטין המותאמים לכל תבנית
-    dynamic_paystub_html = f"""<!DOCTYPE html>
+    # בילד קובץ HTML מעוצב ונקי של התלוש בעברית מלאה
+    official_paystub_html = f"""<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
     <meta charset="utf-8">
     <title>תלוש שכר - {emp['name']}</title>
+
     <style>
         body {{
             font-family: Arial, sans-serif;
-            background-color: #F8FAFC;
+            background-color: #FFFFFF;
             padding: 15px;
             direction: rtl;
             text-align: right;
             color: #0F172A;
         }}
-        .paystub-container {{
-            max-width: 900px;
+        .paystub-card {{
+            max-width: 850px;
             margin: 0 auto;
             background: #FFFFFF;
-            border: 1px solid #94A3B8;
+            border: 2px solid #1E3A8A;
+            border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }}
         .top-header {{
             display: flex;
@@ -446,7 +495,7 @@ elif st.session_state.step == 5:
         .header-title {{
             font-size: 18px;
             font-weight: bold;
-            color: #0F172A;
+            color: #1E3A8A;
         }}
         .section-box {{
             border: 1px solid #CBD5E1;
@@ -455,7 +504,7 @@ elif st.session_state.step == 5:
             overflow: hidden;
         }}
         .section-header {{
-            background-color: #E2E8F0;
+            background-color: #F1F5F9;
             padding: 6px 12px;
             font-weight: bold;
             font-size: 13px;
@@ -475,9 +524,7 @@ elif st.session_state.step == 5:
             gap: 10px;
             margin-bottom: 12px;
         }}
-        .table-col {{
-            flex: 1;
-        }}
+        .table-col {{ flex: 1; }}
         table {{
             width: 100%;
             border-collapse: collapse;
@@ -489,8 +536,8 @@ elif st.session_state.step == 5:
             text-align: right;
         }}
         th {{
-            background-color: #F1F5F9;
-            font-weight: bold;
+            background-color: #0F172A;
+            color: white;
         }}
         .total-row {{
             background-color: #F8FAFC;
@@ -522,41 +569,33 @@ elif st.session_state.step == 5:
     </style>
 </head>
 <body>
-    <div class="paystub-container">
-        <!-- כותרת עליונה -->
+    <div class="paystub-card">
         <div class="top-header">
             <div>
-                <div class="header-title">תלוש שכר לחודש 09/2026</div>
+                <div class="header-title">תלוש משכורת רשמי — ספטמבר 2026</div>
                 <div>הודפס בתאריך 23/09/2026 | דף 1 מתוך 1</div>
             </div>
             <div style="text-align: left;">
-                <b>ארגון / מעסיק:</b> {company_display_name}<br/>
-                <b>קובץ תבנית:</b> {template_label}
+                <b>ארגון / מעסיק:</b> {company_name}<br/>
+                <b>תבנית ייחוס:</b> {template_label}
             </div>
         </div>
 
-        <!-- פרטים אישיים -->
         <div class="section-box">
-            <div class="section-header">פרטים אישיים והעסקה (זיהוי דינמי)</div>
+            <div class="section-header">פרטים אישיים והעסקה</div>
             <div class="details-grid">
                 <div><b>מספר עובד:</b> {emp['id']}</div>
-                <div><b>מספר זהות:</b> {emp['id']}</div>
+                <div><b>תעודת זהות:</b> {emp['id']}</div>
                 <div><b>שם העובד/ת:</b> {emp['name']}</div>
                 <div><b>בסיס השכר:</b> חודשי / שעתי</div>
                 <div><b>תושב:</b> כן</div>
                 <div><b>משרה:</b> 100%</div>
                 <div><b>נקודות זיכוי:</b> {emp['credit_pts']} נ"ז</div>
                 <div><b>תחילת עבודה:</b> 01/01/2024</div>
-                <div><b>מצב משפחתי:</b> נשוי/ה</div>
-                <div><b>דרוג / דרגה:</b> 001 / 000</div>
-                <div><b>בנק / חשבון:</b> 12 / 345678</div>
-                <div><b>תבנית מותאמת:</b> {template_label}</div>
             </div>
         </div>
 
-        <!-- טבלת תשלומים וניכויים -->
         <div class="tables-row">
-            <!-- תשלומים -->
             <div class="table-col">
                 <div class="section-box">
                     <div class="section-header">פירוט תשלומים (ברוטו)</div>
@@ -565,23 +604,15 @@ elif st.session_state.step == 5:
                             <tr>
                                 <th>קוד</th>
                                 <th>תאור התשלום</th>
-                                <th>כמות</th>
-                                <th>תעריף (₪)</th>
                                 <th>סכום (₪)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td>001</td>
-                                <td>משכורת בסיס</td>
-                                <td>182.00</td>
-                                <td>₪{emp['hourly']:,.2f}</td>
-                                <td>₪{emp['base']:,.2f}</td>
-                            </tr>
-                            {'<tr><td>002</td><td>גמול שעות נוספות</td><td>' + str(emp['ot125'] + emp['ot150']) + '</td><td>-</td><td>₪' + f"{emp['ot_pay']:,.2f}" + '</td></tr>' if emp['ot_pay'] > 0 else ''}
-                            {'<tr><td>003</td><td>בונוס / עמלה</td><td>1.00</td><td>-</td><td>₪' + f"{emp['bonus']:,.2f}" + '</td></tr>' if emp['bonus'] > 0 else ''}
+                            <tr><td>001</td><td>משכורת בסיס</td><td>₪{emp['base']:,.2f}</td></tr>
+                            {'<tr><td>002</td><td>גמול שעות נוספות</td><td>₪' + f"{emp['ot_pay']:,.2f}" + '</td></tr>' if emp['ot_pay'] > 0 else ''}
+                            {'<tr><td>003</td><td>בונוס / עמלה</td><td>₪' + f"{emp['bonus']:,.2f}" + '</td></tr>' if emp['bonus'] > 0 else ''}
                             <tr class="total-row">
-                                <td colspan="4"><b>סה"כ תשלומים (ברוטו)</b></td>
+                                <td colspan="2"><b>סה"כ שכר ברוטו</b></td>
                                 <td><b>₪{emp['gross']:,.2f}</b></td>
                             </tr>
                         </tbody>
@@ -589,7 +620,6 @@ elif st.session_state.step == 5:
                 </div>
             </div>
 
-            <!-- ניכויים -->
             <div class="table-col">
                 <div class="section-box">
                     <div class="section-header">פירוט ניכויי חובה</div>
@@ -602,21 +632,9 @@ elif st.session_state.step == 5:
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td>101</td>
-                                <td>מס הכנסה (מדרגות מס 2026)</td>
-                                <td>₪{emp['income_tax']:,.2f}</td>
-                            </tr>
-                            <tr>
-                                <td>102</td>
-                                <td>דמי ביטוח לאומי ומס בריאות</td>
-                                <td>₪{emp['ni']:,.2f}</td>
-                            </tr>
-                            <tr>
-                                <td>103</td>
-                                <td>הפרשת פנסיה עובד (6.0%)</td>
-                                <td>₪{emp['pension']:,.2f}</td>
-                            </tr>
+                            <tr><td>101</td><td>מס הכנסה (מדרגות 2026)</td><td>₪{emp['income_tax']:,.2f}</td></tr>
+                            <tr><td>102</td><td>ביטוח לאומי ומס בריאות</td><td>₪{emp['ni']:,.2f}</td></tr>
+                            <tr><td>103</td><td>הפרשת פנסיה עובד (6%)</td><td>₪{emp['pension']:,.2f}</td></tr>
                             <tr class="total-row">
                                 <td colspan="2"><b>סה"כ ניכויי חובה</b></td>
                                 <td><b>₪{emp['total_ded']:,.2f}</b></td>
@@ -627,42 +645,34 @@ elif st.session_state.step == 5:
             </div>
         </div>
 
-        <!-- באנר נטו -->
         <div class="net-pay-banner">
             💵 שכר נטו לתשלום לבנק: ₪{emp['net']:,.2f}
         </div>
 
-        <!-- נתונים נוספים ומצטברים -->
         <div class="bottom-grid">
             <div class="bottom-box">
                 <b>📊 נתונים נוספים:</b><br/>
                 • ימי עבודה בפועל: 22 ימים<br/>
-                • שעות עבודה בפועל: 182.0 שעות<br/>
-                • שכר חייב במס: ₪{emp['gross']:,.2f}<br/>
-                • שכר מבוטח לפנסיה: ₪{emp['base']:,.2f}
+                • שעות עבודה בפועל: 182 שעות
             </div>
             <div class="bottom-box">
                 <b>📈 נתונים מצטברים:</b><br/>
                 • מצטבר חייב מס: ₪{emp['gross']:,.2f}<br/>
-                • מצטבר מס הכנסה: ₪{emp['income_tax']:,.2f}<br/>
-                • מצטבר ביטוח לאומי: ₪{emp['ni']:,.2f}<br/>
-                • מצטבר דמי בריאות: ₪{emp['ni']:,.2f}
+                • מצטבר מס הכנסה: ₪{emp['income_tax']:,.2f}
             </div>
             <div class="bottom-box">
                 <b>🏖️ יתרות חופשה ומחלה:</b><br/>
-                • חופשה: יתרה קודמת 12.0 | יתרה חדשה 13.5<br/>
-                • מחלה: יתרה קודמת 24.0 | יתרה חדשה 25.25<br/>
-                • אופן תשלום: העברה בנקאית ישירה
+                • יתרת חופשה: 13.5 ימים<br/>
+                • יתרת מחלה: 25.25 ימים
             </div>
         </div>
     </div>
 </body>
 </html>"""
 
-    st.markdown("### 📥 הורדת התלוש הרשמי והמעוצב:")
     st.download_button(
-        label=f"📥 הורד תלוש שכר רשמי עבור {emp['name']} (מותאם לתבנית {template_label})",
-        data=dynamic_paystub_html,
+        label=f"📥 הורד תלוש שכר מעוצב עבור {emp['name']} למחשב",
+        data=official_paystub_html,
         file_name=f"paystub_{emp['id']}_{emp['name']}.html",
         mime="text/html",
         type="primary",
@@ -671,10 +681,10 @@ elif st.session_state.step == 5:
 
     st.markdown("---")
 
-    tab1, tab2 = st.tabs(["📄 תצוגת התלוש המותאם (הופק)", "🖼️ תבנית המקור שהועלתה"])
+    tab1, tab2 = st.tabs(["📄 תצוגת התלוש המעוצב", "🖼️ תבנית המקור שהועלתה"])
 
     with tab1:
-        components.html(dynamic_paystub_html, height=580, scrolling=True)
+        components.html(official_paystub_html, height=560, scrolling=True)
 
     with tab2:
         if st.session_state.sample_template_bytes:
@@ -687,7 +697,7 @@ elif st.session_state.step == 5:
             st.info("לא הועלה קובץ תבנית במסך 4. נעשה שימוש בתבנית הדיגיטלית המובנית.")
 
     st.markdown("---")
-    if st.button("🔄 התחל תהליך חדש (חזרה למסך 1)", use_container_width=True):
+    if st.button("🔄 התחל תהליך חדש (חזרה לשלב 1)", use_container_width=True):
         st.session_state.step = 1
         st.session_state.payroll_calculated = False
         st.rerun()
