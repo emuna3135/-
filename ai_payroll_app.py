@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,7 +9,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - ממשק ברור, נקי ופשוט לחשבים (v11.0)
+# 🤖 אפליקציית AI Payroll - ממשק בעברית עם התאמת RTL מלאה (מימין לשמאל)
 # ===========================================================================
 
 st.set_page_config(
@@ -20,16 +19,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ניהול זיכרון אישורים בזיכרון המערכת
-if "approved_stubs" not in st.session_state:
-    st.session_state.approved_stubs = set()
-if "rejected_stubs" not in st.session_state:
-    st.session_state.rejected_stubs = set()
-
-# עיצוב מותאם אישית נקי וקריא
+# ---------------------------------------------------------------------------
+# 0. הגדרת כיוון מימין לשמאל (RTL) מלאה עבור הממשק והאלמנטים
+# ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-    .stApp { background-color: #FAFAFC; }
+    /* כיוון כללי מימין לשמאל */
+    html, body, [data-testid="stAppViewContainer"], .main, .stApp {
+        direction: rtl;
+        text-align: right;
+    }
+    
+    /* יישור טקסטים, כותרות ותווים */
+    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, label, div, span, caption {
+        direction: rtl !important;
+        text-align: right !important;
+    }
+    
+    /* יישור שדות קלט (אינפוטים), תיבות בחירה וכפתורים */
+    .stTextInput input, .stNumberInput input, div[data-baseweb="select"], .stButton button, .stFileUploader {
+        direction: rtl !important;
+        text-align: right !important;
+    }
+
+    /* יישור כרטיסי המידע */
     .emp-card {
         background: white;
         border-radius: 14px;
@@ -37,9 +50,17 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         margin-bottom: 20px;
         border: 1px solid #E2E8F0;
+        direction: rtl;
+        text-align: right;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ניהול זיכרון אישורים בזיכרון המערכת
+if "approved_stubs" not in st.session_state:
+    st.session_state.approved_stubs = set()
+if "rejected_stubs" not in st.session_state:
+    st.session_state.rejected_stubs = set()
 
 # ---------------------------------------------------------------------------
 # 1. מנוע חישוב פיננסי מדויק (Exact Decimal Financial Engine - 2026)
@@ -162,7 +183,7 @@ def send_email_html(recipient: str, stub: CalculatedPaystub, sender_email: str, 
         msg['Subject'] = f"📄 תלוש משכורת רשמי - {stub.emp_name}"
         
         html = f"""
-        <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9fafb; border-radius: 12px; border: 1px solid #e5e7eb;">
+        <div dir="rtl" style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9fafb; border-radius: 12px; border: 1px solid #e5e7eb; text-align: right;">
             <h2 style="color: #1e3a8a; text-align: center;">📄 תלוש משכורת רשמי — שנת מס 2026</h2>
             <p><b>עובד/ת:</b> {stub.emp_name} (ת.ז {stub.emp_id})</p>
             <hr/>
@@ -185,11 +206,11 @@ def send_email_html(recipient: str, stub: CalculatedPaystub, sender_email: str, 
         return False, f"שגיאה בשליחה: {str(e)}"
 
 # ===========================================================================
-# 🖥️ ממשק משתמש גלוי, פשוט וברור לחלוטין
+# 🖥️ ממשק משתמש בעברית בסידור RTL מלא
 # ===========================================================================
 
 st.title("✨ AI Payroll — מערכת שכר חכמה ופשוטה לחשבים")
-st.caption("החישובים המדויקים והכפתורים מוצגים באופן גלוי וברור עבור כל עובד")
+st.caption("ממשק מותאם בעברית (מימין לשמאל) — החישובים והכפתורים מוצגים באופן גלוי וברור")
 st.markdown("---")
 
 engine = EasyPayrollEngine()
@@ -235,7 +256,6 @@ for stub in ststubs:
     with st.container():
         st.markdown(f"### 👤 {stub.emp_name} (ת.ז: {stub.emp_id}) — סטטוס: **{status_text}**")
         
-        # הצגת החישוב המפורט ב-2 עמודות נקיות וגלויות
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(f"""
@@ -264,16 +284,15 @@ for stub in ststubs:
             for a in stub.anomalies:
                 st.warning(f"⚠️ **התראת AI:** {a}")
 
-        # כפתורי אישור ודחייה גלויים וברורים לכל עובד!
         st.markdown(f"**החלטת חשב שכר עבור {stub.emp_name}:**")
         btn_c1, btn_c2 = st.columns(2)
         with btn_c1:
-            if st.button(f"✅ אשר תלוש עבור {stub.emp_name}", key=f"visible_app_{stub.emp_id}"):
+            if st.button(f"✅ אשר תלוש עבור {stub.emp_name}", key=f"rtl_app_{stub.emp_id}"):
                 st.session_state.approved_stubs.add(stub.emp_id)
                 st.session_state.rejected_stubs.discard(stub.emp_id)
                 st.rerun()
         with btn_c2:
-            if st.button(f"❌ דחה תלוש עבור {stub.emp_name}", key=f"visible_rej_{stub.emp_id}"):
+            if st.button(f"❌ דחה תלוש עבור {stub.emp_name}", key=f"rtl_rej_{stub.emp_id}"):
                 st.session_state.rejected_stubs.add(stub.emp_id)
                 st.session_state.approved_stubs.discard(stub.emp_id)
                 st.rerun()
@@ -295,7 +314,7 @@ m_col1, m_col2 = st.columns(2)
 with m_col1:
     to_mail = st.text_input("כתובת המייל של העובד/ת:", value=f"{curr_stub.emp_id}@company.co.il")
 with m_col2:
-    app_pass = st.text_input("סיסמת אפליקציה שליחה (Google App Password):", type="password", key="easy_pass_v11")
+    app_pass = st.text_input("סיסמת אפליקציה שליחה (Google App Password):", type="password", key="rtl_pass")
 
 if st.button("📧 שלח תלוש מעוצב במייל", type="primary", use_container_width=True):
     if curr_stub.emp_id not in st.session_state.approved_stubs:
