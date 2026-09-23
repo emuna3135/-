@@ -4,26 +4,10 @@ from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 import time
-import io
 import streamlit.components.v1 as components
 
-# ReportLab לייצור קובצי PDF אמיתיים בפייתון
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-
-# רישום גופן העברית במערכת
-try:
-    pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
-    pdfmetrics.registerFont(TTFont('DejaVu-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
-except Exception:
-    pass
-
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים עם הורדה ישירה של קובץ PDF אמיתי
+# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים (גרסת PDF/HTML יציבה 100%)
 # ===========================================================================
 
 st.set_page_config(
@@ -223,93 +207,9 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
         st.error(f"שגיאה בפענוח הקובץ {uploaded_file.name}: {str(e)}")
     return parsed_records
 
-# ---------------------------------------------------------------------------
-# פונקציית ייצור קובץ PDF אמיתי בפייתון (ReportLab PDF Generator)
-# ---------------------------------------------------------------------------
-def heb_fix(text) -> str:
-    words = str(text).split(' ')
-    rev_words = []
-    for w in words:
-        if any('\u0590' <= c <= '\u05ff' for c in w):
-            rev_words.append(w[::-1])
-        else:
-            rev_words.append(w)
-    return ' '.join(rev_words[::-1])
-
-def generate_pdf_bytes(emp: dict) -> bytes:
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=20, topMargin=25, bottomMargin=25)
-    
-    font_name = 'DejaVu'
-    font_bold = 'DejaVu-Bold'
-
-    style_title = ParagraphStyle('Title', fontName=font_bold, fontSize=18, alignment=1, textColor=colors.HexColor('#1E3A8A'))
-    style_sub = ParagraphStyle('Sub', fontName=font_name, fontSize=10, alignment=1, textColor=colors.HexColor('#475569'))
-    style_th = ParagraphStyle('TH', fontName=font_bold, fontSize=10, alignment=1, textColor=colors.white)
-    style_td = ParagraphStyle('TD', fontName=font_name, fontSize=10, alignment=1, textColor=colors.HexColor('#0F172A'))
-    style_net = ParagraphStyle('Net', fontName=font_bold, fontSize=16, alignment=1, textColor=colors.HexColor('#15803D'))
-
-    story = [
-        Paragraph(heb_fix('📄 תלוש משכורת רשמי — ספטמבר 2026'), style_title),
-        Spacer(1, 10),
-        Paragraph(heb_fix(f"שם עובד/ת: {emp['name']} | ת.ז: {emp['id']} | נקודות זיכוי: {emp['credit_pts']} נ\"ז"), style_sub),
-        Spacer(1, 15)
-    ]
-
-    table_data = [
-        [
-            Paragraph(heb_fix('סכום (₪)'), style_th),
-            Paragraph(heb_fix('ניכויי חובה ומיסוי'), style_th),
-            Paragraph(heb_fix('סכום (₪)'), style_th),
-            Paragraph(heb_fix('רכיבי ברוטו ותשלומים'), style_th)
-        ],
-        [
-            Paragraph(f"₪{emp['income_tax']:,.2f}", style_td),
-            Paragraph(heb_fix('מס הכנסה (מדרגות 2026)'), style_td),
-            Paragraph(f"₪{emp['base']:,.2f}", style_td),
-            Paragraph(heb_fix('שכר בסיס (182 שעות)'), style_td)
-        ],
-        [
-            Paragraph(f"₪{emp['ni']:,.2f}", style_td),
-            Paragraph(heb_fix('ביטוח לאומי ומס בריאות'), style_td),
-            Paragraph(f"₪{emp['ot_pay']:,.2f}", style_td),
-            Paragraph(heb_fix('גמול שעות נוספות'), style_td)
-        ],
-        [
-            Paragraph(f"₪{emp['pension']:,.2f}", style_td),
-            Paragraph(heb_fix('הפרשת פנסיה עובד (6%)'), style_td),
-            Paragraph(f"₪{emp['bonus']:,.2f}", style_td),
-            Paragraph(heb_fix('בונוסים ועמלות'), style_td)
-        ],
-        [
-            Paragraph(f"₪{emp['total_ded']:,.2f}", style_td),
-            Paragraph(heb_fix('סה"כ ניכויי חובה'), style_td),
-            Paragraph(f"₪{emp['gross']:,.2f}", style_td),
-            Paragraph(heb_fix('סה"כ שכר ברוטו'), style_td)
-        ]
-    ]
-
-    t = Table(table_data, colWidths=[120, 150, 120, 150])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E3A8A')),
-        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#F1F5F9')),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('TOPPADDING', (0,0), (-1,-1), 8),
-    ]))
-
-    story.append(t)
-    story.append(Spacer(1, 20))
-    story.append(Paragraph(heb_fix(f"💰 שכר נטו לתשלום לבנק: ₪{emp['net']:,.2f}"), style_net))
-
-    doc.build(story)
-    return buffer.getvalue()
-
 # --- כותרת וסרגל התקדמות ---
-st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (הורדת קובץ PDF)")
-st.caption("מערכת שכר אוטונומית לחשבי שכר | קליטה, חישוב, סקירה והורדה ישירה של קובצי PDF")
+st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (הורדה יציבה)")
+st.caption("מערכת שכר אוטונומית לחשבי שכר | קליטה, חישוב, סקירה והורדה ישירה למחשב")
 
 progress_val = st.session_state.step / 5
 st.progress(progress_val)
@@ -484,10 +384,10 @@ elif st.session_state.step == 4:
         st.rerun()
 
 # ===========================================================================
-# מסך 5: הפקת תלוש שכר והורדת קובץ PDF אמיתי
+# מסך 5: הפקת תלוש שכר והורדה למחשב
 # ===========================================================================
 elif st.session_state.step == 5:
-    st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי והורדת קובץ PDF למחשב")
+    st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי והורדה למחשב")
 
     current_employees_input = st.session_state.uploaded_employees_data
     if not current_employees_input:
@@ -505,33 +405,17 @@ elif st.session_state.step == 5:
     if st.session_state.sample_template_name:
         st.info(f"✨ **התלוש מופק בהתאמה מלאה לתבנית העסק שהועלתה:** `{st.session_state.sample_template_name}`")
 
-    selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש והורדת PDF:", options=[e['name'] for e in calculated_data])
+    selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש והורדה:", options=[e['name'] for e in calculated_data])
     emp = next(e for e in calculated_data if e['name'] == selected_name)
 
-    # ייצור קובץ ה-PDF הפיזי בפייתון באמצעות ReportLab
-    pdf_bytes = generate_pdf_bytes(emp)
-
-    st.markdown("### 📥 הורדת התלוש המוכן:")
-    st.download_button(
-        label=f"📥 הורד קובץ PDF עבור {emp['name']}",
-        data=pdf_bytes,
-        file_name=f"paystub_{emp['id']}_{emp['name']}.pdf",
-        mime="application/pdf",
-        type="primary",
-        use_container_width=True
-    )
-
-    st.markdown("---")
-
-    tab1, tab2 = st.tabs(["📄 תצוגת התלוש המעוצב על המסך", "🖼️ תבנית העסק המקורית שהועלתה"])
-
-    with tab1:
-        paystub_html_preview = f"""<!DOCTYPE html>
+    # בילד קובץ תלוש מעוצב בפורמט HTML להורדה ישירה ולשמירה כ-PDF בכל מחשב/טאבלט
+    paystub_doc = f"""<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
     <meta charset="utf-8">
+    <title>תלוש משכורת - {emp['name']}</title>
     <style>
-        body {{ font-family: Arial, sans-serif; background-color: #FFFFFF; padding: 15px; direction: rtl; text-align: right; color: #0F172A; }}
+        body {{ font-family: Arial, sans-serif; background-color: #FFFFFF; padding: 20px; direction: rtl; text-align: right; color: #0F172A; }}
         .paystub-card {{ max-width: 800px; margin: 0 auto; background: white; border: 2px solid #1E3A8A; border-radius: 12px; padding: 25px; }}
         .header {{ background: #1E3A8A; color: white; text-align: center; padding: 15px; font-size: 20px; font-weight: bold; border-radius: 8px; margin-bottom: 20px; }}
         table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
@@ -570,7 +454,23 @@ elif st.session_state.step == 5:
     </div>
 </body>
 </html>"""
-        components.html(paystub_html_preview, height=480, scrolling=True)
+
+    st.markdown("### 📥 הורדת התלוש המוכן:")
+    st.download_button(
+        label=f"📥 הורד תלוש שכר עבור {emp['name']} למחשב",
+        data=paystub_doc,
+        file_name=f"paystub_{emp['id']}_{emp['name']}.html",
+        mime="text/html",
+        type="primary",
+        use_container_width=True
+    )
+
+    st.markdown("---")
+
+    tab1, tab2 = st.tabs(["📄 תצוגת התלוש המעוצב על המסך", "🖼️ תבנית העסק המקורית שהועלתה"])
+
+    with tab1:
+        components.html(paystub_doc, height=480, scrolling=True)
 
     with tab2:
         if st.session_state.sample_template_bytes:
