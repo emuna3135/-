@@ -8,7 +8,7 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (עיצוב מודרני, אוורירי ו-100% בעברית)
+# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (פענוח אקסל חכם, 100% עברית ועיצוב אוורירי)
 # ===========================================================================
 
 st.set_page_config(
@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# עיצוב CSS מתקדם: RTL מלא, טיפוגרפיה נקייה וכרטיסים אווריריים
+# עיצוב CSS מודרני: RTL מלא, טיפוגרפיה נקייה וכרטיסים אווריריים
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
@@ -36,7 +36,6 @@ st.markdown("""
         font-family: 'Rubik', sans-serif !important;
     }
     
-    /* כרטיסים מעוצבים */
     .clean-card {
         background-color: #FFFFFF;
         padding: 22px;
@@ -46,7 +45,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
     
-    /* סגנון כפתורים מודרני */
     .stButton button {
         direction: rtl !important;
         border-radius: 8px !important;
@@ -54,13 +52,11 @@ st.markdown("""
         padding: 8px 20px !important;
     }
     
-    /* יישור טבלאות ושדות קלט */
     .stTextInput input, .stNumberInput input, div[data-baseweb="select"] {
         direction: rtl !important;
         text-align: right !important;
     }
     
-    /* העלמת אלמנטים מיותרים מברירת המחדל של Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 </style>
@@ -183,53 +179,143 @@ class EasyPayrollEngine:
             'credit_pts': pts
         }
 
-# פונקציית פענוח אקסל חכמה - מזהה כותרות בעברית ובאנגלית ומתרגמת לעברית נקייה
+# ===========================================================================
+# 🧠 פונקציית קליטה ופענוח אקסל משודרגת (פותרת 100% מבעיות השמות ו-NaN)
+# ===========================================================================
 def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     parsed_records = []
     try:
         filename = uploaded_file.name.lower()
+        df_raw = None
+        
         if filename.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
+            try:
+                df_raw = pd.read_csv(uploaded_file)
+            except Exception:
+                uploaded_file.seek(0)
+                df_raw = pd.read_csv(uploaded_file, encoding='cp1255')
         elif filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(uploaded_file)
+            df_raw = pd.read_excel(uploaded_file, header=None)
         else:
             return []
-        
-        col_map = {}
+
+        if df_raw is None or df_raw.empty:
+            return []
+
+        # 1. איתור חכם של שורת הכותרות (Header Row Auto-Detection)
+        header_row_idx = 0
+        if filename.endswith(('.xlsx', '.xls')):
+            for r_idx in range(min(15, len(df_raw))):
+                row_vals = [str(v).strip().lower() for v in df_raw.iloc[r_idx].values if pd.notna(v)]
+                row_str = " ".join(row_vals)
+                if any(k in row_str for k in ['שם', 'עובד', 'name', 'תז', 'ת.ז', 'id', 'בסיס', 'salary']):
+                    header_row_idx = r_idx
+                    break
+            
+            uploaded_file.seek(0)
+            df = pd.read_excel(uploaded_file, header=header_row_idx)
+        else:
+            df = df_raw
+
+        df.columns = [str(c).strip() for c in df.columns]
+
+        # 2. זיהוי גמיש של שדות הטבלה
+        first_name_col = None
+        last_name_col = None
+        full_name_col = None
+        id_col = None
+        base_col = None
+        ot125_col = None
+        ot150_col = None
+        bonus_col = None
+        credit_col = None
+
         for col in df.columns:
             c_clean = str(col).strip().lower()
-            if 'שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean:
-                col_map[col] = 'name'
-            elif 'תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean or 'מספר' in c_clean:
-                col_map[col] = 'id'
-            elif 'בסיס' in c_clean or 'base' in c_clean or 'שכר' in c_clean or 'salary' in c_clean:
-                col_map[col] = 'base_salary'
+            if 'unnamed' in c_clean:
+                continue
+            
+            if 'שם פרטי' in c_clean or 'first' in c_clean:
+                first_name_col = col
+            elif 'שם משפחה' in c_clean or 'last' in c_clean:
+                last_name_col = col
+            elif ('שם' in c_clean or 'name' in c_clean or 'עובד' in c_clean or 'שמות' in c_clean) and not full_name_col:
+                full_name_col = col
+            
+            if ('תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean or 'מספר' in c_clean or 'זהות' in c_clean) and not id_col:
+                id_col = col
+            elif ('בסיס' in c_clean or 'base' in c_clean or 'שכר' in c_clean or 'salary' in c_clean or 'יסוד' in c_clean) and not base_col:
+                base_col = col
             elif '125' in c_clean:
-                col_map[col] = 'ot_125'
+                ot125_col = col
             elif '150' in c_clean:
-                col_map[col] = 'ot_150'
-            elif 'בונוס' in c_clean or 'bonus' in c_clean or 'עמלה' in c_clean:
-                col_map[col] = 'bonus'
-            elif 'זיכוי' in c_clean or 'credit' in c_clean or 'נז' in c_clean or 'נ"ז' in c_clean:
-                col_map[col] = 'credit_points'
-        
-        df_renamed = df.rename(columns=col_map)
-        for idx, row in df_renamed.iterrows():
+                ot150_col = col
+            elif ('בונוס' in c_clean or 'bonus' in c_clean or 'עמלה' in c_clean or 'תוספת' in c_clean) and not bonus_col:
+                bonus_col = col
+            elif ('זיכוי' in c_clean or 'credit' in c_clean or 'נז' in c_clean or 'נ"ז' in c_clean) and not credit_col:
+                credit_col = col
+
+        # גיבוי (Fallback): אם לא נמצאה עמודת שם, מציאת עמודת הטקסט העברית הראשונה
+        if not full_name_col and not (first_name_col and last_name_col):
+            for col in df.columns:
+                if 'unnamed' in str(col).lower():
+                    continue
+                sample_vals = df[col].dropna().astype(str).tolist()
+                if any(any('\u0590' <= ch <= '\u05ff' for ch in s) for s in sample_vals[:10]):
+                    full_name_col = col
+                    break
+
+        # 3. חילוץ וניקוי הנתונים שורה אחר שורה
+        for idx, row in df.iterrows():
+            emp_name = ""
+            if first_name_col and last_name_col:
+                fn = str(row.get(first_name_col, '')).strip() if pd.notna(row.get(first_name_col)) else ""
+                ln = str(row.get(last_name_col, '')).strip() if pd.notna(row.get(last_name_col)) else ""
+                emp_name = f"{fn} {ln}".strip()
+            
+            if not emp_name and full_name_col:
+                val = row.get(full_name_col)
+                if pd.notna(val) and str(val).strip() and str(val).strip().lower() != 'nan':
+                    emp_name = str(val).strip()
+            
+            if not emp_name or emp_name.lower() == 'nan':
+                if row.dropna().empty:
+                    continue
+                emp_name = f"עובד {idx + 1}"
+
+            emp_id = ""
+            if id_col:
+                val = row.get(id_col)
+                if pd.notna(val) and str(val).strip() and str(val).strip().lower() != 'nan':
+                    id_str = str(val).strip()
+                    if id_str.endswith('.0'):
+                        id_str = id_str[:-2]
+                    emp_id = id_str
+            if not emp_id:
+                emp_id = str(idx + 101)
+
+            base_val = row.get(base_col, 0) if base_col else 0
+            ot125_val = row.get(ot125_col, 0) if ot125_col else 0
+            ot150_val = row.get(ot150_col, 0) if ot150_col else 0
+            bonus_val = row.get(bonus_col, 0) if bonus_col else 0
+            credit_val = row.get(credit_col, 2.25) if credit_col else 2.25
+
             record = {
-                'id': str(row.get('id', idx + 101)),
-                'name': str(row.get('name', f"עובד {idx+1}")),
-                'base_salary': row.get('base_salary', 10000),
-                'ot_125': row.get('ot_125', 0),
-                'ot_150': row.get('ot_150', 0),
-                'bonus': row.get('bonus', 0),
-                'credit_points': row.get('credit_points', 2.25)
+                'id': emp_id,
+                'name': emp_name,
+                'base_salary': base_val,
+                'ot_125': ot125_val,
+                'ot_150': ot150_val,
+                'bonus': bonus_val,
+                'credit_points': credit_val
             }
             parsed_records.append(record)
+
     except Exception as e:
-        st.error(f"שגיאה בקריאת הקובץ: {str(e)}")
+        st.error(f"שגיאה בפענוח הקובץ: {str(e)}")
     return parsed_records
 
-# המרת נתוני עובדים לטבלה מעוצבת בעברית עבור תצוגה נקייה
+# המרת נתוני עובדים לטבלה מעוצבת בעברית
 def get_hebrew_display_df(records_list):
     display_rows = []
     for r in records_list:
@@ -453,7 +539,7 @@ elif st.session_state.step == 5:
     calculated_data = [engine.process(e) for e in current_employees_input]
 
     template_label = st.session_state.sample_template_name or 'תבנית ארגונית רשמית'
-    company_name = template_label.split('.').replace('_', ' ').replace('-', ' ')
+    company_name = template_label.split('.')[0].replace('_', ' ').replace('-', ' ')
 
     st.info(f"✨ **התלושים מופקים בהתאמה לתבנית הארגון:** `{template_label}`")
 
