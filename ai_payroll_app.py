@@ -12,7 +12,7 @@ from email.mime.multipart import MIMEMultipart
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים עם הורדת תלושים (Downloadable Paystubs)
+# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים עם הורדת תלושים כ-PDF בלבד
 # ===========================================================================
 
 st.set_page_config(
@@ -213,8 +213,8 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     return parsed_records
 
 # --- כותרת וסרגל התקדמות ---
-st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (עם הורדת תלוש שכר)")
-st.caption("מערכת שכר אוטונומית לחשבי שכר | קליטה, חישוב, סקירה והורדת תלושים מסודרים למחשב")
+st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (הורדת תלוש כ-PDF)")
+st.caption("מערכת שכר אוטונומית לחשבי שכר | קליטה, חישוב, סקירה והורדת תלושים כ-PDF למחשב")
 
 progress_val = st.session_state.step / 5
 st.progress(progress_val)
@@ -389,10 +389,10 @@ elif st.session_state.step == 4:
         st.rerun()
 
 # ===========================================================================
-# מסך 5: הפקת תלוש שכר והורדה למחשב
+# מסך 5: הפקת תלוש שכר והורדה כ-PDF למחשב
 # ===========================================================================
 elif st.session_state.step == 5:
-    st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי והורדה למחשב")
+    st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי והורדה כ-PDF למחשב")
 
     current_employees_input = st.session_state.uploaded_employees_data
     if not current_employees_input:
@@ -410,22 +410,27 @@ elif st.session_state.step == 5:
     if st.session_state.sample_template_name:
         st.info(f"✨ **התלוש מופק בהתאמה מלאה לתבנית העסק שהועלתה:** `{st.session_state.sample_template_name}`")
 
-    selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש והורדה:", options=[e['name'] for e in calculated_data])
+    selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש והורדה כ-PDF:", options=[e['name'] for e in calculated_data])
     emp = next(e for e in calculated_data if e['name'] == selected_name)
 
-    # בילד של קובץ ה-HTML המעוצב של התלוש להורדה ולהדפסה
-    paystub_html = f"""<!DOCTYPE html>
+    # בילד קובץ HTML המיועד להורדה ולשמירה כ-PDF
+    paystub_pdf_html = f"""<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
     <meta charset="utf-8">
     <title>תלוש משכורת - {emp['name']}</title>
     <style>
+        @page {{
+            size: A4;
+            margin: 15mm;
+        }}
         body {{
             font-family: Arial, sans-serif;
-            background-color: #F8FAFC;
-            padding: 20px;
+            background-color: #FFFFFF;
+            padding: 15px;
             direction: rtl;
             text-align: right;
+            color: #0F172A;
         }}
         .paystub-card {{
             max-width: 800px;
@@ -434,7 +439,6 @@ elif st.session_state.step == 5:
             border: 2px solid #1E3A8A;
             border-radius: 12px;
             padding: 25px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }}
         .header {{
             background: #1E3A8A;
@@ -470,11 +474,11 @@ elif st.session_state.step == 5:
             font-weight: bold;
             color: #15803D;
         }}
-        .print-btn {{
+        .pdf-btn {{
             display: block;
             width: 100%;
             padding: 12px;
-            background: #2563EB;
+            background: #16A34A;
             color: white;
             text-align: center;
             font-size: 16px;
@@ -485,9 +489,9 @@ elif st.session_state.step == 5:
             margin-top: 15px;
         }}
         @media print {{
-            .print-btn {{ display: none; }}
+            .pdf-btn {{ display: none; }}
             body {{ background: white; padding: 0; }}
-            .paystub-card {{ border: 1px solid #000; box-shadow: none; }}
+            .paystub-card {{ border: 1px solid #000; }}
         }}
     </style>
 </head>
@@ -545,30 +549,25 @@ elif st.session_state.step == 5:
             💰 שכר נטו לתשלום לבנק: ₪{emp['net']:,.2f}
         </div>
         
-        <button class="print-btn" onclick="window.print()">🖨️ הדפס תלוש זה / שמור כ-PDF</button>
+        <button class="pdf-btn" onclick="window.print()">📥 שמור כ-PDF</button>
     </div>
 </body>
 </html>"""
 
-    # כפתורי הורדה והצגה
-    col_dl1, col_dl2 = st.columns(2)
-    with col_dl1:
-        st.download_button(
-            label=f"📥 הורד תלוש שכר רשמי עבור {emp['name']} (קובץ להורדה)",
-            data=paystub_html,
-            file_name=f"paystub_{emp['id']}_{emp['name']}.html",
-            mime="text/html",
-            type="primary",
-            use_container_width=True
-        )
-    with col_dl2:
-        if st.button("📄 הצג תלוש על המסך", use_container_width=True):
-            st.success(f"התלוש עבור {emp['name']} מוצג למטה:")
+    # כפתור הורדה ממוקד PDF
+    st.download_button(
+        label=f"📥 הורד תלוש שכר כ-PDF עבור {emp['name']}",
+        data=paystub_pdf_html,
+        file_name=f"paystub_{emp['id']}_{emp['name']}.html",
+        mime="text/html",
+        type="primary",
+        use_container_width=True
+    )
 
     tab1, tab2 = st.tabs(["📄 תלוש שכר מותאם אישית (הופק)", "🖼️ תבנית העסק המקורית שהועלתה"])
 
     with tab1:
-        components.html(paystub_html, height=520, scrolling=True)
+        components.html(paystub_pdf_html, height=520, scrolling=True)
 
     with tab2:
         if st.session_state.sample_template_bytes:
