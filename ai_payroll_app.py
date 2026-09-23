@@ -8,7 +8,7 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (תיקון באג שגיאת AttributeError בשלב 5)
+# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (מתוקן לחלוטין 100%)
 # ===========================================================================
 
 st.set_page_config(
@@ -555,10 +555,10 @@ elif st.session_state.step == 5:
 
     template_label = st.session_state.sample_template_name or 'תבנית ארגונית רשמית'
     
-    # FIX: חילוץ שם החברה בצורה בטוחה ללא שגיאת AttributeError
+    # חילוץ בטוח של שם החברה ללא שום שגיאה
     clean_label_str = str(template_label)
     if '.' in clean_label_str:
-        company_name = clean_label_str.split('.').replace('_', ' ').replace('-', ' ')
+        company_name = clean_label_str.rsplit('.', 1)[0].replace('_', ' ').replace('-', ' ')
     else:
         company_name = clean_label_str.replace('_', ' ').replace('-', ' ')
 
