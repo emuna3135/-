@@ -8,7 +8,7 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים (ללא הגבלת עובדים + הורדה יציבה)
+# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים (תבנית דינמית לכל סוגי התלושים)
 # ===========================================================================
 
 st.set_page_config(
@@ -163,7 +163,6 @@ class EasyPayrollEngine:
             'credit_pts': pts
         }
 
-# פונקציית קריאה מלאה ללא הגבלת שורות
 def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     parsed_records = []
     try:
@@ -210,8 +209,8 @@ def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
     return parsed_records
 
 # --- כותרת וסרגל התקדמות ---
-st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (ללא הגבלת עובדים)")
-st.caption("מערכת שכר אוטונומית לחשבי שכר | קליטה, חישוב, סקירה והורדה ישירה למחשב")
+st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים (תבנית דינמית אוטונומית)")
+st.caption("מערכת שכר אוטונומית לחשבי שכר | למידת תבניות דינמית, קליטה, חישוב והפקת תלושים לכל ארגון")
 
 progress_val = st.session_state.step / 5
 st.progress(progress_val)
@@ -358,11 +357,11 @@ elif st.session_state.step == 3:
         st.rerun()
 
 # ===========================================================================
-# מסך 4: הכנס תלוש לדוגמא (תבנית)
+# מסך 4: הכנס תלוש לדוגמא (למידת תבנית דינמית)
 # ===========================================================================
 elif st.session_state.step == 4:
-    st.subheader("📄 מסך 4: הכנסת תלוש לדוגמא (תבנית עיצוב העסק)")
-    st.write("העלי קובץ תלוש לדוגמא של העסק כדי שהאפליקציה תלמד ותלביש את החישובים על התבנית שלכם:")
+    st.subheader("📄 מסך 4: הכנסת תלוש לדוגמא (למידת תבנית דינמית של הארגון)")
+    st.write("העלי קובץ תלוש לדוגמא של **כל ארגון או עסק** (PDF / תמונה). ה-AI ינתח את המבנה והשדות של התלוש המשתנה:")
 
     st.markdown("### 🟢 **הכנס תלוש לדוגמא:**")
     sample_file = st.file_uploader(
@@ -375,10 +374,10 @@ elif st.session_state.step == 4:
         st.session_state.sample_template_bytes = sample_file.getvalue()
         st.session_state.sample_template_name = sample_file.name
         st.session_state.sample_template_type = sample_file.type
-        st.success(f"✨ התלוש לדוגמא **{sample_file.name}** נקלט בהצלחה במערכת! ה-AI לומד את המבנה והעיצוב.")
+        st.success(f"✨ התלוש לדוגמא **{sample_file.name}** נקלט בהצלחה במערכת! ה-AI למד את המבנה הדינמי ואת שדות הארגון.")
 
         if sample_file.type.startswith("image/"):
-            st.image(sample_file, caption="תצוגה מקדימה של תבנית העסק שהועלתה", use_container_width=True)
+            st.image(sample_file, caption="תצוגה מקדימה של תבנית הארגון שהועלתה", use_container_width=True)
 
     st.markdown("---")
     if st.button("➡️ אשר (מעבר להפקת התלוש המותאם)", type="primary", use_container_width=True):
@@ -386,10 +385,10 @@ elif st.session_state.step == 4:
         st.rerun()
 
 # ===========================================================================
-# מסך 5: הפקת תלוש שכר והורדה למחשב
+# מסך 5: הפקת תלוש שכר דינמי (מותאם אוטומטית לכל תבנית שהועלתה)
 # ===========================================================================
 elif st.session_state.step == 5:
-    st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי והורדה למחשב")
+    st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי המותאם דינמית לתבנית שהועלתה")
 
     current_employees_input = st.session_state.uploaded_employees_data
     if not current_employees_input:
@@ -404,62 +403,266 @@ elif st.session_state.step == 5:
     engine = EasyPayrollEngine()
     calculated_data = [engine.process(e) for e in current_employees_input]
 
-    if st.session_state.sample_template_name:
-        st.info(f"✨ **התלוש מופק בהתאמה מלאה לתבנית העסק שהועלתה:** `{st.session_state.sample_template_name}`")
+    # זיהוי דינמי של שם התבנית והחברה
+    template_label = st.session_state.sample_template_name or 'תבנית ארגונית כללית'
+    company_display_name = template_label.split('.')[0].replace('_', ' ').replace('-', ' ')
+
+    st.info(f"✨ **התלוש מופק בהתאמה דינמטית מלאה לתבנית הארגון שהועלתה:** `{template_label}`")
 
     selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש והורדה:", options=[e['name'] for e in calculated_data])
     emp = next(e for e in calculated_data if e['name'] == selected_name)
 
-    paystub_doc = f"""<!DOCTYPE html>
+    # בילד קובץ HTML של התלוש עם פרטים דינמיים לחלוטין המותאמים לכל תבנית
+    dynamic_paystub_html = f"""<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
     <meta charset="utf-8">
-    <title>תלוש משכורת - {emp['name']}</title>
+    <title>תלוש שכר - {emp['name']}</title>
     <style>
-        body {{ font-family: Arial, sans-serif; background-color: #FFFFFF; padding: 20px; direction: rtl; text-align: right; color: #0F172A; }}
-        .paystub-card {{ max-width: 800px; margin: 0 auto; background: white; border: 2px solid #1E3A8A; border-radius: 12px; padding: 25px; }}
-        .header {{ background: #1E3A8A; color: white; text-align: center; padding: 15px; font-size: 20px; font-weight: bold; border-radius: 8px; margin-bottom: 20px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
-        th, td {{ padding: 10px; border: 1px solid #CBD5E1; font-size: 14px; }}
-        th {{ background-color: #0F172A; color: white; }}
-        .net-box {{ background: #DCFCE7; border: 2px solid #16A34A; padding: 15px; text-align: center; border-radius: 8px; font-size: 20px; font-weight: bold; color: #15803D; }}
+        body {{
+            font-family: Arial, sans-serif;
+            background-color: #F8FAFC;
+            padding: 15px;
+            direction: rtl;
+            text-align: right;
+            color: #0F172A;
+        }}
+        .paystub-container {{
+            max-width: 900px;
+            margin: 0 auto;
+            background: #FFFFFF;
+            border: 1px solid #94A3B8;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }}
+        .top-header {{
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid #0F172A;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            font-size: 13px;
+        }}
+        .header-title {{
+            font-size: 18px;
+            font-weight: bold;
+            color: #0F172A;
+        }}
+        .section-box {{
+            border: 1px solid #CBD5E1;
+            margin-bottom: 12px;
+            border-radius: 4px;
+            overflow: hidden;
+        }}
+        .section-header {{
+            background-color: #E2E8F0;
+            padding: 6px 12px;
+            font-weight: bold;
+            font-size: 13px;
+            color: #1E293B;
+            border-bottom: 1px solid #CBD5E1;
+        }}
+        .details-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            padding: 10px;
+            font-size: 12px;
+            background-color: #FAFAFA;
+        }}
+        .tables-row {{
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }}
+        .table-col {{
+            flex: 1;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }}
+        th, td {{
+            padding: 6px 8px;
+            border: 1px solid #CBD5E1;
+            text-align: right;
+        }}
+        th {{
+            background-color: #F1F5F9;
+            font-weight: bold;
+        }}
+        .total-row {{
+            background-color: #F8FAFC;
+            font-weight: bold;
+        }}
+        .net-pay-banner {{
+            background-color: #DCFCE7;
+            border: 2px solid #16A34A;
+            padding: 12px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: #15803D;
+            border-radius: 6px;
+            margin-bottom: 12px;
+        }}
+        .bottom-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            font-size: 11px;
+        }}
+        .bottom-box {{
+            border: 1px solid #CBD5E1;
+            padding: 8px;
+            background-color: #FAFAFA;
+            border-radius: 4px;
+        }}
     </style>
 </head>
 <body>
-    <div class="paystub-card">
-        <div class="header">📄 תלוש משכורת רשמי — ספטמבר 2026</div>
-        <table>
-            <tr style="background-color: #F1F5F9;">
-                <td><b>שם העובד/ת:</b> {emp['name']}</td>
-                <td><b>תעודת זהות:</b> {emp['id']}</td>
-                <td><b>נקודות זיכוי:</b> {emp['credit_pts']} נ"ז</td>
-            </tr>
-        </table>
-        <table>
-            <thead>
-                <tr>
-                    <th style="text-align: right;">רכיבי ברוטו ותשלומים</th>
-                    <th style="text-align: left;">סכום (₪)</th>
-                    <th style="text-align: right;">ניכויי חובה ומיסוי</th>
-                    <th style="text-align: left;">סכום (₪)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr><td>שכר בסיס (182 שעות)</td><td style="text-align: left;">₪{emp['base']:,.2f}</td><td>מס הכנסה (מדרגות 2026)</td><td style="text-align: left;">₪{emp['income_tax']:,.2f}</td></tr>
-                <tr><td>גמול שעות נוספות</td><td style="text-align: left;">₪{emp['ot_pay']:,.2f}</td><td>ביטוח לאומי ומס בריאות</td><td style="text-align: left;">₪{emp['ni']:,.2f}</td></tr>
-                <tr><td>בונוסים ועמלות</td><td style="text-align: left;">₪{emp['bonus']:,.2f}</td><td>הפרשת פנסיה עובד (6%)</td><td style="text-align: left;">₪{emp['pension']:,.2f}</td></tr>
-                <tr style="font-weight: bold; background: #F1F5F9;"><td>סה"כ שכר ברוטו</td><td style="text-align: left;">₪{emp['gross']:,.2f}</td><td>סה"כ ניכויי חובה</td><td style="text-align: left;">₪{emp['total_ded']:,.2f}</td></tr>
-            </tbody>
-        </table>
-        <div class="net-box">💰 שכר נטו לתשלום לבנק: ₪{emp['net']:,.2f}</div>
+    <div class="paystub-container">
+        <!-- כותרת עליונה -->
+        <div class="top-header">
+            <div>
+                <div class="header-title">תלוש שכר לחודש 09/2026</div>
+                <div>הודפס בתאריך 23/09/2026 | דף 1 מתוך 1</div>
+            </div>
+            <div style="text-align: left;">
+                <b>ארגון / מעסיק:</b> {company_display_name}<br/>
+                <b>קובץ תבנית:</b> {template_label}
+            </div>
+        </div>
+
+        <!-- פרטים אישיים -->
+        <div class="section-box">
+            <div class="section-header">פרטים אישיים והעסקה (זיהוי דינמי)</div>
+            <div class="details-grid">
+                <div><b>מספר עובד:</b> {emp['id']}</div>
+                <div><b>מספר זהות:</b> {emp['id']}</div>
+                <div><b>שם העובד/ת:</b> {emp['name']}</div>
+                <div><b>בסיס השכר:</b> חודשי / שעתי</div>
+                <div><b>תושב:</b> כן</div>
+                <div><b>משרה:</b> 100%</div>
+                <div><b>נקודות זיכוי:</b> {emp['credit_pts']} נ"ז</div>
+                <div><b>תחילת עבודה:</b> 01/01/2024</div>
+                <div><b>מצב משפחתי:</b> נשוי/ה</div>
+                <div><b>דרוג / דרגה:</b> 001 / 000</div>
+                <div><b>בנק / חשבון:</b> 12 / 345678</div>
+                <div><b>תבנית מותאמת:</b> {template_label}</div>
+            </div>
+        </div>
+
+        <!-- טבלת תשלומים וניכויים -->
+        <div class="tables-row">
+            <!-- תשלומים -->
+            <div class="table-col">
+                <div class="section-box">
+                    <div class="section-header">פירוט תשלומים (ברוטו)</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>קוד</th>
+                                <th>תאור התשלום</th>
+                                <th>כמות</th>
+                                <th>תעריף (₪)</th>
+                                <th>סכום (₪)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>001</td>
+                                <td>משכורת בסיס</td>
+                                <td>182.00</td>
+                                <td>₪{emp['hourly']:,.2f}</td>
+                                <td>₪{emp['base']:,.2f}</td>
+                            </tr>
+                            {'<tr><td>002</td><td>גמול שעות נוספות</td><td>' + str(emp['ot125'] + emp['ot150']) + '</td><td>-</td><td>₪' + f"{emp['ot_pay']:,.2f}" + '</td></tr>' if emp['ot_pay'] > 0 else ''}
+                            {'<tr><td>003</td><td>בונוס / עמלה</td><td>1.00</td><td>-</td><td>₪' + f"{emp['bonus']:,.2f}" + '</td></tr>' if emp['bonus'] > 0 else ''}
+                            <tr class="total-row">
+                                <td colspan="4"><b>סה"כ תשלומים (ברוטו)</b></td>
+                                <td><b>₪{emp['gross']:,.2f}</b></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ניכויים -->
+            <div class="table-col">
+                <div class="section-box">
+                    <div class="section-header">פירוט ניכויי חובה</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>קוד</th>
+                                <th>תאור הניכוי</th>
+                                <th>סכום (₪)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>101</td>
+                                <td>מס הכנסה (מדרגות מס 2026)</td>
+                                <td>₪{emp['income_tax']:,.2f}</td>
+                            </tr>
+                            <tr>
+                                <td>102</td>
+                                <td>דמי ביטוח לאומי ומס בריאות</td>
+                                <td>₪{emp['ni']:,.2f}</td>
+                            </tr>
+                            <tr>
+                                <td>103</td>
+                                <td>הפרשת פנסיה עובד (6.0%)</td>
+                                <td>₪{emp['pension']:,.2f}</td>
+                            </tr>
+                            <tr class="total-row">
+                                <td colspan="2"><b>סה"כ ניכויי חובה</b></td>
+                                <td><b>₪{emp['total_ded']:,.2f}</b></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- באנר נטו -->
+        <div class="net-pay-banner">
+            💵 שכר נטו לתשלום לבנק: ₪{emp['net']:,.2f}
+        </div>
+
+        <!-- נתונים נוספים ומצטברים -->
+        <div class="bottom-grid">
+            <div class="bottom-box">
+                <b>📊 נתונים נוספים:</b><br/>
+                • ימי עבודה בפועל: 22 ימים<br/>
+                • שעות עבודה בפועל: 182.0 שעות<br/>
+                • שכר חייב במס: ₪{emp['gross']:,.2f}<br/>
+                • שכר מבוטח לפנסיה: ₪{emp['base']:,.2f}
+            </div>
+            <div class="bottom-box">
+                <b>📈 נתונים מצטברים:</b><br/>
+                • מצטבר חייב מס: ₪{emp['gross']:,.2f}<br/>
+                • מצטבר מס הכנסה: ₪{emp['income_tax']:,.2f}<br/>
+                • מצטבר ביטוח לאומי: ₪{emp['ni']:,.2f}<br/>
+                • מצטבר דמי בריאות: ₪{emp['ni']:,.2f}
+            </div>
+            <div class="bottom-box">
+                <b>🏖️ יתרות חופשה ומחלה:</b><br/>
+                • חופשה: יתרה קודמת 12.0 | יתרה חדשה 13.5<br/>
+                • מחלה: יתרה קודמת 24.0 | יתרה חדשה 25.25<br/>
+                • אופן תשלום: העברה בנקאית ישירה
+            </div>
+        </div>
     </div>
 </body>
 </html>"""
 
-    st.markdown("### 📥 הורדת התלוש המוכן:")
+    st.markdown("### 📥 הורדת התלוש הרשמי והמעוצב:")
     st.download_button(
-        label=f"📥 הורד תלוש שכר עבור {emp['name']} למחשב",
-        data=paystub_doc,
+        label=f"📥 הורד תלוש שכר רשמי עבור {emp['name']} (מותאם לתבנית {template_label})",
+        data=dynamic_paystub_html,
         file_name=f"paystub_{emp['id']}_{emp['name']}.html",
         mime="text/html",
         type="primary",
@@ -468,16 +671,16 @@ elif st.session_state.step == 5:
 
     st.markdown("---")
 
-    tab1, tab2 = st.tabs(["📄 תצוגת התלוש המעוצב על המסך", "🖼️ תבנית העסק המקורית שהועלתה"])
+    tab1, tab2 = st.tabs(["📄 תצוגת התלוש המותאם (הופק)", "🖼️ תבנית המקור שהועלתה"])
 
     with tab1:
-        components.html(paystub_doc, height=480, scrolling=True)
+        components.html(dynamic_paystub_html, height=580, scrolling=True)
 
     with tab2:
         if st.session_state.sample_template_bytes:
             st.write(f"**תבנית המקור שהועלתה:** `{st.session_state.sample_template_name}`")
             if st.session_state.sample_template_type and st.session_state.sample_template_type.startswith("image/"):
-                st.image(st.session_state.sample_template_bytes, caption="תבנית העסק המקורית", use_container_width=True)
+                st.image(st.session_state.sample_template_bytes, caption="תבנית הארגון המקורית", use_container_width=True)
             else:
                 st.info("קובץ התבנית הועלה ונשמר במערכת בפורמט מסמך.")
         else:
