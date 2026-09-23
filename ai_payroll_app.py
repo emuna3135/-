@@ -8,7 +8,7 @@ import time
 import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (תיקון פונט אייקונים 100% עברית)
+# 🤖 אפליקציית AI Payroll - תהליך 5 שלבים (תיקון באג שגיאת AttributeError בשלב 5)
 # ===========================================================================
 
 st.set_page_config(
@@ -554,7 +554,13 @@ elif st.session_state.step == 5:
     calculated_data = [engine.process(e) for e in current_employees_input]
 
     template_label = st.session_state.sample_template_name or 'תבנית ארגונית רשמית'
-    company_name = template_label.split('.').replace('_', ' ').replace('-', ' ')
+    
+    # FIX: חילוץ שם החברה בצורה בטוחה ללא שגיאת AttributeError
+    clean_label_str = str(template_label)
+    if '.' in clean_label_str:
+        company_name = clean_label_str.split('.').replace('_', ' ').replace('-', ' ')
+    else:
+        company_name = clean_label_str.replace('_', ' ').replace('-', ' ')
 
     st.info(f"✨ **התלושים מופקים בהתאמה לתבנית הארגון:** `{template_label}`")
 
