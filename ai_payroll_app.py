@@ -1,48 +1,42 @@
+
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import streamlit.components.v1 as components
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - ממשק בעברית עם התאמת RTL מלאה (מימין לשמאל)
+# 🤖 אפליקציית AI Payroll - גרסה דינמית ומגיבה בזמן אמת (v13.0 Reactive)
 # ===========================================================================
 
 st.set_page_config(
-    page_title="AI Payroll - מערכת שכר חכמה",
-    page_icon="✨",
+    page_title="AI Payroll - מערכת שכר חכמה ומגיבה",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
 # ---------------------------------------------------------------------------
-# 0. הגדרת כיוון מימין לשמאל (RTL) מלאה עבור הממשק והאלמנטים
+# 0. הגדרת כיוון מימין לשמאל (RTL) מלאה
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* כיוון כללי מימין לשמאל */
     html, body, [data-testid="stAppViewContainer"], .main, .stApp {
         direction: rtl;
         text-align: right;
     }
-    
-    /* יישור טקסטים, כותרות ותווים */
     .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, label, div, span, caption {
         direction: rtl !important;
         text-align: right !important;
     }
-    
-    /* יישור שדות קלט (אינפוטים), תיבות בחירה וכפתורים */
     .stTextInput input, .stNumberInput input, div[data-baseweb="select"], .stButton button, .stFileUploader {
         direction: rtl !important;
         text-align: right !important;
     }
-
-    /* יישור כרטיסי המידע */
     .emp-card {
         background: white;
         border-radius: 14px;
@@ -66,7 +60,13 @@ if "rejected_stubs" not in st.session_state:
 # 1. מנוע חישוב פיננסי מדויק (Exact Decimal Financial Engine - 2026)
 # ---------------------------------------------------------------------------
 def to_dec(val: float | str | int) -> Decimal:
-    return Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    try:
+        if pd.isna(val) or val == "" or val is None:
+            return Decimal('0.00')
+        cleaned = str(val).replace('₪', '').replace(',', '').strip()
+        return Decimal(cleaned).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    except Exception:
+        return Decimal('0.00')
 
 @dataclass
 class TaxBracket:
@@ -118,15 +118,17 @@ class EasyPayrollEngine:
 
     def process(self, emp: dict) -> CalculatedPaystub:
         base = to_dec(emp.get('base_salary', 0))
-        hourly = to_dec(base / Decimal('182'))
-        ot125 = Decimal(str(emp.get('ot_125', 0)))
-        ot150 = Decimal(str(emp.get('ot_150', 0)))
+        hourly = to_dec(base / Decimal('182')) if base > 0 else Decimal('0.00')
+        ot125 = to_dec(emp.get('ot_125', 0))
+        ot150 = to_dec(emp.get('ot_150', 0))
         ot125_pay = to_dec(ot125 * hourly * Decimal('1.25'))
         ot150_pay = to_dec(ot150 * hourly * Decimal('1.50'))
         ot_pay = ot125_pay + ot150_pay
         bonus = to_dec(emp.get('bonus', 0))
         gross = base + ot_pay + bonus
-        pts = Decimal(str(emp.get('credit_points', 2.25)))
+        pts = to_dec(emp.get('credit_points', 2.25))
+        if pts == Decimal('0.00'):
+            pts = Decimal('2.25')
         
         # חישוב מס הכנסה מדויק לפי מדרגות 2026
         tax_gross = Decimal('0.00')
@@ -161,7 +163,6 @@ class EasyPayrollEngine:
         total_ded = tax_final + ni_final + pension
         net = gross - total_ded
         
-        # אנומליות לזיהוי
         anomalies = []
         if ot125 + ot150 > 20:
             anomalies.append(f"קפיצה בשעות נוספות ({ot125 + ot150} שעות) - מומלץ לבדוק")
@@ -169,10 +170,58 @@ class EasyPayrollEngine:
             anomalies.append(f"בונוס חריג בגובה ₪{bonus:,.2f}")
 
         return CalculatedPaystub(
-            emp['id'], emp['name'], base, hourly, ot125, ot150,
+            str(emp.get('id', '100')), str(emp.get('name', 'עובד')), base, hourly, ot125, ot150,
             ot125_pay, ot150_pay, ot_pay, bonus, gross, to_dec(tax_gross),
             to_dec(tax_credit), tax_final, ni_final, pension, total_ded, net, pts, anomalies
         )
+
+# ---------------------------------------------------------------------------
+# פונקציית פענוח קבצים (CSV / Excel Parsing)
+# ---------------------------------------------------------------------------
+def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
+    parsed_records = []
+    try:
+        filename = uploaded_file.name.lower()
+        if filename.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        elif filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(uploaded_file)
+        else:
+            return []
+        
+        col_map = {}
+        for col in df.columns:
+            c_clean = str(col).strip().lower()
+            if 'שם' in c_clean or 'name' in c_clean:
+                col_map[col] = 'name'
+            elif 'תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean:
+                col_map[col] = 'id'
+            elif 'בסיס' in c_clean or 'base' in c_clean or 'שכר' in c_clean:
+                col_map[col] = 'base_salary'
+            elif '125' in c_clean:
+                col_map[col] = 'ot_125'
+            elif '150' in c_clean:
+                col_map[col] = 'ot_150'
+            elif 'בונוס' in c_clean or 'bonus' in c_clean or 'עמלה' in c_clean:
+                col_map[col] = 'bonus'
+            elif 'זיכוי' in c_clean or 'credit' in c_clean or 'נז' in c_clean or 'נ"ז' in c_clean:
+                col_map[col] = 'credit_points'
+        
+        df_renamed = df.rename(columns=col_map)
+        for idx, row in df_renamed.iterrows():
+            record = {
+                'id': str(row.get('id', idx + 101)),
+                'name': str(row.get('name', f"עובד {idx+1}")),
+                'base_salary': row.get('base_salary', 10000),
+                'ot_125': row.get('ot_125', 0),
+                'ot_150': row.get('ot_150', 0),
+                'bonus': row.get('bonus', 0),
+                'credit_points': row.get('credit_points', 2.25)
+            }
+            parsed_records.append(record)
+    except Exception as e:
+        st.error(f"שגיאה בפענוח הקובץ {uploaded_file.name}: {str(e)}")
+    return parsed_records
 
 # פונקציית שליחת מייל
 def send_email_html(recipient: str, stub: CalculatedPaystub, sender_email: str, sender_pass: str):
@@ -206,41 +255,70 @@ def send_email_html(recipient: str, stub: CalculatedPaystub, sender_email: str, 
         return False, f"שגיאה בשליחה: {str(e)}"
 
 # ===========================================================================
-# 🖥️ ממשק משתמש בעברית בסידור RTL מלא
+# 🖥️ ממשק משתמש דינמי ומגיב בלייב (Live Reactive Interface)
 # ===========================================================================
 
-st.title("✨ AI Payroll — מערכת שכר חכמה ופשוטה לחשבים")
-st.caption("ממשק מותאם בעברית (מימין לשמאל) — החישובים והכפתורים מוצגים באופן גלוי וברור")
+st.title("⚡ AI Payroll — מערכת שכר חכמה ומגיבה בזמן אמת")
+st.caption("העלי קובץ אקסל או הקלידי נתונים — החישובים מתעדכנים בלייב בדיוק על האגורה!")
 st.markdown("---")
 
 engine = EasyPayrollEngine()
 
 # ---------------------------------------------------------------------------
-# צעד 1: העלאת נתונים
+# צעד 1: העלאת נתונים / הזנה דינמית
 # ---------------------------------------------------------------------------
-st.subheader("1️⃣ העלאת קבצי שכר / נוכחות")
-uploaded_files = st.file_uploader(
-    "גררי לכאן או לחצי להעלאת קבצי אקסל, שעוני נוכחות, טפסי 101 או צילומי מסך:",
-    type=["xlsx", "csv", "png", "jpg", "pdf"],
-    accept_multiple_files=True
-)
+st.subheader("1️⃣ קליטת נתונים (העלאת אקסל/CSV או הזנה ישירה)")
 
-# נתוני עובדים לדוגמה
-sample_data = [
-    {"id": "101", "name": "ישראל ישראלי", "base_salary": 12500, "ot_125": 25, "ot_150": 10, "bonus": 2500, "credit_points": 2.25},
-    {"id": "102", "name": "דנה לוי", "base_salary": 16000, "ot_125": 5, "ot_150": 2, "bonus": 1500, "credit_points": 2.75},
-    {"id": "103", "name": "משה כהן", "base_salary": 9500, "ot_125": 0, "ot_150": 0, "bonus": 0, "credit_points": 2.25}
-]
+file_col, manual_col = st.columns([2, 1])
 
-ststubs = [engine.process(e) for e in sample_data]
+with file_col:
+    uploaded_file = st.file_uploader(
+        "גררי לכאן קובץ אקסל (.xlsx) או CSV עם נתוני העובדים:",
+        type=["xlsx", "xls", "csv"],
+        key="reactive_uploader"
+    )
+
+employees_input_data = []
+
+if uploaded_file is not None:
+    parsed_data = parse_uploaded_file(uploaded_file)
+    if parsed_data:
+        st.success(f"✨ הקובץ **{uploaded_file.name}** נקלט בהצלחה! פוענחו {len(parsed_data)} עובדים והמערכת חישבה אותם בלייב.")
+        employees_input_data = parsed_data
+else:
+    employees_input_data = [
+        {"id": "101", "name": "ישראל ישראלי", "base_salary": 12500, "ot_125": 25, "ot_150": 10, "bonus": 2500, "credit_points": 2.25},
+        {"id": "102", "name": "דנה לוי", "base_salary": 16000, "ot_125": 5, "ot_150": 2, "bonus": 1500, "credit_points": 2.75},
+        {"id": "103", "name": "משה כהן", "base_salary": 9500, "ot_125": 0, "ot_150": 0, "bonus": 0, "credit_points": 2.25}
+    ]
+
+with manual_col:
+    with st.expander("➕ הוספת עובד/ת חדש/ה בלייב", expanded=False):
+        new_name = st.text_input("שם העובד/ת:", value="עובד חדש", key="m_name")
+        new_id = st.text_input("ת.ז:", value="104", key="m_id")
+        new_base = st.number_input("שכר בסיס (₪):", value=14000.0, step=500.0, key="m_base")
+        new_ot125 = st.number_input("שעות 125%:", value=8.0, step=1.0, key="m_ot125")
+        new_ot150 = st.number_input("שעות 150%:", value=0.0, step=1.0, key="m_ot150")
+        new_bonus = st.number_input("בונוס (₪):", value=1000.0, step=100.0, key="m_bonus")
+        new_pts = st.number_input("נקודות זיכוי:", value=2.25, step=0.25, key="m_pts")
+        
+        if st.button("➕ הוסף לרשימת החישוב", use_container_width=True):
+            employees_input_data.append({
+                "id": new_id, "name": new_name, "base_salary": new_base,
+                "ot_125": new_ot125, "ot_150": new_ot150, "bonus": new_bonus, "credit_points": new_pts
+            })
+            st.success(f"העובד {new_name} התווסף לחישוב!")
+
+# חישוב התלושים בלייב מתוך הנתונים המעודכנים!
+ststubs = [engine.process(e) for e in employees_input_data]
 
 st.markdown("---")
 
 # ---------------------------------------------------------------------------
-# צעד 2: הצגת החישובים המפורטים וכפתורי אישור/דחייה אישיים לכל עובד
+# צעד 2: הצגת החישובים המפורטים המגיבים בלייב
 # ---------------------------------------------------------------------------
-st.subheader("2️⃣ חישובי השכר המפורטים והחלטת חשב השכר")
-st.write("כל הנתונים מחושבים בדיוק על האגורה. לכל עובד יש כפתורי אישור ודחייה אישיים:")
+st.subheader("2️⃣ חישובי השכר המפורטים והחלטת חשב השכר (חישוב מיידי בלייב)")
+st.write("המערכת חישבה את כל הנתונים מתוך הקובץ/ההזנה. לכל עובד יש כפתורי אישור ודחייה אישיים:")
 
 for stub in ststubs:
     is_app = stub.emp_id in st.session_state.approved_stubs
@@ -252,7 +330,6 @@ for stub in ststubs:
     elif is_rej:
         status_text = "❌ נדחה / הועבר לתיקון"
 
-    # כרטיס גלוי ומלא עבור כל עובד
     with st.container():
         st.markdown(f"### 👤 {stub.emp_name} (ת.ז: {stub.emp_id}) — סטטוס: **{status_text}**")
         
@@ -261,7 +338,7 @@ for stub in ststubs:
             st.markdown(f"""
             **💵 פירוט רכיבי ברוטו:**
             * **שכר בסיס:** ₪{stub.base_salary:,.2f}
-            * **תעריף שעתי:** ₪{stub.hourly_rate:,.2f} / שעה
+            * **תעריף שעתי מחושב:** ₪{stub.hourly_rate:,.2f} / שעה
             * **שעות נוספות 125% ({stub.ot_hours_125} שעות):** ₪{stub.overtime_125_pay:,.2f}
             * **שעות נוספות 150% ({stub.ot_hours_150} שעות):** ₪{stub.overtime_150_pay:,.2f}
             * **בונוסים ועמלות:** ₪{stub.bonus:,.2f}
@@ -272,7 +349,7 @@ for stub in ststubs:
             **📉 פירוט ניכויי חובה ומיסוי:**
             * **מס הכנסה לפני זיכוי:** ₪{stub.tax_before_credit:,.2f}
             * **זיכוי מס ({stub.credit_points} נ"ז):** -₪{stub.tax_credit_amount:,.2f}
-            * **מס הכנסה סופי:** ₪{stub.income_tax:,.2f}
+            * **מס הכנסה סופי לתשלום:** ₪{stub.income_tax:,.2f}
             * **דמי ביטוח לאומי ומס בריאות:** ₪{stub.national_insurance:,.2f}
             * **הפרשת פנסיה עובד (6%):** ₪{stub.pension_employee:,.2f}
             * **סה"כ ניכויי חובה:** ₪{stub.total_deductions:,.2f}
@@ -287,12 +364,12 @@ for stub in ststubs:
         st.markdown(f"**החלטת חשב שכר עבור {stub.emp_name}:**")
         btn_c1, btn_c2 = st.columns(2)
         with btn_c1:
-            if st.button(f"✅ אשר תלוש עבור {stub.emp_name}", key=f"rtl_app_{stub.emp_id}"):
+            if st.button(f"✅ אשר תלוש עבור {stub.emp_name}", key=f"react_app_{stub.emp_id}"):
                 st.session_state.approved_stubs.add(stub.emp_id)
                 st.session_state.rejected_stubs.discard(stub.emp_id)
                 st.rerun()
         with btn_c2:
-            if st.button(f"❌ דחה תלוש עבור {stub.emp_name}", key=f"rtl_rej_{stub.emp_id}"):
+            if st.button(f"❌ דחה תלוש עבור {stub.emp_name}", key=f"react_rej_{stub.emp_id}"):
                 st.session_state.rejected_stubs.add(stub.emp_id)
                 st.session_state.approved_stubs.discard(stub.emp_id)
                 st.rerun()
@@ -314,7 +391,7 @@ m_col1, m_col2 = st.columns(2)
 with m_col1:
     to_mail = st.text_input("כתובת המייל של העובד/ת:", value=f"{curr_stub.emp_id}@company.co.il")
 with m_col2:
-    app_pass = st.text_input("סיסמת אפליקציה שליחה (Google App Password):", type="password", key="rtl_pass")
+    app_pass = st.text_input("סיסמת אפליקציה שליחה (Google App Password):", type="password", key="react_pass")
 
 if st.button("📧 שלח תלוש מעוצב במייל", type="primary", use_container_width=True):
     if curr_stub.emp_id not in st.session_state.approved_stubs:
