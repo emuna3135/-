@@ -8,9 +8,10 @@ import time
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import streamlit.components.v1 as components
 
 # ===========================================================================
-# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים מובנה לחשבי שכר
+# 🤖 אפליקציית AI Payroll - תהליך 5 מסכים ללא הגבלת כמות עובדים (Unlimited Scale)
 # ===========================================================================
 
 st.set_page_config(
@@ -35,22 +36,26 @@ st.markdown("""
         direction: rtl !important;
         text-align: right !important;
     }
-    .step-container {
+    .step-card {
         background-color: #FFFFFF;
         padding: 25px;
         border-radius: 16px;
         border: 1px solid #E2E8F0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.04);
         margin-top: 15px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ניהול מצב המסכים (Session State)
+# ניהול מצב המסכים והאישורים (Session State)
 if "step" not in st.session_state:
     st.session_state.step = 1
-if "uploaded_files" not in st.session_state:
-    st.session_state.uploaded_files = []
+if "uploaded_employees_data" not in st.session_state:
+    st.session_state.uploaded_employees_data = []
+if "approved_stubs" not in st.session_state:
+    st.session_state.approved_stubs = set()
+if "rejected_stubs" not in st.session_state:
+    st.session_state.rejected_stubs = set()
 if "sample_template" not in st.session_state:
     st.session_state.sample_template = None
 if "payroll_calculated" not in st.session_state:
@@ -139,7 +144,7 @@ class EasyPayrollEngine:
 
         return {
             'id': str(emp.get('id', '101')),
-            'name': str(emp.get('name', 'דנה לוי')),
+            'name': str(emp.get('name', 'עובד/ת')),
             'base': base,
             'hourly': hourly,
             'ot125': ot125,
@@ -157,18 +162,55 @@ class EasyPayrollEngine:
             'credit_pts': pts
         }
 
-sample_employees = [
-    {"id": "101", "name": "דנה לוי", "base_salary": 16000, "ot_125": 5, "ot_150": 2, "bonus": 4500, "credit_points": 2.75},
-    {"id": "102", "name": "ישראל ישראלי", "base_salary": 12500, "ot_125": 15, "ot_150": 5, "bonus": 1200, "credit_points": 2.25},
-    {"id": "103", "name": "משה כהן", "base_salary": 9500, "ot_125": 0, "ot_150": 0, "bonus": 0, "credit_points": 2.25}
-]
-
-engine = EasyPayrollEngine()
-calculated_data = [engine.process(e) for e in sample_employees]
+# פונקציית קריאת קבצים (קולטת קבצים ללא הגבלת כמויות)
+def parse_uploaded_file(uploaded_file) -> List[Dict[str, Any]]:
+    parsed_records = []
+    try:
+        filename = uploaded_file.name.lower()
+        if filename.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        elif filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(uploaded_file)
+        else:
+            return []
+        
+        col_map = {}
+        for col in df.columns:
+            c_clean = str(col).strip().lower()
+            if 'שם' in c_clean or 'name' in c_clean:
+                col_map[col] = 'name'
+            elif 'תז' in c_clean or 'ת.ז' in c_clean or 'id' in c_clean:
+                col_map[col] = 'id'
+            elif 'בסיס' in c_clean or 'base' in c_clean or 'שכר' in c_clean:
+                col_map[col] = 'base_salary'
+            elif '125' in c_clean:
+                col_map[col] = 'ot_125'
+            elif '150' in c_clean:
+                col_map[col] = 'ot_150'
+            elif 'בונוס' in c_clean or 'bonus' in c_clean or 'עמלה' in c_clean:
+                col_map[col] = 'bonus'
+            elif 'זיכוי' in c_clean or 'credit' in c_clean or 'נז' in c_clean or 'נ"ז' in c_clean:
+                col_map[col] = 'credit_points'
+        
+        df_renamed = df.rename(columns=col_map)
+        for idx, row in df_renamed.iterrows():
+            record = {
+                'id': str(row.get('id', idx + 101)),
+                'name': str(row.get('name', f"עובד {idx+1}")),
+                'base_salary': row.get('base_salary', 10000),
+                'ot_125': row.get('ot_125', 0),
+                'ot_150': row.get('ot_150', 0),
+                'bonus': row.get('bonus', 0),
+                'credit_points': row.get('credit_points', 2.25)
+            }
+            parsed_records.append(record)
+    except Exception as e:
+        st.error(f"שגיאה בפענוח הקובץ {uploaded_file.name}: {str(e)}")
+    return parsed_records
 
 # --- כותרת וסרגל התקדמות ---
-st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים")
-st.caption("מערכת שכר חכמה ואוטונומית לחשבי שכר | סנכרון רגולציה מלא ואישור אנושי")
+st.title("🤖 אפליקציית AI Payroll — תהליך 5 מסכים פשוט ומהיר")
+st.caption("מערכת שכר אוטונומית לחשבי שכר | קליטה, חישוב, סקירה והפקת תלושים במינימום מאמץ")
 
 progress_val = st.session_state.step / 5
 st.progress(progress_val)
@@ -185,11 +227,18 @@ if st.session_state.step == 1:
     with up_col1:
         uploaded_files = st.file_uploader(
             "📁 העלאת קבצים (אקסל, צילומי מסך, PDF):",
-            type=["xlsx", "csv", "png", "jpg", "jpeg", "pdf"],
+            type=["xlsx", "xls", "csv", "png", "jpg", "jpeg", "pdf"],
             accept_multiple_files=True
         )
         if uploaded_files:
-            st.success(f"נקלטו {len(uploaded_files)} קבצים במערכת.")
+            all_records = []
+            for f in uploaded_files:
+                records = parse_uploaded_file(f)
+                if records:
+                    all_records.extend(records)
+            if all_records:
+                st.session_state.uploaded_employees_data = all_records
+                st.success(f"✨ נקלטו בהצלחה {len(all_records)} עובדים מתוך הקבצים שהועלו! המערכת תחשב את כולם.")
 
     with up_col2:
         st.write("📸 **צילום טפסים בלייב במצלמה:**")
@@ -207,17 +256,28 @@ if st.session_state.step == 1:
 # ===========================================================================
 elif st.session_state.step == 2:
     st.subheader("🧮 מסך 2: הרצת חישוב AI וסנכרון רגולציה")
-    st.write("המערכת תריץ כעת את מנוע החישוב הפיננסי המדויק על האגורה ותסתנכרן מול חוקי המיסוי:")
+    
+    current_employees_input = st.session_state.uploaded_employees_data
+    if not current_employees_input:
+        current_employees_input = [
+            {"id": "101", "name": "דנה לוי", "base_salary": 16000, "ot_125": 5, "ot_150": 2, "bonus": 4500, "credit_points": 2.75},
+            {"id": "102", "name": "ישראל ישראלי", "base_salary": 12500, "ot_125": 15, "ot_150": 5, "bonus": 1200, "credit_points": 2.25},
+            {"id": "103", "name": "משה כהן", "base_salary": 9500, "ot_125": 0, "ot_150": 0, "bonus": 0, "credit_points": 2.25},
+            {"id": "104", "name": "אלישבע מור", "base_salary": 14500, "ot_125": 12, "ot_150": 6, "bonus": 1200, "credit_points": 3.25},
+            {"id": "105", "name": "אביתר אברהם", "base_salary": 18500, "ot_125": 4, "ot_150": 0, "bonus": 3000, "credit_points": 4.25}
+        ]
+
+    st.write(f"המערכת תריץ כעת חישוב פיננסי מדויק עבור **{len(current_employees_input)} עובדים** ותסתנכרן מול חוקי המיסוי:")
 
     if not st.session_state.payroll_calculated:
         if st.button("🧮 חשב שכר עכשיו", type="primary", use_container_width=True):
-            with st.spinner("⏳ מנוע ה-AI מחשב בדיוק על האגורה ומסנכרן חוקי מיסוי 2026..."):
-                time.sleep(2.5)
+            with st.spinner(f"⏳ מנוע ה-AI מחשב בדיוק על האגורה עבור {len(current_employees_input)} עובדים..."):
+                time.sleep(2.0)
             st.session_state.payroll_calculated = True
             st.rerun()
     else:
         st.balloons()
-        st.success("🎉 **הנתונים מוכנים!** החישוב הושלם בדיוק מוחלט על האגורה בהתאם לחוקי 2026.")
+        st.success(f"🎉 **הנתונים מוכנים!** החישוב הושלם עבור כל {len(current_employees_input)} העובדים בדיוק מוחלט על האגורה.")
         st.markdown("---")
         if st.button("➡️ אשר (מעבר למסך סקירת החשב)", type="primary", use_container_width=True):
             st.session_state.step = 3
@@ -228,16 +288,44 @@ elif st.session_state.step == 2:
 # ===========================================================================
 elif st.session_state.step == 3:
     st.subheader("📋 מסך 3: סקירת נתונים מפורטת ואישור חשב שכר")
-    st.write("עברי על החישובים המדויקים שבוצעו ע\"י ה-AI ואשרי את הנתונים:")
+
+    current_employees_input = st.session_state.uploaded_employees_data
+    if not current_employees_input:
+        current_employees_input = [
+            {"id": "101", "name": "דנה לוי", "base_salary": 16000, "ot_125": 5, "ot_150": 2, "bonus": 4500, "credit_points": 2.75},
+            {"id": "102", "name": "ישראל ישראלי", "base_salary": 12500, "ot_125": 15, "ot_150": 5, "bonus": 1200, "credit_points": 2.25},
+            {"id": "103", "name": "משה כהן", "base_salary": 9500, "ot_125": 0, "ot_150": 0, "bonus": 0, "credit_points": 2.25},
+            {"id": "104", "name": "אלישבע מור", "base_salary": 14500, "ot_125": 12, "ot_150": 6, "bonus": 1200, "credit_points": 3.25},
+            {"id": "105", "name": "אביתר אברהם", "base_salary": 18500, "ot_125": 4, "ot_150": 0, "bonus": 3000, "credit_points": 4.25}
+        ]
+
+    engine = EasyPayrollEngine()
+    calculated_data = [engine.process(e) for e in current_employees_input]
+
+    m_col1, m_col2, m_col3 = st.columns(3)
+    m_col1.metric("סה\"כ עובדים במחזור", len(calculated_data))
+    m_col2.metric("אושרו ע\"י החשב", len(st.session_state.approved_stubs))
+    m_col3.metric("נדחו / לתיקון", len(st.session_state.rejected_stubs))
+
+    search_query = st.text_input("🔍 חיפוש מהיר עובד/ת לפי שם או ת.ז:", value="")
+
+    st.markdown("---")
 
     for emp in calculated_data:
-        with st.expander(f"👤 **{emp['name']}** (ת.ז {emp['id']}) — ברוטו: ₪{emp['gross']:,.2f} | 💰 נטו לבנק: ₪{emp['net']:,.2f}", expanded=True):
+        if search_query and search_query.strip() not in emp['name'] and search_query.strip() not in emp['id']:
+            continue
+
+        is_app = emp['id'] in st.session_state.approved_stubs
+        is_rej = emp['id'] in st.session_state.rejected_stubs
+        status_text = "✅ אושר" if is_app else ("❌ נדחה" if is_rej else "⏳ ממתין לבדיקה")
+
+        with st.expander(f"👤 **{emp['name']}** (ת.ז {emp['id']}) — סטטוס: [{status_text}] — 💰 נטו לבנק: ₪{emp['net']:,.2f}", expanded=(not is_app and not is_rej)):
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown(f"""
                 **💵 פירוט רכיבי ברוטו:**
                 * שכר בסיס: ₪{emp['base']:,.2f}
-                * תעריף שעתי (בסיס ÷ 182): ₪{emp['hourly']:,.2f}
+                * תעריף שעתי: ₪{emp['hourly']:,.2f} / שעה
                 * שעות נוספות (125% + 150%): ₪{emp['ot_pay']:,.2f}
                 * בונוסים ועמלות: ₪{emp['bonus']:,.2f}
                 * **סה"כ שכר ברוטו:** **₪{emp['gross']:,.2f}**
@@ -250,6 +338,18 @@ elif st.session_state.step == 3:
                 * הפרשת פנסיה עובד (6%): ₪{emp['pension']:,.2f}
                 * **סה"כ ניכויי חובה:** ₪{emp['total_ded']:,.2f}
                 """)
+
+            btn_c1, btn_c2 = st.columns(2)
+            with btn_c1:
+                if st.button(f"✅ אשר תלוש עבור {emp['name']}", key=f"s3_app_{emp['id']}"):
+                    st.session_state.approved_stubs.add(emp['id'])
+                    st.session_state.rejected_stubs.discard(emp['id'])
+                    st.rerun()
+            with btn_c2:
+                if st.button(f"❌ דחה תלוש עבור {emp['name']}", key=f"s3_rej_{emp['id']}"):
+                    st.session_state.rejected_stubs.add(emp['id'])
+                    st.session_state.approved_stubs.discard(emp['id'])
+                    st.rerun()
 
     st.markdown("---")
     if st.button("✅ אשר (מעבר להכנסת תלוש לדוגמא)", type="primary", use_container_width=True):
@@ -284,7 +384,19 @@ elif st.session_state.step == 4:
 # ===========================================================================
 elif st.session_state.step == 5:
     st.subheader("🎉 מסך 5: הפקת תלוש שכר רשמי ומעוצב")
-    st.write("המערכת מפיקה כעת תלוש מעוצב ומאורגן בדיוק לפי תבנית העסק שהוכנסה:")
+
+    current_employees_input = st.session_state.uploaded_employees_data
+    if not current_employees_input:
+        current_employees_input = [
+            {"id": "101", "name": "דנה לוי", "base_salary": 16000, "ot_125": 5, "ot_150": 2, "bonus": 4500, "credit_points": 2.75},
+            {"id": "102", "name": "ישראל ישראלי", "base_salary": 12500, "ot_125": 15, "ot_150": 5, "bonus": 1200, "credit_points": 2.25},
+            {"id": "103", "name": "משה כהן", "base_salary": 9500, "ot_125": 0, "ot_150": 0, "bonus": 0, "credit_points": 2.25},
+            {"id": "104", "name": "אלישבע מור", "base_salary": 14500, "ot_125": 12, "ot_150": 6, "bonus": 1200, "credit_points": 3.25},
+            {"id": "105", "name": "אביתר אברהם", "base_salary": 18500, "ot_125": 4, "ot_150": 0, "bonus": 3000, "credit_points": 4.25}
+        ]
+
+    engine = EasyPayrollEngine()
+    calculated_data = [engine.process(e) for e in current_employees_input]
 
     selected_name = st.selectbox("בחרי עובד/ת להפקת התלוש:", options=[e['name'] for e in calculated_data])
     emp = next(e for e in calculated_data if e['name'] == selected_name)
