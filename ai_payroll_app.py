@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 
 # ===========================================================================
 # 🤖 Autonomous Enterprise AI Payroll System (v5.0 - Production Grade)
-# Robust Column Mapping | Exact Decimal Math | Cumulative YTD Tax | AES-256
+# Safe Float Parsing | Exact Decimal Math | Cumulative YTD Tax | AES-256
 # ===========================================================================
 
 st.set_page_config(
@@ -198,10 +198,10 @@ else:
     st.sidebar.info("ℹ️ מופעלים כללי מס ברירת מחדל (2026)")
 
 # ---------------------------------------------------------------------------
-# 4. Flexible & Robust Excel Column Parsing Helper
+# 4. Safe & Robust Excel Column Parsing Helper (Protected Against Text Rows)
 # ---------------------------------------------------------------------------
 def parse_excel_dataframe(df: pd.DataFrame) -> List[dict]:
-    """מנגנון מיפוי עמודות גמיש וחכם עבור קבצי אקסל ו-CSV בכל מבנה"""
+    """מנגנון מיפוי עמודות מוגן המדלג בבטחה על שורות הסבר בעברית"""
     df_clean = df.copy()
     df_clean.columns = [str(col).strip() for col in df_clean.columns]
     
@@ -222,35 +222,46 @@ def parse_excel_dataframe(df: pd.DataFrame) -> List[dict]:
     col_bonus = find_col(['בונוס', 'עמלה', 'עמלות', 'bonus'])
     col_credits = find_col(['נקודות זיכוי', 'נ"ז', 'נז', 'זיכוי', 'credit_points', 'credits'])
 
+    def safe_float(val, default=0.0) -> float:
+        if val is None or pd.isna(val):
+            return default
+        try:
+            cleaned = str(val).replace(',', '').strip()
+            return float(cleaned)
+        except (ValueError, TypeError):
+            return default
+
     parsed_employees = []
     for idx, row in df_clean.iterrows():
-        emp_id = str(row[col_id]).strip() if (col_id and not pd.isna(row[col_id])) else str(idx + 1)
+        raw_id = row[col_id] if col_id else None
+        emp_id = str(raw_id).strip() if (raw_id is not None and not pd.isna(raw_id)) else str(idx + 1)
         if emp_id.endswith('.0'):
             emp_id = emp_id[:-2]
             
-        emp_name = str(row[col_name]).strip() if (col_name and not pd.isna(row[col_name])) else f"עובד {idx + 1}"
+        raw_name = row[col_name] if col_name else None
+        emp_name = str(raw_name).strip() if (raw_name is not None and not pd.isna(raw_name)) else f"עובד {idx + 1}"
         
-        raw_salary = row[col_salary] if col_salary else 10000
-        salary_val = float(raw_salary) if (raw_salary is not None and not pd.isna(raw_salary)) else 10000.0
+        salary_val = safe_float(row[col_salary] if col_salary else 10000.0, default=10000.0)
         
-        ot_total = float(row[col_ot_total]) if (col_ot_total and not pd.isna(row[col_ot_total])) else 0.0
-        ot_125 = float(row[col_ot_125]) if (col_ot_125 and not pd.isna(row[col_ot_125])) else 0.0
-        ot_150 = float(row[col_ot_150]) if (col_ot_150 and not pd.isna(row[col_ot_150])) else 0.0
+        # דילוג אוטומטי על שורות כותרת/הסבר (אם השכר אינו מספרי ושמות השורות מכילים טקסט תיאורי)
+        if salary_val == 0.0 and col_salary:
+            if "נתונים" in emp_name or "2026" in emp_name or "תקן" in emp_name:
+                continue
+
+        ot_total = safe_float(row[col_ot_total] if col_ot_total else 0.0, default=0.0)
+        ot_125 = safe_float(row[col_ot_125] if col_ot_125 else 0.0, default=0.0)
+        ot_150 = safe_float(row[col_ot_150] if col_ot_150 else 0.0, default=0.0)
         
         if ot_total > 0 and ot_125 == 0 and ot_150 == 0:
             ot_125 = ot_total
             
-        bonus_val = float(row[col_bonus]) if (col_bonus and not pd.isna(row[col_bonus])) else 0.0
-        
-        if col_credits and not pd.isna(row[col_credits]):
-            credit_pts_val = float(row[col_credits])
-        else:
-            credit_pts_val = 2.25
+        bonus_val = safe_float(row[col_bonus] if col_bonus else 0.0, default=0.0)
+        credit_pts_val = safe_float(row[col_credits] if col_credits else 2.25, default=2.25)
 
         parsed_employees.append({
             "id": emp_id,
             "name": emp_name,
-            "base_salary": salary_val,
+            "base_salary": salary_val if salary_val > 0 else 10000.0,
             "overtime_hours": ot_total if ot_total > 0 else (ot_125 + ot_150),
             "overtime_125_hours": ot_125,
             "overtime_150_hours": ot_150,
