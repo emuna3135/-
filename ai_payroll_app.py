@@ -9,8 +9,8 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 
 # ===========================================================================
-# 🤖 Autonomous Enterprise AI Payroll System (v5.0 - Production Grade)
-# Safe Float Parsing | Exact Decimal Math | Cumulative YTD Tax | AES-256
+# 🤖 Autonomous Enterprise AI Payroll System (v6.0 - Production Grade)
+# Auto-Reset Cache on File Upload | Safe Parsing | Exact Decimal Math | AES-256
 # ===========================================================================
 
 st.set_page_config(
@@ -21,7 +21,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# 0. RTL Styling & UI Settings
+# 0. RTL Styling & Custom CSS Protections
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -83,9 +83,11 @@ if "audit_trail" not in st.session_state:
     st.session_state.audit_trail = []
 if "cipher_key" not in st.session_state:
     st.session_state.cipher_key = Fernet.generate_key().decode('utf-8')
+if "last_uploaded_file" not in st.session_state:
+    st.session_state.last_uploaded_file = None
 
 # ---------------------------------------------------------------------------
-# 1. Security Manager & Encryption
+# 1. Security Manager & AES-256 Encryption
 # ---------------------------------------------------------------------------
 class SecurityManager:
     @staticmethod
@@ -121,7 +123,7 @@ class SecurityManager:
         st.session_state.audit_trail.append(log_entry)
 
 # ---------------------------------------------------------------------------
-# 2. Regulatory Engine Data
+# 2. Exact Decimal Math & Regulatory Data (2026 Israeli Law)
 # ---------------------------------------------------------------------------
 def to_dec(val: float | str | int | None) -> Decimal:
     if val is None or pd.isna(val) or str(val).strip() == "":
@@ -198,10 +200,19 @@ else:
     st.sidebar.info("ℹ️ מופעלים כללי מס ברירת מחדל (2026)")
 
 # ---------------------------------------------------------------------------
-# 4. Safe & Robust Excel Column Parsing Helper (Protected Against Text Rows)
+# 4. Robust & Safe Excel Column Parsing Helper
 # ---------------------------------------------------------------------------
+def safe_float(val, default: float = 0.0) -> float:
+    if val is None or pd.isna(val):
+        return default
+    try:
+        cleaned = str(val).replace(',', '').strip()
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return default
+
 def parse_excel_dataframe(df: pd.DataFrame) -> List[dict]:
-    """מנגנון מיפוי עמודות מוגן המדלג בבטחה על שורות הסבר בעברית"""
+    """מנגנון מיפוי עמודות חכם ומוגן המזהה עמודות ומסנן טקסט חופשי"""
     df_clean = df.copy()
     df_clean.columns = [str(col).strip() for col in df_clean.columns]
     
@@ -222,31 +233,22 @@ def parse_excel_dataframe(df: pd.DataFrame) -> List[dict]:
     col_bonus = find_col(['בונוס', 'עמלה', 'עמלות', 'bonus'])
     col_credits = find_col(['נקודות זיכוי', 'נ"ז', 'נז', 'זיכוי', 'credit_points', 'credits'])
 
-    def safe_float(val, default=0.0) -> float:
-        if val is None or pd.isna(val):
-            return default
-        try:
-            cleaned = str(val).replace(',', '').strip()
-            return float(cleaned)
-        except (ValueError, TypeError):
-            return default
-
     parsed_employees = []
     for idx, row in df_clean.iterrows():
+        raw_name = row[col_name] if col_name else None
+        emp_name = str(raw_name).strip() if (raw_name is not None and not pd.isna(raw_name)) else f"עובד {idx + 1}"
+        
+        salary_val = safe_float(row[col_salary] if col_salary else 10000.0, default=0.0)
+        
+        # דילוג אוטומטי על שורות כותרת/הסבר
+        if salary_val == 0.0 and col_salary:
+            if any(term in emp_name for term in ["נתונים", "2026", "תקן", "הסבר", "ממוצע"]):
+                continue
+
         raw_id = row[col_id] if col_id else None
         emp_id = str(raw_id).strip() if (raw_id is not None and not pd.isna(raw_id)) else str(idx + 1)
         if emp_id.endswith('.0'):
             emp_id = emp_id[:-2]
-            
-        raw_name = row[col_name] if col_name else None
-        emp_name = str(raw_name).strip() if (raw_name is not None and not pd.isna(raw_name)) else f"עובד {idx + 1}"
-        
-        salary_val = safe_float(row[col_salary] if col_salary else 10000.0, default=10000.0)
-        
-        # דילוג אוטומטי על שורות כותרת/הסבר (אם השכר אינו מספרי ושמות השורות מכילים טקסט תיאורי)
-        if salary_val == 0.0 and col_salary:
-            if "נתונים" in emp_name or "2026" in emp_name or "תקן" in emp_name:
-                continue
 
         ot_total = safe_float(row[col_ot_total] if col_ot_total else 0.0, default=0.0)
         ot_125 = safe_float(row[col_ot_125] if col_ot_125 else 0.0, default=0.0)
@@ -430,22 +432,34 @@ sample_employees = [
 with tab_dashboard:
     st.header("1️⃣ קליטת נתונים ולוח בקרת שכר")
     
-    # 📥 רובריקת העלאת אקסל
+    # 📥 רובריקת העלאת אקסל עם מנגנון איפוס זיכרון אוטומטי
     uploaded_file = st.file_uploader("📥 העלי קובץ נתוני שכר (Excel / CSV):", type=["xlsx", "xls", "csv"])
     
     active_emp_list = sample_employees
     if uploaded_file is not None:
+        # בדיקה האם הועלה קובץ חדש או הוחלף קובץ -> איפוס זיכרון המטמון במידי
+        if st.session_state.last_uploaded_file != uploaded_file.name:
+            st.session_state.edited_employees = {}
+            st.session_state.approved_stubs = set()
+            st.session_state.rejected_stubs = set()
+            st.session_state.last_uploaded_file = uploaded_file.name
+            st.toast(f"🔄 הועלה קובץ חדש: {uploaded_file.name}. זיכרון המטמון אופס בהצלחה!", icon="✨")
+            
         try:
             df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
             parsed_employees = parse_excel_dataframe(df_raw)
             if parsed_employees:
                 active_emp_list = parsed_employees
-                st.success(f"✅ הקובץ '{uploaded_file.name}' פוענח בהצלחה! נקלטו {len(parsed_employees)} עובדים עם נתונים ייחודיים.")
+                st.success(f"✅ הקובץ '{uploaded_file.name}' פוענח בהצלחה! מחושבים כעת {len(parsed_employees)} עובדים בזמן אמת.")
                 
                 with st.expander("🔍 הצג טבלת נתונים שפוענחה מהקובץ"):
                     st.dataframe(pd.DataFrame(parsed_employees), use_container_width=True)
         except Exception as e:
             st.error(f"שגיאה בקריאת הקובץ: {e}")
+    else:
+        if st.session_state.last_uploaded_file is not None:
+            st.session_state.last_uploaded_file = None
+            st.session_state.edited_employees = {}
 
     processor = CumulativePayrollProcessor(current_rules)
     calculated_stubs = [processor.process_employee(emp, {}) for emp in active_emp_list]
