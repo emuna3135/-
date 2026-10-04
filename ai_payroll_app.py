@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import html
 import json
 
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# 0. הגדרות עיצוב RTL (מימין לשמאל) ואבטחת אייקונים
+# 0. הגדרות עיצוב RTL (מימין לשמאל), אבטחת אייקונים ועיצוב כרטיסים
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -37,19 +37,19 @@ st.markdown("""
         text-align: right !important;
     }
     
-    /* שמירה על כיוון LTR עבור אייקונים ומספרים */
-    .material-symbols-outlined, .stIcon {
+    /* שמירה על כיוון LTR עבור אייקונים ומספרים בלבד למניעת חפיפת טקסטים */
+    .material-symbols-outlined, .stIcon, [data-testid="stMetricValue"] {
         direction: ltr !important;
         display: inline-block;
     }
 
-    /* יישור שדות קלט וכפתורים */
+    /* יישור שדות קלט, תיבות בחירה וכפתורים */
     .stTextInput input, .stNumberInput input, div[data-baseweb="select"], .stButton button, .stFileUploader {
         direction: rtl !important;
         text-align: right !important;
     }
 
-    /* כרטיסי עובדים ועיצוב אלמנטים */
+    /* עיצוב כרטיסי עובדים ודגלי אנומליות */
     .emp-card {
         background-color: #ffffff;
         border-radius: 12px;
@@ -64,31 +64,34 @@ st.markdown("""
     .flag-high {
         background-color: #FEF2F2;
         border-right: 4px solid #EF4444;
-        padding: 8px 12px;
-        margin: 4px 0;
-        border-radius: 4px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        border-radius: 6px;
         color: #991B1B;
+        font-size: 14px;
     }
     .flag-medium {
         background-color: #FFFBEB;
         border-right: 4px solid #F59E0B;
-        padding: 8px 12px;
-        margin: 4px 0;
-        border-radius: 4px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        border-radius: 6px;
         color: #92400E;
+        font-size: 14px;
     }
     .flag-low {
         background-color: #EFF6FF;
         border-right: 4px solid #3B82F6;
-        padding: 8px 12px;
-        margin: 4px 0;
-        border-radius: 4px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        border-radius: 6px;
         color: #1E40AF;
+        font-size: 14px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ניהול מצבי זיכרון עבור אישורים, דחיות ועריכות
+# ניהול מצבי זיכרון עבור אישורים, דחיות ועריכות ב-Session State
 if "approved_stubs" not in st.session_state:
     st.session_state.approved_stubs = set()
 if "rejected_stubs" not in st.session_state:
@@ -99,12 +102,13 @@ if "edited_employees" not in st.session_state:
 # ---------------------------------------------------------------------------
 # 1. מנוע חישוב פיננסי מדויק (Exact Decimal Financial Engine - 2026)
 # ---------------------------------------------------------------------------
-def to_dec(val: float | str | int) -> Decimal:
-    """המרת ערך ל-Decimal מדויק עם עיגול בנקאי ל-2 ספרות"""
-    if val is None or val == "":
+def to_dec(val: float | str | int | None) -> Decimal:
+    """המרת ערך ל-Decimal מדויק עם עיגול בנקאי ל-2 ספרות (מתמודד בבטחה עם None/NaN)"""
+    if val is None or pd.isna(val) or str(val).strip() == "":
         return Decimal('0.00')
     try:
-        return Decimal(str(val)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        cleaned = str(val).replace(',', '').strip()
+        return Decimal(cleaned).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     except Exception:
         return Decimal('0.00')
 
@@ -116,10 +120,10 @@ class TaxBracket:
 @dataclass
 class RegulatoryData2026:
     year: int = 2026
-    credit_point_value_monthly: Decimal = to_dec('242.00')  # שווי נקודת זיכוי 2026
+    credit_point_value_monthly: Decimal = to_dec('242.00')  # שווי נקודת זיכוי מעודכן ל-2026
     minimum_wage_hourly: Decimal = to_dec('32.30')
     
-    # מדרגות מס הכנסה מעודכנות לשנת 2026
+    # מדרגות מס הכנסה חודשיות מעודכנות לשנת 2026
     tax_brackets: List[TaxBracket] = field(default_factory=lambda: [
         TaxBracket(to_dec('7010.00'), to_dec('0.10')),
         TaxBracket(to_dec('10060.00'), to_dec('0.14')),
@@ -137,7 +141,7 @@ class RegulatoryData2026:
     bituach_leumi_threshold: Decimal = to_dec('7703.00')  # 60% משכר ממוצע ב-2026
     national_insurance_reduced_rate: Decimal = to_dec('0.0427')  # 4.27% שיעור מופחת
     national_insurance_full_rate: Decimal = to_dec('0.1217')     # 12.17% שיעור מלא
-    bituach_leumi_max_income_cap: Decimal = to_dec('51910.00')   # תקרת גבייה מרבית
+    bituach_leumi_max_income_cap: Decimal = to_dec('51910.00')   # תקרת גבייה מרבית חודשית
 
 # ---------------------------------------------------------------------------
 # 2. סרגל צד - לוח בקרת רגולציה וחוקי מס דינמיים (Human-in-the-Loop)
@@ -174,12 +178,12 @@ class AnomalyFlag:
     current_value: str
 
 class AIAnomalyDetector:
-    """סורק AI לזיהוי חריגות בשכר ובשעות נוספות"""
+    """סורק AI לזיהוי חריגות בשכר ובשעות נוספות להצגה לחשב השכר בלבד"""
     @staticmethod
     def scan_employee_payroll(emp_data: dict, historical_avg: dict) -> List[AnomalyFlag]:
         flags = []
         
-        # 1. קפיצה בשעות נוספות
+        # 1. קפיצה בשעות נוספות (Overtime Spike)
         curr_ot = float(emp_data.get('overtime_hours', 0) or 0)
         avg_ot = float(historical_avg.get('overtime_hours', 0) or 0)
         if avg_ot > 0 and curr_ot > avg_ot * 1.8 and curr_ot > 15:
@@ -192,7 +196,7 @@ class AIAnomalyDetector:
                 current_value=f"{curr_ot} שעות"
             ))
             
-        # 2. בונוס חריג
+        # 2. בונוס/עמלה חריגה
         curr_bonus = float(emp_data.get('bonus', 0) or 0)
         avg_bonus = float(historical_avg.get('bonus', 0) or 0)
         if curr_bonus > 0 and (avg_bonus == 0 or curr_bonus > avg_bonus * 2):
@@ -204,7 +208,7 @@ class AIAnomalyDetector:
                 current_value=f"₪{curr_bonus:,.2f}"
             ))
 
-        # 3. בדיקת 0 נקודות זיכוי (תושב חוץ / ללא זכאות)
+        # 3. בדיקת 0 נקודות זיכוי (מקרה קצה ד': תושב חוץ / ללא זכאות)
         pts = float(emp_data.get('credit_points', 2.25) if emp_data.get('credit_points') is not None else 2.25)
         if pts == 0.0:
             flags.append(AnomalyFlag(
@@ -215,7 +219,7 @@ class AIAnomalyDetector:
                 current_value="0.00 נקודות זיכוי"
             ))
 
-        # 4. עדכון טופס 101
+        # 4. עדכון טופס 101 חדש
         if emp_data.get('form_101_updated') and pts == float(historical_avg.get('credit_points', 2.25) or 2.25):
             flags.append(AnomalyFlag(
                 risk_level="LOW",
@@ -257,7 +261,7 @@ class PayrollProcessor:
     def __init__(self, rules: RegulatoryData2026):
         self.rules = rules
         
-    def calculate_tax(self, gross: Decimal, credit_points: Decimal) -> (Decimal, Decimal):
+    def calculate_tax(self, gross: Decimal, credit_points: Decimal) -> Tuple[Decimal, Decimal]:
         """חישוב מס הכנסה לפי מדרגות 2026 ומס יסף"""
         tax = Decimal('0.00')
         remaining = gross
@@ -282,7 +286,7 @@ class PayrollProcessor:
         tax_credit = credit_points * self.rules.credit_point_value_monthly
         final_income_tax = max(Decimal('0.00'), tax - tax_credit)
         
-        # חישוב מס יסף (3% מעל 60,130 ש"ח לחודש)
+        # חישוב מס יסף (3% מעל 60,130 ש"ח לחודש ב-2026)
         sur_tax = Decimal('0.00')
         if gross > self.rules.sur_tax_threshold:
             sur_tax = (gross - self.rules.sur_tax_threshold) * self.rules.sur_tax_rate
@@ -290,7 +294,7 @@ class PayrollProcessor:
         return to_dec(final_income_tax), to_dec(sur_tax)
 
     def calculate_national_insurance(self, gross: Decimal) -> Decimal:
-        """חישוב ביטוח לאומי ומס בריאות כולל תקרת גבייה מרבית (51,910 ש"ח)"""
+        """חישוב ביטוח לאומי ומס בריאות כולל תקרת גבייה מרבית (51,910 ש"ח ב-2026)"""
         taxable_gross = min(gross, self.rules.bituach_leumi_max_income_cap)
         threshold = self.rules.bituach_leumi_threshold
         
@@ -315,7 +319,7 @@ class PayrollProcessor:
         bonus = to_dec(emp_data.get('bonus', 0))
         gross = base + ot_pay + bonus
         
-        # טיפול מדויק בנקודות זיכוי (אם הוגדר 0.00, משאירים 0.00 ולא דורסים ל-2.25)
+        # טיפול מדויק בנקודות זיכוי: אם צוין 0.00 לא משנים ל-2.25
         raw_pts = emp_data.get('credit_points')
         if raw_pts is None or str(raw_pts).strip() == "":
             credit_pts = Decimal('2.25')
@@ -324,7 +328,7 @@ class PayrollProcessor:
             
         income_tax, sur_tax = self.calculate_tax(gross, credit_pts)
         ni = self.calculate_national_insurance(gross)
-        pension_emp = to_dec(gross * Decimal('0.06'))
+        pension_emp = to_dec(gross * Decimal('0.06'))  # 6% חלק עובד
         
         total_tax_and_sur = income_tax + sur_tax
         total_deductions = total_tax_and_sur + ni + pension_emp
@@ -356,13 +360,16 @@ class PayrollProcessor:
         )
 
 # ---------------------------------------------------------------------------
-# 5. מנוע הפקת HTML מוגן (Escaping & Security)
+# 5. מנוע הפקת HTML מוגן ומעוצב (Escaping & Security)
 # ---------------------------------------------------------------------------
 def generate_paystub_html(stub: CalculatedPaystub, company_name: str = "חברה בע\"מ") -> str:
-    """הפקת HTML מעוצב עם אבטחת סינון מחרוזות (Escaping)"""
+    """הפקת HTML מעוצב מוגן מפני הזרקות (HTML Escaping)"""
     safe_emp_name = html.escape(stub.emp_name)
     safe_emp_id = html.escape(stub.emp_id)
-    safe_company = html.escape(company_name)
+    
+    # טיפול נקי ומאובטח בשם החברה והתבנית למניעת AttributeError
+    clean_company = company_name.rsplit('.', 1)[0] if '.' in company_name else company_name
+    safe_company = html.escape(clean_company.replace('_', ' '))
     
     ot_125_row = f"<tr><td style='padding: 8px;'>שעות נוספות 125%</td><td style='padding: 8px;'>{stub.ot_hours_125} שעות</td><td style='padding: 8px;'>₪{stub.overtime_125_pay:,.2f}</td></tr>" if stub.ot_hours_125 > 0 else ""
     ot_150_row = f"<tr><td style='padding: 8px;'>שעות נוספות 150%</td><td style='padding: 8px;'>{stub.ot_hours_150} שעות</td><td style='padding: 8px;'>₪{stub.overtime_150_pay:,.2f}</td></tr>" if stub.ot_hours_150 > 0 else ""
@@ -460,7 +467,7 @@ st.header("1️⃣ קליטת נתוני שכר וקובץ עובדים")
 
 uploaded_file = st.file_uploader("העלי קובץ נתוני שכר (Excel / CSV):", type=["xlsx", "xls", "csv"])
 
-# הגדרת נתוני דמו כברירת מחדל
+# הגדרת נתוני דמו כברירת מחדל לכיסוי כל מקרי הקצה
 sample_employees = [
     {
         "id": "101", "name": "ישראל ישראלי", "base_salary": 12500,
@@ -564,7 +571,7 @@ for stub in calculated_stubs:
     
     with st.expander(f"👤 עובד/ת: {stub.emp_name} (ת.ז: {stub.emp_id}) | שכר ברוטו: ₪{stub.gross_salary:,.2f} | נטו: ₪{stub.net_salary:,.2f} | סטטוס: {status_badge}", expanded=not is_approved):
         
-        col_info, col_actions = st.columns()
+        col_info, col_actions = st.columns(2)
         
         with col_info:
             st.write(f"**שכר יסוד:** ₪{stub.base_salary:,.2f} | **שעות נוספות:** ₪{stub.overtime_pay:,.2f} | **בונוס:** ₪{stub.bonus:,.2f}")
