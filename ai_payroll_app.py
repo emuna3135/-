@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -9,8 +10,8 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 
 # ===========================================================================
-# 🤖 Autonomous Enterprise AI Payroll System (v6.0 - Production Grade)
-# Auto-Reset Cache on File Upload | Safe Parsing | Exact Decimal Math | AES-256
+# 🤖 Autonomous Enterprise AI Payroll System (v7.0 - Production Grade)
+# Smart Header Detection | Safe Float Parsing | Exact Decimal Math | AES-256
 # ===========================================================================
 
 st.set_page_config(
@@ -200,7 +201,7 @@ else:
     st.sidebar.info("ℹ️ מופעלים כללי מס ברירת מחדל (2026)")
 
 # ---------------------------------------------------------------------------
-# 4. Robust & Safe Excel Column Parsing Helper
+# 4. Smart Header Detection & Robust Excel Parsing
 # ---------------------------------------------------------------------------
 def safe_float(val, default: float = 0.0) -> float:
     if val is None or pd.isna(val):
@@ -211,14 +212,33 @@ def safe_float(val, default: float = 0.0) -> float:
     except (ValueError, TypeError):
         return default
 
-def parse_excel_dataframe(df: pd.DataFrame) -> List[dict]:
-    """מנגנון מיפוי עמודות חכם ומוגן המזהה עמודות ומסנן טקסט חופשי"""
-    df_clean = df.copy()
+def load_excel_smart(df_raw: pd.DataFrame) -> pd.DataFrame:
+    """זיהוי אוטומטי של שורת הכותרות באקסל גם אם מופיעות שורות תיאור בראש הדף"""
+    cols_str = ' '.join([str(c) for c in df_raw.columns])
+    matches_top = sum(1 for k in ['שכר', 'ת.ז', 'שם', 'בונוס', 'זיכוי', '125%'] if k in cols_str)
+    if matches_top >= 2:
+        return df_raw
+    
+    # סריקת 10 השורות הראשונות למציאת שורת הכותרות האמיתית
+    for r_idx in range(min(10, len(df_raw))):
+        row_vals = [str(val).strip() for val in df_raw.iloc[r_idx].values]
+        row_str = ' '.join(row_vals)
+        matches_row = sum(1 for k in ['שכר', 'ת.ז', 'שם', 'בונוס', 'זיכוי', '125%'] if k in row_str)
+        if matches_row >= 2:
+            new_df = df_raw.iloc[r_idx + 1:].copy()
+            new_df.columns = row_vals
+            return new_df.reset_index(drop=True)
+            
+    return df_raw
+
+def parse_excel_dataframe(df_input: pd.DataFrame) -> List[dict]:
+    """מנגנון מיפוי עמודות חכם ומוגן המדלג על שורות כותרת ומונע שגיאות מיקום"""
+    df_clean = load_excel_smart(df_input)
     df_clean.columns = [str(col).strip() for col in df_clean.columns]
     
     def find_col(keywords: List[str]) -> Optional[str]:
         for col in df_clean.columns:
-            col_lower = col.lower()
+            col_lower = str(col).lower()
             for kw in keywords:
                 if kw.lower() in col_lower:
                     return col
@@ -238,18 +258,16 @@ def parse_excel_dataframe(df: pd.DataFrame) -> List[dict]:
         raw_name = row[col_name] if col_name else None
         emp_name = str(raw_name).strip() if (raw_name is not None and not pd.isna(raw_name)) else f"עובד {idx + 1}"
         
-        salary_val = safe_float(row[col_salary] if col_salary else 10000.0, default=0.0)
-        
-        # דילוג אוטומטי על שורות כותרת/הסבר
-        if salary_val == 0.0 and col_salary:
-            if any(term in emp_name for term in ["נתונים", "2026", "תקן", "הסבר", "ממוצע"]):
-                continue
+        # דילוג על שורות סיכום או הסבר
+        if any(term in emp_name for term in ["נתונים", "2026", "תקן", "הסבר", "ממוצע", "סה\"כ"]):
+            continue
 
         raw_id = row[col_id] if col_id else None
         emp_id = str(raw_id).strip() if (raw_id is not None and not pd.isna(raw_id)) else str(idx + 1)
         if emp_id.endswith('.0'):
             emp_id = emp_id[:-2]
 
+        salary_val = safe_float(row[col_salary] if col_salary else 10000.0, default=10000.0)
         ot_total = safe_float(row[col_ot_total] if col_ot_total else 0.0, default=0.0)
         ot_125 = safe_float(row[col_ot_125] if col_ot_125 else 0.0, default=0.0)
         ot_150 = safe_float(row[col_ot_150] if col_ot_150 else 0.0, default=0.0)
@@ -415,7 +433,7 @@ class CumulativePayrollProcessor:
 # ---------------------------------------------------------------------------
 # 6. Interface & Layout Tabs
 # ---------------------------------------------------------------------------
-st.title("🛡️ Enterprise AI Payroll System (2026)")
+st.title("🛡️️ Enterprise AI Payroll System (2026)")
 
 tab_dashboard, tab_security, tab_paystub = st.tabs([
     "📊 לוח בקרה וחישוב שכר",
@@ -437,7 +455,6 @@ with tab_dashboard:
     
     active_emp_list = sample_employees
     if uploaded_file is not None:
-        # בדיקה האם הועלה קובץ חדש או הוחלף קובץ -> איפוס זיכרון המטמון במידי
         if st.session_state.last_uploaded_file != uploaded_file.name:
             st.session_state.edited_employees = {}
             st.session_state.approved_stubs = set()
