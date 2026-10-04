@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,9 +9,8 @@ from datetime import datetime
 from cryptography.fernet import Fernet
 
 # ===========================================================================
-# 🤖 Autonomous Enterprise AI Payroll System (v4.0 - 2026 Production Grade)
-# Exact Decimal Math | Cumulative YTD Tax | AES-256 Encryption | Audit Log
-# Dynamic Regulatory Engine | Excel Data Ingestion
+# 🤖 Autonomous Enterprise AI Payroll System (v5.0 - Production Grade)
+# Robust Column Mapping | Exact Decimal Math | Cumulative YTD Tax | AES-256
 # ===========================================================================
 
 st.set_page_config(
@@ -200,7 +198,70 @@ else:
     st.sidebar.info("ℹ️ מופעלים כללי מס ברירת מחדל (2026)")
 
 # ---------------------------------------------------------------------------
-# 4. Payroll Calculation Engine
+# 4. Flexible & Robust Excel Column Parsing Helper
+# ---------------------------------------------------------------------------
+def parse_excel_dataframe(df: pd.DataFrame) -> List[dict]:
+    """מנגנון מיפוי עמודות גמיש וחכם עבור קבצי אקסל ו-CSV בכל מבנה"""
+    df_clean = df.copy()
+    df_clean.columns = [str(col).strip() for col in df_clean.columns]
+    
+    def find_col(keywords: List[str]) -> Optional[str]:
+        for col in df_clean.columns:
+            col_lower = col.lower()
+            for kw in keywords:
+                if kw.lower() in col_lower:
+                    return col
+        return None
+
+    col_id = find_col(['ת.ז', 'זהות', 'מספר עובד', 'id', 'emp_id'])
+    col_name = find_col(['שם', 'שם עובד', 'name', 'employee'])
+    col_salary = find_col(['שכר יסוד', 'שכר בסיס', 'שכר', 'base_salary', 'salary'])
+    col_ot_total = find_col(['שעות נוספות', 'סך שעות נוספות', 'overtime_hours', 'ot_hours'])
+    col_ot_125 = find_col(['125%', '125', 'overtime_125'])
+    col_ot_150 = find_col(['150%', '150', 'overtime_150'])
+    col_bonus = find_col(['בונוס', 'עמלה', 'עמלות', 'bonus'])
+    col_credits = find_col(['נקודות זיכוי', 'נ"ז', 'נז', 'זיכוי', 'credit_points', 'credits'])
+
+    parsed_employees = []
+    for idx, row in df_clean.iterrows():
+        emp_id = str(row[col_id]).strip() if (col_id and not pd.isna(row[col_id])) else str(idx + 1)
+        if emp_id.endswith('.0'):
+            emp_id = emp_id[:-2]
+            
+        emp_name = str(row[col_name]).strip() if (col_name and not pd.isna(row[col_name])) else f"עובד {idx + 1}"
+        
+        raw_salary = row[col_salary] if col_salary else 10000
+        salary_val = float(raw_salary) if (raw_salary is not None and not pd.isna(raw_salary)) else 10000.0
+        
+        ot_total = float(row[col_ot_total]) if (col_ot_total and not pd.isna(row[col_ot_total])) else 0.0
+        ot_125 = float(row[col_ot_125]) if (col_ot_125 and not pd.isna(row[col_ot_125])) else 0.0
+        ot_150 = float(row[col_ot_150]) if (col_ot_150 and not pd.isna(row[col_ot_150])) else 0.0
+        
+        if ot_total > 0 and ot_125 == 0 and ot_150 == 0:
+            ot_125 = ot_total
+            
+        bonus_val = float(row[col_bonus]) if (col_bonus and not pd.isna(row[col_bonus])) else 0.0
+        
+        if col_credits and not pd.isna(row[col_credits]):
+            credit_pts_val = float(row[col_credits])
+        else:
+            credit_pts_val = 2.25
+
+        parsed_employees.append({
+            "id": emp_id,
+            "name": emp_name,
+            "base_salary": salary_val,
+            "overtime_hours": ot_total if ot_total > 0 else (ot_125 + ot_150),
+            "overtime_125_hours": ot_125,
+            "overtime_150_hours": ot_150,
+            "bonus": bonus_val,
+            "credit_points": credit_pts_val
+        })
+        
+    return parsed_employees
+
+# ---------------------------------------------------------------------------
+# 5. Payroll Calculation Engine
 # ---------------------------------------------------------------------------
 @dataclass
 class AnomalyFlag:
@@ -339,7 +400,7 @@ class CumulativePayrollProcessor:
         )
 
 # ---------------------------------------------------------------------------
-# 5. Interface & Layout Tabs
+# 6. Interface & Layout Tabs
 # ---------------------------------------------------------------------------
 st.title("🛡️ Enterprise AI Payroll System (2026)")
 
@@ -365,28 +426,39 @@ with tab_dashboard:
     if uploaded_file is not None:
         try:
             df_raw = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-            st.success(f"✅ הקובץ '{uploaded_file.name}' נקלט בהצלחה! נמצאו {len(df_raw)} עובדים.")
-            parsed_list = []
-            for idx, row in df_raw.iterrows():
-                parsed_list.append({
-                    "id": str(row.get("ת.ז", row.get("id", idx + 1))),
-                    "name": str(row.get("שם עובד", row.get("name", f"עובד {idx+1}"))),
-                    "base_salary": float(row.get("שכר יסוד", row.get("base_salary", 10000))),
-                    "overtime_hours": float(row.get("שעות נוספות", row.get("overtime_hours", 0))),
-                    "overtime_125_hours": float(row.get("שעות 125%", row.get("overtime_125_hours", 0))),
-                    "overtime_150_hours": float(row.get("שעות 150%", row.get("overtime_150_hours", 0))),
-                    "bonus": float(row.get("בונוס", row.get("bonus", 0))),
-                    "credit_points": float(row.get("נקודות זיכוי", row.get("credit_points", 2.25)))
-                })
-            if parsed_list:
-                active_emp_list = parsed_list
+            parsed_employees = parse_excel_dataframe(df_raw)
+            if parsed_employees:
+                active_emp_list = parsed_employees
+                st.success(f"✅ הקובץ '{uploaded_file.name}' פוענח בהצלחה! נקלטו {len(parsed_employees)} עובדים עם נתונים ייחודיים.")
+                
+                with st.expander("🔍 הצג טבלת נתונים שפוענחה מהקובץ"):
+                    st.dataframe(pd.DataFrame(parsed_employees), use_container_width=True)
         except Exception as e:
             st.error(f"שגיאה בקריאת הקובץ: {e}")
 
     processor = CumulativePayrollProcessor(current_rules)
     calculated_stubs = [processor.process_employee(emp, {}) for emp in active_emp_list]
 
-    st.subheader("📋 סיכום תלושים לחישוב:")
+    st.subheader(f"📋 סיכום תלושים מחושבים ({len(calculated_stubs)} עובדים):")
+    
+    total_gross = sum(s.gross_salary for s in calculated_stubs)
+    total_net = sum(s.net_salary for s in calculated_stubs)
+    total_tax = sum(s.income_tax for s in calculated_stubs)
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("סה\"כ ברוטו למחזור", f"₪{total_gross:,.2f}")
+    m2.metric("סה\"כ ניכויי מס", f"₪{total_tax:,.2f}")
+    m3.metric("סה\"כ נטו לתשלום", f"₪{total_net:,.2f}")
+    
+    st.markdown("---")
+
     for stub in calculated_stubs:
         with st.expander(f"👤 {stub.emp_name} (ת.ז: {stub.emp_id}) | ברוטו: ₪{stub.gross_salary:,.2f} | נטו: ₪{stub.net_salary:,.2f}"):
-            st.write(f"**שכר יסוד:** ₪{stub.base_salary:,.2f} | **מס:** ₪{stub.income_tax:,.2f} | **ביטוח לאומי:** ₪{stub.national_insurance:,.2f}")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write(f"**שכר יסוד:** ₪{stub.base_salary:,.2f} | **שעות נוספות:** ₪{stub.overtime_pay:,.2f} | **בונוס:** ₪{stub.bonus:,.2f}")
+                st.write(f"**נקודות זיכוי:** {stub.credit_points} נ\"ז")
+            with c2:
+                st.write(f"**מס הכנסה ומס יסף:** ₪{stub.income_tax:,.2f}")
+                st.write(f"**ביטוח לאומי ומס בריאות:** ₪{stub.national_insurance:,.2f}")
+                st.write(f"**פנסיה עובד (6%):** ₪{stub.pension_employee:,.2f}")
