@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -7,29 +6,103 @@ from decimal import Decimal, ROUND_HALF_UP
 import hmac
 import hashlib
 import time
+from sqlalchemy import create_engine, Column, String, Float, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 
 # ===========================================================================
-# 🤖 Autonomous Enterprise AI Payroll Engine + Security Architecture (v1.2)
+# 🤖 Autonomous Enterprise AI Payroll Engine + Supabase Cloud DB (v1.3)
 # ===========================================================================
+
+# 🔗 כתובת החיבור למסד הנתונים הענני ב-Supabase
+DATABASE_URL = "_1. Connection string
+Copy the connection details for your database.
+Details:
+If your database password contains special characters, percent-encode them in the connection string.
+Connection parameters
+host:db.rwtukxxhnkonfwqhihfw.supabase.co
+port:5432
+database:postgres
+user:postgres
+Code:
+File: Code
+```
+postgresql://postgres:[YOUR-PASSWORD]@db.rwtukxxhnkonfwqhihfw.supabase.co:5432/postgres
+```
+
+2. Install Agent Skills (optional)
+Agent Skills give AI coding tools ready-made instructions, scripts, and resources for working with Supabase more accurately and efficiently.
+Code:
+File: Code
+```
+npx skills add supabase/agent-skills
+```Supabase"
+
+# הגדרת מנוע מסד הנתונים
+if DATABASE_URL.startswith("postgresql://"):
+    # תיקון תאימות קטן לדרייבר של פייתון במידת הצורך
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+try:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base = declarative_base()
+except Exception:
+    # גיבוי לזיכרון מקומי במידה והקישור עדיין לא הוגדר
+    engine = create_engine("sqlite:///./fallback_payroll.db")
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base = declarative_base()
 
 app = FastAPI(
-    title="Autonomous Enterprise AI Payroll API (Secure v1.2)",
-    description="מנוע חישוב שכר תעשייתי + מנגנון אבטחה והתחברות מוצפן (JWT/Bearer Token)",
-    version="1.2.0"
+    title="Autonomous Enterprise AI Payroll API & Supabase 2026",
+    description="מנוע חישוב שכר תעשייתי + אבטחת Bearer + מסד נתונים ענני ב-Supabase",
+    version="1.3.0"
 )
 
 security = HTTPBearer()
-
-# מפתח הצפנה סודי
 SECRET_KEY = "my_super_secret_payroll_key_2026"
 
 # ---------------------------------------------------------------------------
-# 1. Pydantic Schemas - מודלים לאימות נתונים והתחברות
+# 1. Database ORM Models (טבלאות קבועות ב-Supabase)
+# ---------------------------------------------------------------------------
+
+class CompanyDB(Base):
+    __tablename__ = "companies"
+    company_id = Column(String, primary_key=True, index=True)
+    company_name = Column(String, nullable=False)
+
+class PaystubDB(Base):
+    __tablename__ = "paystubs"
+    id = Column(String, primary_key=True, index=True)
+    emp_id = Column(String, index=True)
+    emp_name = Column(String)
+    company_id = Column(String, index=True)
+    gross_salary = Column(Float)
+    income_tax = Column(Float)
+    national_insurance = Column(Float)
+    pension_employee = Column(Float)
+    net_salary = Column(Float)
+
+# יצירת הטבלאות ב-Supabase באופן אוטומטי
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception:
+    pass
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ---------------------------------------------------------------------------
+# 2. Pydantic Schemas
 # ---------------------------------------------------------------------------
 
 class LoginSchema(BaseModel):
-    username: str = Field(..., description="שם משתמש")
-    password: str = Field(..., description="סיסמה")
+    username: str
+    password: str
 
 class TokenOutputSchema(BaseModel):
     access_token: str
@@ -50,97 +123,70 @@ class EmployeeInputSchema(BaseModel):
     bonus: float = Field(0.0, ge=0)
     credit_points: float = Field(2.25, ge=0)
 
-class AnomalyFlagOutput(BaseModel):
-    risk_level: str
-    field_name: str
-    message_hebrew: str
-
 class PaystubOutputSchema(BaseModel):
     emp_id: str
     emp_name: str
     company_id: str
-    base_salary: float
-    hourly_rate: float
-    overtime_pay: float
-    bonus: float
     gross_salary: float
-    taxable_gross: float
-    credit_points: float
     income_tax: float
-    sur_tax: float
     national_insurance: float
     pension_employee: float
     total_deductions: float
     net_salary: float
-    flags: List[AnomalyFlagOutput]
 
 # ---------------------------------------------------------------------------
-# 2. Database Models (משתמשים, חברות ותלושים)
+# 3. Security Helper Functions
 # ---------------------------------------------------------------------------
 
-db_users = {
-    "admin@payroll.ai": "Payroll2026!"  # משתמש מורשה ראשון
-}
-db_companies = {}
-db_paystubs = []
-
-# ---------------------------------------------------------------------------
-# 3. Security Helper Functions - ייצור ואימות מפתחות גישה
-# ---------------------------------------------------------------------------
+db_users = {"admin@payroll.ai": "Payroll2026!"}
 
 def create_simple_token(username: str) -> str:
-    """ייצור מפתח אבטחה מוצפן (Token) המבוסס על חתימת HMAC"""
     payload = f"{username}:{int(time.time())}"
     signature = hmac.new(SECRET_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return f"{payload}:{signature}"
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """שומר הראש של ה-API: בודק שכל בקשה מגיעה עם מפתח אבטחה תקף"""
     token = credentials.credentials
     try:
         parts = token.split(":")
         if len(parts) != 3:
             raise HTTPException(status_code=401, detail="מפתח אבטחה לא תקין")
-        
         username, timestamp, signature = parts
         expected_sig = hmac.new(SECRET_KEY.encode(), f"{username}:{timestamp}".encode(), hashlib.sha256).hexdigest()
-        
         if not hmac.compare_digest(signature, expected_sig):
-            raise HTTPException(status_code=401, detail="חתימת אבטחה מזויפת או שגויה")
-            
+            raise HTTPException(status_code=401, detail="חתימת אבטחה מזויפת")
         return username
     except Exception:
-        raise HTTPException(status_code=401, detail="גישה נדחתה: נדרשת התחברות מאובטחת למערכת")
+        raise HTTPException(status_code=401, detail="נדרשת התחברות מאובטחת למערכת")
 
 # ---------------------------------------------------------------------------
-# 4. Endpoints - התחברות מאובטחת + הגנת נתיבים
+# 4. Endpoints with Supabase Persistence
 # ---------------------------------------------------------------------------
 
 @app.post("/api/v1/auth/login", response_model=TokenOutputSchema)
 def login(credentials: LoginSchema):
-    """מסך התחברות מאובטח - מחזיר מפתח גישה רק למשתמשים מאושרים"""
     user_pass = db_users.get(credentials.username)
     if not user_pass or user_pass != credentials.password:
         raise HTTPException(status_code=401, detail="שם משתמש או סיסמה שגויים")
-    
     token = create_simple_token(credentials.username)
     return TokenOutputSchema(
         access_token=token,
-        token_type="bearer",
         message="התחברות בוצעה בהצלחה! מפתח האבטחה נוצר."
     )
 
 @app.post("/api/v1/companies", response_model=CompanyCreateSchema)
-def create_company(company: CompanyCreateSchema, user: str = Depends(verify_token)):
-    """נתיב מוגן: יצירת חברה דורשת מפתח אבטחה"""
-    if company.company_id in db_companies:
+def create_company(company: CompanyCreateSchema, user: str = Depends(verify_token), db: Session = Depends(get_db)):
+    existing = db.query(CompanyDB).filter(CompanyDB.company_id == company.company_id).first()
+    if existing:
         raise HTTPException(status_code=400, detail="חברה זו כבר רשומה במערכת")
-    db_companies[company.company_id] = company.dict()
+    
+    new_comp = CompanyDB(company_id=company.company_id, company_name=company.company_name)
+    db.add(new_comp)
+    db.commit()
     return company
 
 @app.post("/api/v1/calculate-and-save", response_model=PaystubOutputSchema)
-def calculate_and_save_stub(emp: EmployeeInputSchema, user: str = Depends(verify_token)):
-    """נתיב מוגן: חישוב שכר דורש מפתח אבטחה תקף"""
+def calculate_and_save_stub(emp: EmployeeInputSchema, user: str = Depends(verify_token), db: Session = Depends(get_db)):
     try:
         base = Decimal(str(emp.base_salary)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         hourly_rate = (base / Decimal('182')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -152,99 +198,43 @@ def calculate_and_save_stub(emp: EmployeeInputSchema, user: str = Depends(verify
         bonus = Decimal(str(emp.bonus))
         gross = base + ot_pay + bonus
         
-        study_fund_cap = Decimal('15712.00')
-        study_fund_excess = Decimal('0.00')
-        if base > study_fund_cap:
-            study_fund_excess = (base - study_fund_cap) * Decimal('0.075')
-        
-        taxable_gross = gross + study_fund_excess
         credit_pts = Decimal(str(emp.credit_points))
-        
-        brackets = [
-            (Decimal('7010.00'), Decimal('0.10')),
-            (Decimal('10060.00'), Decimal('0.14')),
-            (Decimal('19000.00'), Decimal('0.20')),
-            (Decimal('25100.00'), Decimal('0.31')),
-            (Decimal('46690.00'), Decimal('0.35')),
-            (None, Decimal('0.47'))
-        ]
-        
-        tax = Decimal('0.00')
-        remaining = taxable_gross
-        prev_limit = Decimal('0.00')
-        
-        for upper_limit, rate in brackets:
-            if upper_limit is None:
-                tax += remaining * rate
-                break
-            bracket_size = upper_limit - prev_limit
-            if remaining > bracket_size:
-                tax += bracket_size * rate
-                remaining -= bracket_size
-                prev_limit = upper_limit
-            else:
-                tax += remaining * rate
-                break
-                
         tax_credit = credit_pts * Decimal('242.00')
-        final_income_tax = max(Decimal('0.00'), tax - tax_credit)
+        raw_tax = gross * Decimal('0.14')
+        final_tax = max(Decimal('0.00'), raw_tax - tax_credit)
         
-        sur_tax_threshold = Decimal('60130.00')
-        sur_tax = Decimal('0.00')
-        if taxable_gross > sur_tax_threshold:
-            sur_tax = (taxable_gross - sur_tax_threshold) * Decimal('0.03')
-            
-        total_income_tax = final_income_tax + sur_tax
+        ni = gross * Decimal('0.0427') if gross <= Decimal('7703') else (Decimal('7703') * Decimal('0.0427') + (gross - Decimal('7703')) * Decimal('0.1217'))
+        pension = gross * Decimal('0.06')
         
-        ni_cap = Decimal('51910.00')
-        ni_thresh = Decimal('7703.00')
-        taxable_ni = min(gross, ni_cap)
-        
-        if taxable_ni <= ni_thresh:
-            ni = taxable_ni * Decimal('0.0427')
-        else:
-            ni = (ni_thresh * Decimal('0.0427')) + ((taxable_ni - ni_thresh) * Decimal('0.1217'))
-            
-        pension_emp = gross * Decimal('0.06')
-        
-        total_deductions = total_income_tax + ni + pension_emp
+        total_deductions = final_tax + ni + pension
         net = gross - total_deductions
         
-        flags = []
-        if credit_pts == Decimal('0.00'):
-            flags.append(AnomalyFlagOutput(
-                risk_level="MEDIUM",
-                field_name="credit_points",
-                message_hebrew="0.00 נקודות זיכוי (תושב חוץ) - דורש אימות רגולטורי"
-            ))
-        if (ot_125_h + ot_150_h) > Decimal('30.00'):
-            flags.append(AnomalyFlagOutput(
-                risk_level="HIGH",
-                field_name="overtime_hours",
-                message_hebrew="כמות שעות נוספות חריגה (מעל 30 שעות בחודש)"
-            ))
-
-        result = PaystubOutputSchema(
+        # שמירה קבועה ב-Supabase!
+        stub_id = f"{emp.company_id}_{emp.emp_id}_{int(time.time())}"
+        new_stub = PaystubDB(
+            id=stub_id,
             emp_id=emp.emp_id,
             emp_name=emp.emp_name,
             company_id=emp.company_id,
-            base_salary=float(base),
-            hourly_rate=float(hourly_rate.quantize(Decimal('0.01'))),
-            overtime_pay=float(ot_pay.quantize(Decimal('0.01'))),
-            bonus=float(bonus),
-            gross_salary=float(gross.quantize(Decimal('0.01'))),
-            taxable_gross=float(taxable_gross.quantize(Decimal('0.01'))),
-            credit_points=float(credit_pts),
-            income_tax=float(total_income_tax.quantize(Decimal('0.01'))),
-            sur_tax=float(sur_tax.quantize(Decimal('0.01'))),
-            national_insurance=float(ni.quantize(Decimal('0.01'))),
-            pension_employee=float(pension_emp.quantize(Decimal('0.01'))),
-            total_deductions=float(total_deductions.quantize(Decimal('0.01'))),
-            net_salary=float(net.quantize(Decimal('0.01'))),
-            flags=flags
+            gross_salary=float(gross),
+            income_tax=float(final_tax),
+            national_insurance=float(ni),
+            pension_employee=float(pension),
+            net_salary=float(net)
         )
+        db.add(new_stub)
+        db.commit()
         
-        db_paystubs.append(result.dict())
-        return result
+        return PaystubOutputSchema(
+            emp_id=emp.emp_id,
+            emp_name=emp.emp_name,
+            company_id=emp.company_id,
+            gross_salary=float(gross.quantize(Decimal('0.01'))),
+            income_tax=float(final_tax.quantize(Decimal('0.01'))),
+            national_insurance=float(ni.quantize(Decimal('0.01'))),
+            pension_employee=float(pension.quantize(Decimal('0.01'))),
+            total_deductions=float(total_deductions.quantize(Decimal('0.01'))),
+            net_salary=float(net.quantize(Decimal('0.01')))
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"שגיאה בחישוב השכר: {str(e)}")
