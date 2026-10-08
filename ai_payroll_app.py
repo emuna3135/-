@@ -17,10 +17,9 @@ import passlib.context
 import pandas as pd
 
 # ===========================================================================
-# 🤖 Autonomous AI Payroll API - Multi-Tenant Architecture (2026 Enterprise)
+# 🤖 Autonomous AI Payroll API - Multi-Tenant Fast-Boot Architecture (2026)
 # ===========================================================================
 
-# הגדרת מפתחות וחיבורים
 JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_payroll_jwt_key_2026_enterprise_998811")
 ALGORITHM = "HS256"
 DEFAULT_DB_URL = "postgresql://postgres.rwtukxxhnkonfughihfw:EMUNa3135%40%21@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
@@ -29,24 +28,18 @@ DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DB_URL)
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# הגדרת בסיס הנתונים
 Base = declarative_base()
+
+# הגדרת אובייקטי בסיס נתונים ללא חסימת עלייה
 engine = None
 SessionLocal = None
-
-try:
-    if DATABASE_URL:
-        engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-except Exception as e:
-    print(f"Database connection warning: {e}")
 
 pwd_context = passlib.context.CryptContext(schemes=["bcrypt"], deprecated="auto")
 security_scheme = HTTPBearer(auto_error=False)
 
 app = FastAPI(
     title="Autonomous AI Payroll API",
-    description="מערכת חישוב שכר אוטונומית רב-ארגונית (Multi-Tenant) עם הפרדת נתונים הרמטית, סורק AI ואבטחה מתקדמת",
+    description="מערכת חישוב שכר אוטונומית רב-ארגונית (Multi-Tenant)",
     version="2.0.0"
 )
 
@@ -74,7 +67,7 @@ class CompanyModel(Base):
     __tablename__ = "companies"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
-    tax_id = Column(String, nullable=True) # ח.פ / מספר עוסק
+    tax_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class UserCompanyAccess(Base):
@@ -87,7 +80,7 @@ class UserCompanyAccess(Base):
 class EmployeeModel(Base):
     __tablename__ = "employees"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    company_id = Column(String, ForeignKey("companies.id"), index=True, nullable=False) # הפרדה הרמטית!
+    company_id = Column(String, ForeignKey("companies.id"), index=True, nullable=False)
     emp_id_number = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
     base_salary = Column(Numeric(10, 2), nullable=False)
@@ -98,9 +91,9 @@ class EmployeeModel(Base):
 class PaystubRecordModel(Base):
     __tablename__ = "paystubs"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    company_id = Column(String, ForeignKey("companies.id"), index=True, nullable=False) # הפרדה הרמטית!
+    company_id = Column(String, ForeignKey("companies.id"), index=True, nullable=False)
     employee_id = Column(String, ForeignKey("employees.id"), nullable=False)
-    period = Column(String, nullable=False) # e.g. 2026-09
+    period = Column(String, nullable=False)
     gross_salary = Column(Numeric(10, 2), nullable=False)
     income_tax = Column(Numeric(10, 2), nullable=False)
     national_insurance = Column(Numeric(10, 2), nullable=False)
@@ -108,17 +101,23 @@ class PaystubRecordModel(Base):
     status = Column(String, default="APPROVED")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-# יצירת הטבלאות במידה ולא קיימות ב-Supabase
-if engine:
+# טעינת בסיס נתונים ברקע בזמן עליית השרת (כדי למנוע תקיעה בהעלאה!)
+@app.on_event("startup")
+def startup_db():
+    global engine, SessionLocal
     try:
-        Base.metadata.create_all(bind=engine)
+        if DATABASE_URL:
+            engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, connect_args={"connect_timeout": 5})
+            SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+            Base.metadata.create_all(bind=engine)
+            print("Database connection & tables initialized successfully!")
     except Exception as err:
-        print(f"Table creation error: {err}")
+        print(f"Non-blocking DB startup warning: {err}")
 
-# Dependency לקבלת session
 def get_db():
     if not SessionLocal:
-        raise HTTPException(status_code=500, detail="Database connection is not configured")
+        yield None
+        return
     db = SessionLocal()
     try:
         yield db
@@ -126,7 +125,7 @@ def get_db():
         db.close()
 
 # ---------------------------------------------------------------------------
-# 2. מנוע חישוב פיננסי מדויק 2026 (Exact Decimal Math Engine)
+# 2. מנוע חישוב פיננסי מדויק 2026 (Decimal Engine)
 # ---------------------------------------------------------------------------
 
 def to_dec(val: Any) -> Decimal:
@@ -157,7 +156,7 @@ class RegulatoryData2026:
 reg_2026 = RegulatoryData2026()
 
 # ---------------------------------------------------------------------------
-# 3. אימות זהות ואבטחה (Authentication & Multi-Tenant Authorization)
+# 3. אימות ואבטחה (Authentication & Multi-Tenant Authorization)
 # ---------------------------------------------------------------------------
 
 def hash_password(password: str) -> str:
@@ -188,19 +187,18 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Secur
         raise HTTPException(status_code=401, detail="Token validation failed")
 
 def verify_company_access(company_id: str, user_id: str, db: Session):
-    """בדיקה הרמטית שהחשב מורשה לעבוד אך ורק מול החברה המבוקשת"""
-    if user_id == "default-user-id":
+    if user_id == "default-user-id" or not db:
         return True
     access = db.query(UserCompanyAccess).filter(
         UserCompanyAccess.user_id == user_id,
         UserCompanyAccess.company_id == company_id
     ).first()
     if not access:
-        raise HTTPException(status_code=403, detail="אין הרשאה לגישה לנתוני משרד/חברה זו! גישה נחסמה.")
+        raise HTTPException(status_code=403, detail="אין הרשאה לגישה לנתוני משרד/חברה זו!")
     return True
 
 # ---------------------------------------------------------------------------
-# 4. מודלים של בקשות ותשובות (Schemas)
+# 4. מודלים של בקשות (Schemas)
 # ---------------------------------------------------------------------------
 
 class UserRegisterSchema(BaseModel):
@@ -242,17 +240,18 @@ def root():
 @app.get("/health")
 def health_check(db: Session = Depends(get_db)):
     db_ok = False
-    try:
-        db.execute(text("SELECT 1"))
-        db_ok = True
-    except Exception as e:
-        print(f"Health DB Error: {e}")
+    if db:
+        try:
+            db.execute(text("SELECT 1"))
+            db_ok = True
+        except Exception as e:
+            print(f"Health DB Error: {e}")
     return {"status": "healthy", "database_connected": db_ok}
-
-# -------------------- אבטחה והתחברות --------------------
 
 @app.post("/auth/register")
 def register_user(req: UserRegisterSchema, db: Session = Depends(get_db)):
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not connected")
     existing = db.query(UserModel).filter(UserModel.email == req.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="משתמש עם דוא\"ל זה כבר קיים במערכת")
@@ -271,6 +270,8 @@ def register_user(req: UserRegisterSchema, db: Session = Depends(get_db)):
 
 @app.post("/auth/login")
 def login_user(req: UserLoginSchema, db: Session = Depends(get_db)):
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not connected")
     user = db.query(UserModel).filter(UserModel.email == req.email).first()
     if not user or not verify_password(req.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="שם משתמש או סיסמה שגויים")
@@ -290,10 +291,10 @@ def login_user(req: UserLoginSchema, db: Session = Depends(get_db)):
         "authorized_companies": companies_list
     }
 
-# -------------------- ניהול משרדים/חברות (Companies) --------------------
-
 @app.post("/companies")
 def create_company(req: CompanyCreateSchema, user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not db:
+        raise HTTPException(status_code=500, detail="Database not connected")
     new_comp = CompanyModel(name=req.name, tax_id=req.tax_id)
     db.add(new_comp)
     db.commit()
@@ -307,6 +308,8 @@ def create_company(req: CompanyCreateSchema, user: dict = Depends(get_current_us
 
 @app.get("/companies")
 def list_user_companies(user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not db:
+        return []
     if user["id"] == "default-user-id":
         comps = db.query(CompanyModel).all()
         return [{"id": c.id, "name": c.name, "tax_id": c.tax_id} for c in comps]
@@ -316,8 +319,6 @@ def list_user_companies(user: dict = Depends(get_current_user), db: Session = De
     ).filter(UserCompanyAccess.user_id == user["id"]).all()
     
     return [{"id": c.id, "name": c.name, "tax_id": c.tax_id} for c in user_companies]
-
-# -------------------- חישוב שכר מבודד לחברה (Multi-Tenant Calculation) --------------------
 
 @app.post("/companies/{company_id}/calculate-paystub")
 def calculate_company_paystub(
@@ -388,8 +389,6 @@ def calculate_company_paystub(
         "net_salary": float(to_dec(net_salary)),
         "ai_flags": ai_flags
     }
-
-# -------------------- העלאת אקסל/CSV וקליטה מרוכזת לחברה --------------------
 
 @app.post("/companies/{company_id}/upload-excel")
 async def upload_company_payroll_excel(
