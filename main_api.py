@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker, Session
 # ===========================================================================
 
 # 🔗 כתובת החיבור למסד הנתונים הענני ב-Supabase
-DATABASE_URL = "_1. Connection string
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres.rwtukxxhnkonfughihfw:EMUNa3135%40%21@aws-0-eu-central-1.pooler.supabase.com:6543/postgres")
 Copy the connection details for your database.
 Details:
 If your database password contains special characters, percent-encode them in the connection string.
