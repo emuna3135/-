@@ -33,11 +33,7 @@ postgresql://postgres:[YOUR-PASSWORD]@db.rwtukxxhnkonfwqhihfw.supabase.co:5432/p
 2. Install Agent Skills (optional)
 Agent Skills give AI coding tools ready-made instructions, scripts, and resources for working with Supabase more accurately and efficiently.
 Code:
-File: Code
-```
-npx skills add supabase/agent-skills
-```Supabase"
-
+File: Code```
 # הגדרת מנוע מסד הנתונים
 if DATABASE_URL.startswith("postgresql://"):
     # תיקון תאימות קטן לדרייבר של פייתון במידת הצורך
