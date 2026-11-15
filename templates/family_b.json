@@ -1,0 +1,264 @@
+{
+  "name": "משפחה ב' (תוכנת שכר צפופה עם עמודת סמל; תלושי 2019)",
+  "source_note": "נכתב ידנית מקריאת התלוש המקורי (הדפסת_תלושים). מבנה מקורב: אזורים ומקום, לא התאמה מדויקת לפיקסל. שדות שאין להם נתון במערכת לא נכללים.",
+  "unmapped": [
+    "מספר תלוש",
+    "תיק ניכויים",
+    "מספר עובד",
+    "מחלקה",
+    "דרגה/סוג משרה",
+    "קוד סמל לכל רכיב",
+    "בנק/סניף/חשבון",
+    "ימי העדרות מפורטים (חופשה/מחלה לפי חודש)",
+    "מדרגת מס וקוד תיאום מס",
+    "פירוט חודשי העבודה (ינו-דצמ)",
+    "תאריך הדפסה"
+  ],
+  "elements": [
+    {
+      "type": "text",
+      "at": [
+        205,
+        5
+      ],
+      "text": "תלוש שכר לחודש {period}",
+      "bold": true,
+      "size": 11
+    },
+    {
+      "type": "kv",
+      "rect": [
+        36,
+        8,
+        171,
+        14
+      ],
+      "label_w": 22,
+      "rows": [
+        [
+          "שם המעביד",
+          "employer_name"
+        ],
+        [
+          "ח.פ / ת.ז",
+          "employer_id"
+        ],
+        [
+          "כתובת",
+          "employer_address"
+        ]
+      ]
+    },
+    {
+      "type": "kv",
+      "rect": [
+        36,
+        23,
+        100,
+        29
+      ],
+      "label_w": 24,
+      "title": "",
+      "rows": [
+        [
+          "שם העובד",
+          "employee_name"
+        ],
+        [
+          "מספר זהות",
+          "employee_id_masked"
+        ],
+        [
+          "תחילת עבודה",
+          "start_date"
+        ],
+        [
+          "היקף משרה",
+          "position_scope"
+        ],
+        [
+          "ותק",
+          "seniority"
+        ],
+        [
+          "אופן תשלום",
+          "payment"
+        ]
+      ]
+    },
+    {
+      "type": "kv",
+      "rect": [
+        138,
+        23,
+        69,
+        29
+      ],
+      "label_w": 26,
+      "rows": [
+        [
+          "עבודה בחודש",
+          "worked"
+        ],
+        [
+          "חופשה",
+          "vacation"
+        ],
+        [
+          "מחלה",
+          "sick"
+        ],
+        [
+          "ערך שעה",
+          "regular_hour_value"
+        ],
+        [
+          "שכר מינימום",
+          "min_wage"
+        ],
+        [
+          "נקודות זיכוי",
+          "points"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "rect": [
+        36,
+        55,
+        100,
+        100
+      ],
+      "title": "פירוט התשלומים",
+      "title_fill": "#1f3a8a",
+      "source": "payments",
+      "header_fill": "#dde3f5",
+      "columns": [
+        {
+          "header": "סוג התשלום",
+          "col": "label",
+          "w": 68
+        },
+        {
+          "header": "תשלומים",
+          "col": "amount",
+          "w": 32,
+          "align": "left"
+        }
+      ],
+      "total": {
+        "label": "סה\"כ תשלומים",
+        "bind": "gross"
+      }
+    },
+    {
+      "type": "table",
+      "rect": [
+        138,
+        55,
+        69,
+        30
+      ],
+      "title": "מס ומצטברים",
+      "title_fill": "#1f3a8a",
+      "source": "tax_data",
+      "header_fill": "#dde3f5",
+      "columns": [
+        {
+          "header": "תיאור",
+          "col": "label",
+          "w": 33
+        },
+        {
+          "header": "החודש",
+          "col": "month",
+          "w": 16,
+          "align": "left"
+        },
+        {
+          "header": "מצטבר",
+          "col": "cum",
+          "w": 20,
+          "align": "left"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "rect": [
+        138,
+        88,
+        69,
+        40
+      ],
+      "title": "הפרשות מעסיק",
+      "title_fill": "#1f3a8a",
+      "source": "employer",
+      "header_fill": "#dde3f5",
+      "columns": [
+        {
+          "header": "סוג",
+          "col": "label",
+          "w": 31
+        },
+        {
+          "header": "על שכר",
+          "col": "base",
+          "w": 17,
+          "align": "left"
+        },
+        {
+          "header": "סכום",
+          "col": "amount",
+          "w": 21,
+          "align": "left"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "rect": [
+        36,
+        158,
+        100,
+        52
+      ],
+      "title": "ניכויי חובה ורשות",
+      "title_fill": "#1f3a8a",
+      "source": "deductions",
+      "header_fill": "#dde3f5",
+      "columns": [
+        {
+          "header": "סוג הניכוי",
+          "col": "label",
+          "w": 68
+        },
+        {
+          "header": "סכום",
+          "col": "amount",
+          "w": 32,
+          "align": "left"
+        }
+      ],
+      "total": {
+        "label": "סה\"כ ניכויים",
+        "bind": "total_deductions"
+      }
+    },
+    {
+      "type": "stat",
+      "rect": [
+        36,
+        214,
+        70,
+        13
+      ],
+      "label": "נטו לתשלום",
+      "bind": "net",
+      "fill": "#dde3f5",
+      "heavy": true,
+      "size": 11
+    }
+  ]
+}

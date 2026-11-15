@@ -289,15 +289,16 @@ function registerView() {
 }
 function newcoView() {
   const name = h("input", { type: "text", required: true });
+  const taxId = h("input", { type: "text", inputmode: "numeric", maxlength: "9", placeholder: "ח.פ או ת.ז של המעסיק (9 ספרות)" });
   const msg = h("div", { "aria-live": "polite" });
   const form = h("form", { onsubmit: async (e) => {
     e.preventDefault(); msg.replaceChildren();
     try {
-      const c = await api("POST", "/companies", { name: name.value });
+      const c = await api("POST", "/companies", { name: name.value, tax_id: taxId.value.trim() || null });
       state.companies = await api("GET", "/companies"); state.companyId = c.id; render("calc");
     } catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   } },
-    h("h2", {}, "הקמת משרד"), h("label", {}, "שם המשרד", name), msg, h("button", { class: "btn", type: "submit" }, "יצירה"));
+    h("h2", {}, "הקמת משרד"), h("label", {}, "שם המשרד", name), h("label", {}, "מספר ח.פ / ת.ז של המעסיק (נדרש בתלוש)", taxId), msg, h("button", { class: "btn", type: "submit" }, "יצירה"));
   return h("div", { class: "login" },
     h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "עוד צעד קטן"), h("p", {}, "המשרד מחזיק את העובדים והתלושים. את הופכת לבעלת המשרד.")), h("div")),
     h("section", { class: "login-form" }, form));

@@ -1,0 +1,29 @@
+{
+  "name": "משפחה ג' (תלוש סינל, פורמט סרוק 2023)",
+  "source_note": "נכתב ידנית מקריאת תלוש סרוק. מבנה מקורב: אזורים ומקום, לא התאמה מדויקת לפיקסל. שדות שאין להם נתון במערכת לא נכללים.",
+  "unmapped": ["מספר עובד", "תיק ניכויים", "תיק ביטוח לאומי", "תפקיד", "מחלקה", "אגף", "בנק/סניף/חשבון", "פרטי מרכיבי שכר ותעריפים", "ניכויי רשות מפורטים", "פירוט חודשי העבודה", "תקופת הלידה/תיאום מס מפורט", "יתרת חופשה ומחלה מפורטת", "ימי עבודה, ותק ופרטי התעסוקה מפורטים"],
+  "elements": [
+    {"type": "text", "at": [200, 9], "text": "חודש שכר {period}", "bold": true, "size": 11},
+    {"type": "kv", "rect": [9, 12, 90, 22], "label_w": 22, "title": "המעביד", "title_fill": "#6b7b8a", "rows": [["חברה", "employer_name"], ["ח.פ / ת.ז", "employer_id"], ["כתובת", "employer_address"]]},
+    {"type": "kv", "rect": [102, 12, 99, 31], "label_w": 24, "title": "העובד", "title_fill": "#6b7b8a", "rows": [["שם", "employee_name"], ["מספר זהות", "employee_id_masked"], ["תחילת עבודה", "start_date"], ["היקף משרה", "position_scope"], ["ותק", "seniority"]]},
+
+    {"type": "table", "rect": [102, 46, 99, 70], "title": "פירוט תשלומים", "title_fill": "#6b7b8a", "source": "payments", "header_fill": "#e7ebef",
+     "columns": [{"header": "תיאור", "col": "label", "w": 66}, {"header": "לתשלום", "col": "amount", "w": 33, "align": "left"}],
+     "total": {"label": "סה\"כ תשלומים", "bind": "gross"}},
+
+    {"type": "table", "rect": [9, 46, 90, 70], "title": "ניכויי חובה", "title_fill": "#6b7b8a", "source": "deductions", "header_fill": "#e7ebef",
+     "columns": [{"header": "תיאור", "col": "label", "w": 60}, {"header": "ניכוי", "col": "amount", "w": 30, "align": "left"}],
+     "total": {"label": "סה\"כ ניכויים", "bind": "total_deductions"}},
+
+    {"type": "table", "rect": [102, 119, 99, 34], "title": "נתוני מס מצטברים", "title_fill": "#6b7b8a", "source": "tax_data", "header_fill": "#e7ebef",
+     "columns": [{"header": "תיאור", "col": "label", "w": 51}, {"header": "החודש", "col": "month", "w": 24, "align": "left"}, {"header": "מצטבר", "col": "cum", "w": 24, "align": "left"}]},
+
+    {"type": "table", "rect": [9, 119, 90, 34], "title": "הפרשות מעסיק", "title_fill": "#6b7b8a", "source": "employer", "header_fill": "#e7ebef",
+     "columns": [{"header": "סוג", "col": "label", "w": 42}, {"header": "על שכר", "col": "base", "w": 24, "align": "left"}, {"header": "סכום", "col": "amount", "w": 24, "align": "left"}]},
+
+    {"type": "kv", "rect": [102, 156, 99, 28], "label_w": 30, "rows": [["עבודה בחודש", "worked"], ["חופשה", "vacation"], ["מחלה", "sick"], ["ערך שעה", "regular_hour_value"], ["שכר מינימום", "min_wage"], ["נקודות זיכוי", "points"]]},
+
+    {"type": "stat", "rect": [9, 156, 90, 13], "label": "שכר נטו", "bind": "net", "fill": "#e7ebef", "heavy": true, "size": 11},
+    {"type": "stat", "rect": [9, 172, 90, 12], "label": "לתשלום", "bind": "net", "size": 10}
+  ]
+}

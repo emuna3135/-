@@ -216,7 +216,9 @@ def _title_bar(c, el, x, y, w):
     c.setStrokeColor(colors.HexColor("#6b7b8a"))
     c.setLineWidth(0.4)
     c.rect(x * mm, _y(y + bh), w * mm, bh * mm, stroke=1, fill=0)
-    c.setFillColor(ps.INK)
+    fill = _hex(el.get("title_fill"), ps.HEAD)
+    lum = 0.299 * fill.red + 0.587 * fill.green + 0.114 * fill.blue
+    c.setFillColor(colors.white if lum < 0.45 else ps.INK)     # כותרת על רקע כהה: טקסט לבן
     c.setFont("HE-B", el.get("title_size", 8.5))
     if el.get("title_align", "center") == "center":
         c.drawCentredString((x + w / 2) * mm, _y(y + bh * 0.72), visual(el["title"]))

@@ -56,6 +56,25 @@ class Validation(unittest.TestCase):
                              "columns": [{"header": "א", "col": "label", "w": 30}, {"header": "ב", "col": "amount", "w": 30}]}))
 
 
+class AllTemplates(unittest.TestCase):
+    NAMES = ["family_a", "family_b", "family_c"]
+
+    def test_each_template_valid_and_renders_without_missing(self):
+        d, _ = sample_d()
+        for n in self.NAMES:
+            spec = T.load(os.path.join(HERE, "templates", n + ".json"))
+            pdf, missing = T.render(spec, d)
+            self.assertTrue(pdf.startswith(b"%PDF"), n)
+            self.assertEqual(missing, [], n)
+
+    def test_each_template_holds_many_payment_rows(self):
+        d, _ = sample_d()
+        d["payments"] = [("רכיב", 100.0)] * 8
+        d["deductions"] = [("ניכוי", "", 10.0)] * 8
+        for n in self.NAMES:
+            T.render(T.load(os.path.join(HERE, "templates", n + ".json")), d)
+
+
 class Render(unittest.TestCase):
     def test_renders_pdf_and_no_missing(self):
         d, _ = sample_d()
