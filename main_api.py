@@ -1510,3 +1510,59 @@ async def upload_excel(
           f"rows={len(rows)} ok={len(results)} errors={len(errors)}")
     db.commit()
     return {"processed": len(results), "errors": errors, "paystubs": results}
+
+
+COLUMN_MAP["other_deductions"] = ["other_deductions", "ניכויים אחרים", "ניכוי אחר"]
+
+
+@app.post("/companies/{company_id}/upload-excel-card")
+async def upload_excel_card(
+    company_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    העלאת Excel לפי כרטיס העובד: בקובץ רק ת.ז, שנה, חודש ונתונים משתנים (שעות 125/150, בונוס, פטור ממס, ניכויים אחרים,
+    ואופציונלית שכר יסוד לחודש). נקודות זיכוי ושיטת המס נגזרות מטופס 101 של העובד, והפנסיה וההפרשות מכרטיס העובד.
+    העובד חייב להיות קיים עם אותה ת.ז. כל שורה עוברת בדיוק את אותו חישוב של /employees/{id}/calculate.
+    """
+    require_company(company_id, user, db, "write")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "הקובץ גדול מדי (מעל 5MB)")
+    rows = read_rows(file.filename or "", content)
+    if len(rows) > 2000:
+        raise HTTPException(400, "יותר מדי שורות (מעל 2000)")
+
+    results, errors = [], []
+    for i, row in enumerate(rows, start=2):
+        try:
+            id_number = str(pick(row, "emp_id_number", "")).strip()
+            if not id_number:
+                raise ValueError("חסרה תעודת זהות")
+            emp = db.query(Employee).filter(Employee.company_id == company_id,
+                                            Employee.id_hash == emp_key(company_id, id_number)).first()
+            if not emp:
+                raise ValueError("עובד עם ת.ז הזו לא קיים במשרד. יש להוסיף אותו קודם")
+            base = pick(row, "base_salary")
+            body = CalcFromCardIn(
+                year=int(pick(row, "year", 0)), month=int(pick(row, "month", 0)),
+                ot_hours_125=float(pick(row, "ot_hours_125", 0)),
+                ot_hours_150=float(pick(row, "ot_hours_150", 0)),
+                bonus=float(pick(row, "bonus", 0)),
+                tax_exempt=float(pick(row, "tax_exempt", 0)),
+                other_deductions=float(pick(row, "other_deductions", 0)),
+                base_salary=float(base) if base is not None else None)
+            out = calculate_from_card(company_id, emp.id, body, user, db)
+            results.append(out)
+        except HTTPException as e:
+            db.rollback()
+            errors.append({"row": i, "error": str(e.detail)})
+        except Exception as e:
+            db.rollback()
+            errors.append({"row": i, "error": str(e)})
+    audit(db, user.id, company_id, "upload_excel_card", "file", None,
+          f"rows={len(rows)} ok={len(results)} errors={len(errors)}")
+    db.commit()
+    return {"processed": len(results), "errors": errors, "paystubs": results}

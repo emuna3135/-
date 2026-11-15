@@ -475,11 +475,13 @@ function slipPageView() {
 function uploadView() {
   const file = h("input", { type: "file", accept: ".xlsx,.csv", required: true });
   const out = h("div", { "aria-live": "polite" });
+  const mode = h("select", {}, h("option", { value: "/upload-excel-card" }, "לפי כרטיס העובד וטופס 101 (בקובץ רק ת.ז, שנה, חודש ונתונים משתנים)"),
+    h("option", { value: "/upload-excel" }, "ישן: נקודות זיכוי, פנסיה ושיטת מס בתוך הקובץ"));
   const form = h("form", { onsubmit: async (e) => {
     e.preventDefault(); out.replaceChildren(h("p", {}, "מחשבת…"));
     const fd = new FormData(); fd.append("file", file.files[0]);
     try {
-      const r = await api("POST", cp("/upload-excel"), fd, true);
+      const r = await api("POST", cp(mode.value), fd, true);
       const nodes = [h("p", {}, "חושבו " + r.processed + " שורות, " + r.errors.length + " שגיאות.")];
       if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו:"),
         h("ul", {}, r.errors.map(x => h("li", {}, "שורה " + x.row + ": " + x.error)))));
@@ -487,8 +489,8 @@ function uploadView() {
         (p.flags && p.flags.length ? " | יש דגלים" : "") + (p.unresolved && p.unresolved.length ? " | דורש טיפול ידני" : "")), slipView(p))));
       out.replaceChildren(...nodes);
     } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
-  } }, h("label", {}, "קובץ אקסל או CSV", file), h("button", { class: "btn", type: "submit" }, "העלאה וחישוב"));
-  return shell("upload", "העלאת אקסל", h("div", {}, h("p", {}, "הגיליון הראשון בקובץ נקרא. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
+  } }, h("label", {}, "סוג הקובץ", mode), h("label", {}, "קובץ אקסל או CSV", file), h("button", { class: "btn", type: "submit" }, "העלאה וחישוב"));
+  return shell("upload", "העלאת אקסל", h("div", {}, h("p", {}, "הגיליון הראשון בקובץ נקרא. בשיטה המומלצת העובד חייב להיות רשום עם טופס 101 לשנה. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
 }
 
 /* ---------- עובדים ---------- */
