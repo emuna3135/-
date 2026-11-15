@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https:; img-src 'self' data:">
+<title>מערכת שכר</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --ink:#0E2650; --blue:#1E5BD8; --blue-d:#1747A8; --sky:#EDF4FF; --sky2:#DCE9FD; --line:#D6E3F7; --white:#fff;
+  --muted:#5B6E8F; --ok:#0E8A5F; --ok-bg:#E4F6EE; --law:#1E5BD8; --law-bg:#E6EEFD;
+  --warn:#9A6200; --warn-bg:#FFF3D6; --bad:#B3261E; --bad-bg:#FDE8E6;
+  --r:10px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{font-size:16px}
+body{margin:0;font-family:Heebo,system-ui,sans-serif;color:var(--ink);background:var(--white);line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;display:inline-block}
+.sr{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* כניסה */
+.login{min-block-size:100vh;display:grid;grid-template-columns:1fr 1fr}
+.login-side{background:var(--ink);color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:space-between}
+.login-side h1{font-size:2.4rem;line-height:1.2;margin:0 0 16px;font-weight:700}
+.login-side p{margin:0;max-inline-size:34ch;color:#BFD0F2;font-size:1.05rem}
+.principle{border-inline-start:3px solid #6C9BFF;padding-inline-start:16px;color:#E7EEFF;font-size:1.15rem;max-inline-size:32ch}
+.login-form{padding:56px;display:flex;align-items:center;justify-content:center}
+.login-form form{inline-size:min(380px,100%);display:grid;gap:16px}
+.login-form h2{margin:0 0 4px;font-size:1.5rem}
+label{display:grid;gap:6px;font-weight:500;font-size:.95rem}
+input,select,textarea{inline-size:100%;min-inline-size:0;padding:11px 12px;border:1px solid #B9CBEA;border-radius:8px;background:#fff;min-block-size:44px}
+input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+.btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
+.btn:hover{background:var(--blue-d)}
+.btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
+.btn.ghost:hover{background:var(--sky)}
+.btn.danger{background:#fff;color:var(--bad);border:1px solid var(--bad)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.linkish{background:none;border:0;color:var(--blue);cursor:pointer;padding:0;text-decoration:underline;font-size:.95rem}
+.err{background:var(--bad-bg);color:var(--bad);padding:10px 12px;border-radius:8px;font-size:.95rem}
+.info{background:var(--sky);color:var(--ink);padding:10px 12px;border-radius:8px;font-size:.95rem}
+
+/* מעטפת */
+.app{display:grid;grid-template-columns:240px 1fr;min-block-size:100vh}
+.rail{background:var(--ink);color:#fff;padding:24px 16px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;block-size:100vh}
+.brand{font-weight:700;font-size:1.25rem;padding:4px 12px 20px}
+.brand small{display:block;font-weight:400;color:#9DB4E6;font-size:.8rem}
+.rail button.nav{background:none;border:0;color:#D3DFF7;text-align:start;padding:11px 12px;border-radius:8px;cursor:pointer;font-weight:500;min-block-size:44px}
+.rail button.nav:hover{background:#18356F}
+.rail button.nav[aria-current=page]{background:#fff;color:var(--ink);font-weight:700}
+.rail .spacer{flex:1}
+.rail .who{font-size:.85rem;color:#9DB4E6;padding:8px 12px}
+main{padding:32px 40px 64px;min-inline-size:0}
+.topline{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-block-end:24px}
+h2.page{margin:0;font-size:1.7rem}
+.demo{background:var(--warn-bg);color:var(--warn);padding:8px 14px;border-radius:8px;font-weight:600;font-size:.9rem}
+
+/* טפסים בתוך מסכים */
+.split>*{min-inline-size:0}
+.split{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:32px;align-items:start}
+fieldset{min-inline-size:0;border:0;border-block-start:1px solid var(--line);padding:16px 0 4px;margin:0 0 8px;display:grid;gap:12px}
+legend{font-weight:700;padding:0 0 0 8px;color:var(--ink)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* תלוש כספר חשבונות */
+.slip{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff}
+.slip-head{background:var(--sky);padding:16px 20px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-block-end:1px solid var(--line)}
+.slip-head strong{font-size:1.1rem}
+.ledger{inline-size:100%;border-collapse:collapse}
+.ledger th{font-weight:600;color:var(--muted);font-size:.85rem;text-align:start;padding:10px 20px;border-block-end:1px solid var(--line)}
+.ledger td{padding:0;border-block-end:1px solid #EAF1FC}
+.ledger tr.line button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:1fr auto;gap:12px;inline-size:100%;padding:13px 20px;cursor:pointer;align-items:center}
+.ledger tr.line button:hover{background:#F7FAFF}
+.ledger tr.line button:focus-visible{outline:3px solid var(--blue);outline-offset:-3px}
+.lbl{display:flex;gap:10px;align-items:center}
+.dot{inline-size:10px;block-size:10px;border-radius:50%;flex:none}
+.s-ok .dot{background:var(--ok)} .s-law .dot{background:var(--law)} .s-warn .dot{background:#E39A00} .s-bad .dot{background:var(--bad)}
+.amt{font-weight:600;font-size:1.02rem}
+.amt.none{color:var(--bad);font-weight:600}
+.note{padding:0 20px 14px 20px;color:var(--muted);font-size:.92rem;display:none}
+.note.open{display:block}
+.chip{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.s-ok .chip{background:var(--ok-bg);color:var(--ok)} .s-law .chip{background:var(--law-bg);color:var(--law)}
+.s-warn .chip{background:var(--warn-bg);color:var(--warn)} .s-bad .chip{background:var(--bad-bg);color:var(--bad)}
+.net{display:flex;justify-content:space-between;align-items:baseline;padding:20px;background:var(--ink);color:#fff}
+.net .big{font-size:2rem;font-weight:700}
+.unres{margin:16px 0 0;padding:14px 18px;background:var(--bad-bg);color:var(--bad);border-radius:var(--r)}
+.unres ul{margin:6px 0 0;padding-inline-start:20px}
+.flags{margin:12px 0 0;padding:12px 18px;background:var(--warn-bg);color:var(--warn);border-radius:var(--r)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-block:16px;font-size:.88rem;color:var(--muted)}
+.legend span{display:flex;gap:6px;align-items:center}
+
+/* טבלאות כלליות */
+table.t{inline-size:100%;border-collapse:collapse}
+table.t th{text-align:start;color:var(--muted);font-size:.85rem;font-weight:600;padding:10px 12px;border-block-end:2px solid var(--line)}
+table.t td{padding:12px;border-block-end:1px solid #EAF1FC;vertical-align:top}
+table.t tr.click{cursor:pointer} table.t tr.click:hover{background:#F7FAFF}
+.empty{padding:40px 20px;border:1px dashed #B9CBEA;border-radius:var(--r);text-align:center;color:var(--muted)}
+.panel{border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-block-end:16px}
+.fields{display:grid;grid-template-columns:max-content 1fr;gap:8px 20px;margin:0}
+.fields dt{color:var(--muted)} .fields dd{margin:0;font-weight:500}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-block-start:16px;align-items:center}
+.check{display:flex;gap:10px;align-items:flex-start;font-weight:400}
+.check input{inline-size:auto;min-block-size:auto;margin-block-start:5px}
+.toast{position:fixed;inset-block-end:24px;inset-inline-start:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;box-shadow:0 6px 24px rgba(14,38,80,.25)}
+.secret{font-family:ui-monospace,monospace;background:var(--sky);padding:8px 12px;border-radius:8px;direction:ltr;text-align:left;user-select:all;word-break:break-all}
+
+@media (max-width:900px){
+  .login{grid-template-columns:1fr} .login-side{padding:28px}
+  .app{grid-template-columns:1fr} .rail{position:static;block-size:auto;flex-direction:row;flex-wrap:wrap;padding:12px}
+  .rail .spacer,.rail .who{display:none} .brand{padding:4px 8px}
+  main{padding:20px 16px 48px} .split{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+"use strict";
+/* ---------- מצב ---------- */
+const state = { api: "", token: null, companies: [], companyId: null, user: null, demo: false, view: "login", pending: null };
+/* האסימון נשמר בזיכרון בלבד (לא ב-localStorage), כדי שלא יישאר בדפדפן אחרי סגירה. */
+
+/* ---------- עזרי DOM (בלי innerHTML: כל טקסט נכנס כ-textContent) ---------- */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === false || v == null) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "text") el.textContent = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+const root = document.getElementById("root");
+function mount(node) { root.replaceChildren(node); }
+function put(el, ...kids) { el.replaceChildren(...kids.filter(k => k != null && k !== false)); }
+function toast(msg) {
+  const t = h("div", { class: "toast", role: "status" }, msg);
+  document.body.append(t); setTimeout(() => t.remove(), 3200);
+}
+const fmt = (v) => v == null ? null : Number(v).toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/* ---------- סטטוסים: ארבעה, בלי לנחש ---------- */
+function statusInfo(s) {
+  s = String(s || "");
+  if (s.startsWith("מאומת")) return { cls: "s-ok", text: "מאומת מול תלוש" };
+  if (s.startsWith("לפי חוק")) return { cls: "s-law", text: "לפי חוק" };
+  if (s.startsWith("לפי הקורס")) return { cls: "s-warn", text: "טרם נבדק מול החוק" };
+  return { cls: "s-bad", text: "נדרש טיפול ידני" };
+}
+const LABELS = { income_tax: "מס הכנסה", national_insurance: "ביטוח לאומי", health: "מס בריאות",
+  pension_employee: "פנסיה (עובד)", study_fund_employee: "קרן השתלמות (עובד)", life_insurance: "ביטוח חיים",
+  other_deductions: "ניכויים אחרים" };
+
+/* ---------- API ---------- */
+async function api(method, path, body, isForm) {
+  if (state.demo) return demoApi(method, path, body);
+  const headers = {};
+  if (state.token) headers.Authorization = "Bearer " + state.token;
+  if (body && !isForm) headers["Content-Type"] = "application/json";
+  let res;
+  try {
+    res = await fetch(state.api + path, { method, headers, body: body ? (isForm ? body : JSON.stringify(body)) : undefined });
+  } catch (e) { throw new Error("אין חיבור לשרת. בדקי את כתובת השרת ואת החיבור לאינטרנט."); }
+  const refreshed = res.headers.get("X-Refreshed-Token");   // חלון אי-פעילות: השרת מחדש את הטוקן בפעילות
+  if (refreshed && state.token) state.token = refreshed;
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* תשובה ריקה */ }
+  if (!res.ok) {
+    const d = data && data.detail;
+    const msg = typeof d === "string" ? d : Array.isArray(d) ? d.map(x => x.msg).join("; ") : "הפעולה נכשלה (" + res.status + ")";
+    if (res.status === 401 && state.token) { state.token = null; render("login"); }
+    throw new Error(msg);
+  }
+  return data;
+}
+
+/* ---------- נתוני דוגמה: מסומנים בבירור, אינם חישוב אמיתי ---------- */
+function demoApi(method, path, body) {
+  return new Promise((resolve, reject) => setTimeout(() => {
+    if (path.endsWith("/calculate-paystub")) {
+      const g = Number(body.base_salary) + Number(body.bonus || 0);
+      return resolve({ emp_name: body.emp_name, emp_id_number: "*****" + String(body.emp_id_number).slice(-4),
+        period: body.period || (body.month + "/" + body.year), gross: g, net: g * 0.78,
+        items: {
+          income_tax: { value: g * 0.09, status: "לפי חוק - לא נבדק מול תלוש", note: "דוגמה בלבד: המספר אינו חישוב אמיתי." },
+          national_insurance: { value: g * 0.035, status: "מאומת", note: "דוגמה בלבד." },
+          health: { value: g * 0.05, status: "מאומת", note: "דוגמה בלבד." },
+          pension_employee: { value: g * 0.06, status: "לפי הקורס - לא נבדק מול החוק", note: "דוגמה בלבד: שיעור הפנסיה נגזר מהקורס." },
+          study_fund_employee: { value: null, status: "נדרש טיפול ידני", note: "דוגמה: מקרה שהמערכת לא מנחשת." } },
+        unresolved: ["קרן השתלמות (עובד)"], flags: ["נתוני דוגמה: אין להסתמך על המספרים"], overall_status: "נדרש טיפול ידני" });
+    }
+    if (path.endsWith("/employees")) return resolve([
+      { id: "d1", full_name: "דנה לוי (דוגמה)", id_number_masked: "*****1234", base_salary: 9800, start_date: "2022-03-01" },
+      { id: "d2", full_name: "יוסי כהן (דוגמה)", id_number_masked: "*****5678", base_salary: 7400, start_date: "2024-09-15" }]);
+    if (path.endsWith("/proposals")) return resolve([
+      { id: "p1", kind: "form101", status: "pending", year: 2025, created_at: "2026-10-18T10:20:00", usable: false },
+      { id: "p2", kind: "guideline", status: "approved", year: null, created_at: "2026-10-10T09:00:00", usable: true }]);
+    if (/\/proposals\/p\d$/.test(path) && method === "GET") return resolve({ id: "p1", kind: "form101", status: "pending", year: 2025,
+      fields: { tax_year: 2025, signed_on: "2025-01-05", income_type: "main", other_income: false, other_credits_claimed: false },
+      ignored_fields: [], extraction: { source: "manual", notes: ["לא הוגדר מחלץ אוטומטי: נדרשת הזנה ידנית של השדות"] },
+      validation: { errors: {}, warnings: ["חסרים נתוני עובד (תושבות/מין): נקודות הזיכוי לא נבדקו"], checks: {}, floor_status: "n/a" } });
+    if (path.endsWith("/decision")) return resolve({ status: body.action === "approve" ? "approved" : "rejected" });
+    if (path.endsWith("/rules")) return resolve([]);
+    if (path.endsWith("/audit-log")) return resolve([
+      { at: "2026-10-19T12:01:00", action: "login", entity: null }, { at: "2026-10-19T12:04:00", action: "calculate_paystub", entity: "paystub" }]);
+    reject(new Error("לא זמין במצב דוגמה"));
+  }, 150));
+}
+
+/* ---------- מסך כניסה ---------- */
+function loginView(step) {
+  const email = h("input", { type: "email", autocomplete: "username", required: true, id: "em" });
+  const pw = h("input", { type: "password", autocomplete: "current-password", required: true, id: "pw" });
+  const code = h("input", { inputmode: "numeric", autocomplete: "one-time-code", pattern: "[0-9]{6}", maxlength: "6", id: "cd" });
+  const apiBase = h("input", { type: "url", placeholder: "https://…onrender.com", id: "ab", value: state.api });
+  const msg = h("div", { "aria-live": "polite" });
+  const needCode = step === "2fa";
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); msg.replaceChildren();
+    state.api = apiBase.value.replace(/\/$/, "");
+    try {
+      const r = await api("POST", "/auth/login", { email: email.value, password: pw.value, totp_code: code.value || null });
+      state.token = r.access_token; state.user = email.value;
+      if (r.two_factor_setup_required) return render("enroll");
+      state.companies = r.companies || []; state.companyId = state.companies[0] && state.companies[0].id;
+      render("calc");
+    } catch (err) {
+      if (/totp|דו-שלבי/.test(err.message)) { msg.replaceChildren(h("div", { class: "info" }, "נדרש קוד מאפליקציית האימות.")); form.querySelector(".codebox").hidden = false; }
+      else msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message));
+    }
+  } },
+    h("h2", {}, "כניסה למערכת"),
+    h("label", {}, "אימייל", email),
+    h("label", {}, "סיסמה", pw),
+    h("label", { class: "codebox", hidden: !needCode }, "קוד אימות דו-שלבי (6 ספרות)", code),
+    msg,
+    h("button", { class: "btn", type: "submit" }, "כניסה"),
+    h("button", { class: "linkish", type: "button", onclick: () => render("chpw") }, "החלפת סיסמה"),
+    h("details", {}, h("summary", {}, "הגדרות חיבור"), h("label", {}, "כתובת השרת (ריק = אותו אתר)", apiBase)),
+    h("button", { class: "linkish", type: "button", onclick: () => { state.demo = true; state.user = "דוגמה"; state.companies = [{ id: "demo", name: "משרד לדוגמה" }]; state.companyId = "demo"; render("calc"); } },
+      "הצגת המערכת עם נתוני דוגמה, בלי חיבור לשרת"));
+  return h("div", { class: "login" },
+    h("section", { class: "login-side" },
+      h("div", {}, h("h1", {}, "שכר שאפשר לסמוך עליו"), h("p", {}, "חישוב שכר שמראה מאיפה כל מספר מגיע, ולא מנחש כשהוא לא יודע.")),
+      h("div", { class: "principle" }, "מה שאין לו מקור, מסומן לטיפול ידני.")),
+    h("section", { class: "login-form" }, form));
+}
+
+/* ---------- החלפת סיסמה (גם כשהסיסמה פגה; בלי כניסה קודמת) ---------- */
+function chpwView() {
+  const email = h("input", { type: "email", autocomplete: "username", required: true });
+  const oldPw = h("input", { type: "password", autocomplete: "current-password", required: true });
+  const newPw = h("input", { type: "password", autocomplete: "new-password", required: true, minlength: "12" });
+  const code = h("input", { inputmode: "numeric", autocomplete: "one-time-code", pattern: "[0-9]{6}", maxlength: "6" });
+  const msg = h("div", { "aria-live": "polite" });
+  return h("div", { class: "login" },
+    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "החלפת סיסמה"), h("p", {}, "הסיסמה חייבת להיות לפחות 12 תווים, עם אותיות וספרות. סיסמה מוחלפת לפחות אחת לחצי שנה.")), h("div")),
+    h("section", { class: "login-form" }, h("form", { onsubmit: async (e) => {
+      e.preventDefault(); msg.replaceChildren();
+      try {
+        await api("POST", "/auth/change-password", { email: email.value, old_password: oldPw.value, new_password: newPw.value, totp_code: code.value || null });
+        state.token = null; render("login");
+      } catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+    } },
+      h("h2", {}, "החלפת סיסמה"),
+      h("label", {}, "אימייל", email), h("label", {}, "סיסמה נוכחית", oldPw), h("label", {}, "סיסמה חדשה", newPw),
+      h("label", {}, "קוד אימות דו-שלבי (אם הוגדר)", code), msg,
+      h("button", { class: "btn", type: "submit" }, "החלפה"),
+      h("button", { class: "linkish", type: "button", onclick: () => render("login") }, "חזרה לכניסה"))));
+}
+
+/* ---------- הקמת 2FA ---------- */
+function enrollView() {
+  const out = h("div");
+  const code = h("input", { inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", id: "ec" });
+  const msg = h("div", { "aria-live": "polite" });
+  api("POST", "/auth/2fa/setup").then(r => out.replaceChildren(
+    h("p", {}, "הוסיפי את המפתח לאפליקציית אימות (Google Authenticator, Microsoft Authenticator או דומה):"),
+    h("div", { class: "secret" }, r.secret),
+    h("p", { class: "info" }, "שמרי את המפתח במקום בטוח. אי אפשר להציג אותו שוב.")
+  )).catch(e => out.replaceChildren(h("div", { class: "err" }, e.message)));
+  return h("div", { class: "login" },
+    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "עוד שלב אחד לאבטחה"), h("p", {}, "במערכת שכר נדרש אימות דו-שלבי לכל משתמש.")), h("div")),
+    h("section", { class: "login-form" }, h("form", { onsubmit: async (e) => {
+      e.preventDefault();
+      try { const r = await api("POST", "/auth/2fa/enable", { code: code.value }); state.token = r.access_token;
+        const cs = await api("GET", "/companies"); state.companies = cs; state.companyId = cs[0] && cs[0].id; render("calc"); }
+      catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+    } }, h("h2", {}, "הקמת אימות דו-שלבי"), out, h("label", {}, "קוד מהאפליקציה", code), msg, h("button", { class: "btn", type: "submit" }, "הפעלה"))));
+}
+
+/* ---------- מעטפת ---------- */
+const NAV = [["calc", "חישוב תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
+function shell(view, title, content) {
+  const nav = NAV.map(([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label));
+  return h("div", { class: "app" },
+    h("nav", { class: "rail", "aria-label": "ניווט ראשי" },
+      h("div", { class: "brand" }, "מערכת שכר", h("small", {}, (state.companies.find(c => c.id === state.companyId) || {}).name || "")),
+      nav, h("div", { class: "spacer" }), h("div", { class: "who" }, state.user || ""),
+      h("button", { class: "nav", onclick: async () => {
+        try { if (state.token && !state.demo) await api("POST", "/auth/logout"); } catch (e) { /* יוצאים בכל מקרה */ }
+        state.token = null; state.demo = false; render("login"); } }, "יציאה")),
+    h("main", {}, h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
+}
+const cp = (p) => "/companies/" + state.companyId + p;
+
+/* ---------- חישוב תלוש ---------- */
+function calcView() {
+  const today = new Date();
+  const f = {};
+  const inp = (name, label, attrs) => { f[name] = h("input", Object.assign({ name }, attrs || {})); return h("label", {}, label, f[name]); };
+  const out = h("div", { "aria-live": "polite" });
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); out.replaceChildren(h("p", {}, "מחשבת…"));
+    const b = { emp_id_number: f.emp_id_number.value.trim(), emp_name: f.emp_name.value.trim(),
+      year: +f.year.value, month: +f.month.value, base_salary: +f.base_salary.value,
+      bonus: +f.bonus.value || 0, ot_hours_125: +f.ot125.value || 0, ot_hours_150: +f.ot150.value || 0,
+      credit_points: +f.credit_points.value, pension_employee_rate: (+f.pension.value || 0) / 100 };
+    try { out.replaceChildren(slipView(await api("POST", cp("/calculate-paystub"), b))); }
+    catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } },
+    h("fieldset", {}, h("legend", {}, "עובד"),
+      inp("emp_name", "שם מלא", { required: true }), inp("emp_id_number", "תעודת זהות", { required: true, inputmode: "numeric", maxlength: "9", autocomplete: "off" })),
+    h("fieldset", {}, h("legend", {}, "תקופה ושכר"),
+      h("div", { class: "row2" }, inp("year", "שנה", { type: "number", value: today.getFullYear(), required: true }), inp("month", "חודש", { type: "number", min: 1, max: 12, value: today.getMonth() + 1, required: true })),
+      inp("base_salary", "שכר יסוד (₪)", { type: "number", step: "0.01", min: 0, required: true }), inp("bonus", "בונוס (₪)", { type: "number", step: "0.01", min: 0, value: 0 }),
+      h("div", { class: "row2" }, inp("ot125", "שעות 125%", { type: "number", step: "0.25", min: 0, value: 0 }), inp("ot150", "שעות 150%", { type: "number", step: "0.25", min: 0, value: 0 }))),
+    h("fieldset", {}, h("legend", {}, "מס והפרשות"),
+      inp("credit_points", "נקודות זיכוי (לפי טופס 101)", { type: "number", step: "0.25", min: 0, value: 2.25 }), inp("pension", "פנסיה עובד (%)", { type: "number", step: "0.1", min: 0, max: 50, value: 6 })),
+    h("button", { class: "btn", type: "submit" }, "חישוב"));
+  return shell("calc", "חישוב תלוש", h("div", { class: "split" }, form, h("div", {}, legend(), out,
+    h("div", { class: "empty" }, "מלאי את הפרטים משמאל ולחצי על חישוב. כל שורה בתלוש תראה מאיפה המספר בא."))));
+}
+function legend() {
+  const it = (cls, t) => h("span", { class: cls }, h("i", { class: "dot" }), t);
+  return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "מאומת מול תלוש"), it("s-law", "לפי חוק"), it("s-warn", "טרם נבדק מול החוק"), it("s-bad", "נדרש טיפול ידני"));
+}
+function slipView(r) {
+  const rows = Object.entries(r.items || {}).map(([k, v]) => {
+    const s = statusInfo(v.status);
+    const note = h("div", { class: "note", id: "n-" + k }, (v.note || "אין הערה") + " · סטטוס מקור: " + v.status);
+    const btn = h("button", { type: "button", "aria-expanded": "false", "aria-controls": "n-" + k, onclick: () => {
+      const open = note.classList.toggle("open"); btn.setAttribute("aria-expanded", open); } },
+      h("span", { class: "lbl " + s.cls }, h("i", { class: "dot" }), h("span", {}, LABELS[k] || k), h("span", { class: "chip" }, s.text)),
+      v.value == null ? h("span", { class: "amt none" }, "לא חושב") : h("span", { class: "amt num" }, fmt(v.value)));
+    return h("tr", { class: "line" }, h("td", {}, btn, note));
+  });
+  return h("div", {},
+    h("div", { class: "slip" },
+      h("div", { class: "slip-head" }, h("div", {}, h("strong", {}, r.emp_name || ""), h("div", { class: "num" }, r.emp_id_number || "")), h("div", {}, "תקופה: ", h("span", { class: "num" }, r.period || ""))),
+      h("table", { class: "ledger" }, h("thead", {}, h("tr", {}, h("th", {}, "רכיב וסטטוס (לחצי להסבר)"))),
+        h("tbody", {}, h("tr", { class: "line" }, h("td", {}, h("div", { style: "display:flex;justify-content:space-between;padding:13px 20px" }, h("span", {}, "ברוטו"), h("span", { class: "amt num" }, fmt(r.gross))))), rows)),
+      h("div", { class: "net" }, h("span", {}, "נטו לתשלום"), r.net == null ? h("span", { class: "big" }, "לא חושב") : h("span", { class: "big num" }, fmt(r.net)))),
+    r.unresolved && r.unresolved.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "דורש טיפול ידני לפני שימוש בתלוש:"), h("ul", {}, r.unresolved.map(u => h("li", {}, u)))) : null,
+    r.flags && r.flags.length ? h("div", { class: "flags" }, h("strong", {}, "שימי לב:"), h("ul", {}, r.flags.map(x => h("li", {}, x)))) : null);
+}
+
+/* ---------- עובדים ---------- */
+function listView(view, title, path, cols, emptyMsg, onRow) {
+  const box = h("div", {}, h("p", {}, "טוענת…"));
+  api("GET", cp(path)).then(rows => {
+    if (!rows.length) return box.replaceChildren(h("div", { class: "empty" }, emptyMsg));
+    box.replaceChildren(h("table", { class: "t" }, h("thead", {}, h("tr", {}, cols.map(c => h("th", {}, c[0])))),
+      h("tbody", {}, rows.map(r => h("tr", { class: onRow ? "click" : "", tabindex: onRow ? "0" : false, onclick: onRow && (() => onRow(r)), onkeydown: onRow && ((e) => { if (e.key === "Enter") onRow(r); }) },
+        cols.map(c => h("td", {}, c[1](r)))))))); })
+    .catch(e => box.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)));
+  return shell(view, title, box);
+}
+const empsView = () => listView("emps", "עובדים", "/employees",
+  [["שם", r => r.full_name], ["ת״ז", r => h("span", { class: "num" }, r.id_number_masked)], ["שכר יסוד", r => h("span", { class: "num" }, fmt(r.base_salary))], ["תחילת עבודה", r => r.start_date ? h("span", { class: "num" }, r.start_date) : "—"]],
+  "עוד אין עובדים במשרד. עובדים נוספים דרך ה-API או בהעלאת קובץ אקסל.");
+
+/* ---------- מסמכים לאישור ---------- */
+const KIND = { form101: "טופס 101", form106: "טופס 106", guideline: "הנחיה חדשה" };
+const FIELD = { tax_year: "שנת מס", signed_on: "תאריך חתימה", income_type: "סוג הכנסה", other_income: "הכנסה נוספת", other_credits_claimed: "זיכויים נוספים", id_number: "תעודת זהות", manual_points: "נקודות זיכוי ידניות", gross_total: "סך הכנסה", tax_withheld: "מס שנוכה", ni_withheld: "ביטוח לאומי שנוכה", employer_name: "מעסיק", topic: "נושא", value: "ערך", unit: "יחידה", effective_from: "בתוקף מ", effective_to: "בתוקף עד", basis: "בסיס", source_text: "נוסח מקור" };
+const PSTATUS = { pending: "ממתין לאישור", approved: "אושר", rejected: "נדחה", superseded: "הוחלף" };
+const propsView = () => listView("props", "מסמכים לאישור", "/proposals",
+  [["סוג", r => KIND[r.kind] || r.kind], ["שנה", r => r.year || "—"], ["מצב", r => PSTATUS[r.status] || r.status],
+   ["נוצר", r => h("span", { class: "num" }, (r.created_at || "").slice(0, 10))]],
+  "אין מסמכים. העלאת טופס 101, טופס 106 או הנחיה חדשה תיצור כאן הצעה שממתינה לאישור שלך.",
+  (r) => { state.pending = r.id; render("prop"); });
+function propView() {
+  const box = h("div", {}, h("p", {}, "טוענת…"));
+  api("GET", cp("/proposals/" + state.pending)).then(p => {
+    const v = p.validation || { errors: {}, warnings: [] };
+    const errKeys = Object.keys(v.errors || {});
+    const confirm = h("input", { type: "checkbox", id: "cf" });
+    const floor = h("input", { type: "checkbox", id: "fl" });
+    const needFloor = v.floor_status === "not_checked";
+    const msg = h("div", { "aria-live": "polite" });
+    const decide = async (action) => {
+      try { await api("POST", cp("/proposals/" + p.id + "/decision"), { action, confirm: confirm.checked, floor_ack: floor.checked });
+        toast(action === "approve" ? "ההצעה אושרה" : "ההצעה נדחתה"); render("props"); }
+      catch (e) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)); }
+    };
+    put(box,
+      h("div", { class: "panel" }, h("p", { class: "info" }, "הנתונים שמוצגים כאן נקלטו מהמסמך. בדקי אותם מול המסמך המקורי לפני אישור."),
+        h("dl", { class: "fields" }, Object.entries(p.fields || {}).flatMap(([k, val]) => [h("dt", {}, FIELD[k] || k), h("dd", {}, val === true ? "כן" : val === false ? "לא" : String(val))]))),
+      errKeys.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "שגיאות שחוסמות אישור:"), h("ul", {}, errKeys.map(k => h("li", {}, k + ": " + v.errors[k])))) : null,
+      (v.warnings || []).length ? h("div", { class: "flags" }, h("strong", {}, "אזהרות:"), h("ul", {}, v.warnings.map(w => h("li", {}, w)))) : null,
+      p.status === "pending" ? h("div", { class: "panel" },
+        h("label", { class: "check" }, confirm, "בדקתי את הנתונים מול המסמך ואני מאשרת אותם."),
+        needFloor ? h("label", { class: "check" }, floor, "אני מבינה שהכלל הזה לא נבדק מול רצפת החוק.") : null,
+        msg,
+        h("div", { class: "actions" }, h("button", { class: "btn", disabled: errKeys.length > 0, onclick: () => decide("approve") }, "אישור ההצעה"),
+          h("button", { class: "btn danger", onclick: () => decide("reject") }, "דחייה"),
+          h("button", { class: "btn ghost", onclick: () => render("props") }, "חזרה לרשימה")))
+        : h("p", {}, "מצב נוכחי: " + (PSTATUS[p.status] || p.status)));
+  }).catch(e => box.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)));
+  return shell("props", "בדיקת הצעה", box);
+}
+
+/* ---------- כללי משרד ויומן ---------- */
+const rulesView = () => listView("rules", "כללי המשרד", "/rules",
+  [["נושא", r => r.topic], ["גרסה", r => r.version], ["פעיל", r => r.active ? "כן" : "לא"]],
+  "עוד אין הנחיות מאושרות. הנחיות שאישרת יופיעו כאן. הן שייכות למשרד שלך בלבד ולא משנות חישוב עד לחיבור מפורש.");
+const ACTION = { login: "כניסה", login_failed: "ניסיון כניסה שנכשל", calculate_paystub: "חישוב תלוש", proposal_created: "יצירת הצעה", proposal_approved: "אישור הצעה", proposal_rejected: "דחיית הצעה", create_employee: "יצירת עובד" };
+const auditView = () => listView("audit", "יומן פעולות", "/audit-log",
+  [["זמן", r => h("span", { class: "num" }, (r.at || "").replace("T", " ").slice(0, 16))], ["פעולה", r => ACTION[r.action] || r.action], ["ישות", r => r.entity || "—"]],
+  "היומן ריק. כל כניסה, חישוב ואישור נרשמים כאן, בלי נתונים אישיים.");
+
+/* ---------- ניתוב ---------- */
+function render(view) {
+  state.view = view;
+  const views = { login: () => loginView(), chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
+  mount(views[view]());
+  window.scrollTo(0, 0);
+}
+render("login");
+</script>
+</body>
+</html>

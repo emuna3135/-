@@ -1,4 +1,12 @@
-streamlit
-pandas
-openpyxl
+fastapi
+uvicorn
+sqlalchemy
+pydantic
+bcrypt
+pyjwt
 cryptography
+python-multipart
+psycopg2-binary
+openpyxl
+reportlab
+anthropic
