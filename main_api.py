@@ -11,6 +11,7 @@ import jwt
 import card
 import payslip
 import templating
+import termination
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import authpolicy
 import proposals
@@ -1197,6 +1198,41 @@ def override_item(company_id: str, employee_id: str, body: OverrideIn,
           f"{body.month:02d}/{body.year} field={body.field} reason={body.reason[:80]}")
     db.commit()
     return {"company_id": company_id, "employee_id": emp.id, **public_res(new_res)}
+
+
+class TerminationIn(BaseModel):
+    end_date: datetime.date
+    ended_by: str = Field(..., pattern="^(dismissed|resigned)$")
+    section14: bool = False
+    severance_components: list = Field(default_factory=list, description="רשימת [סוג, סכום]; ראו labor_rules.severance_wage")
+    unused_vacation_days: Optional[float] = Field(None, ge=0)
+    vacation_day_value: Optional[float] = Field(None, ge=0)
+    notice_days_unworked: Optional[float] = Field(None, ge=0)
+    notice_day_value: Optional[float] = Field(None, ge=0)
+
+
+@app.post("/companies/{company_id}/employees/{employee_id}/termination")
+def termination_settlement(company_id: str, employee_id: str, body: TerminationIn,
+                           user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """חישוב זכויות סיום העסקה. מחשבון עזר בלבד: מה שלא ידוע מסומן ידני, והמס על הרכיבים לא מחושב."""
+    require_company(company_id, user, db, "write")
+    emp, d = get_employee(db, company_id, employee_id)
+    if not d.get("start_date"):
+        raise HTTPException(422, "חסר תאריך תחילת עבודה בכרטיס העובד")
+    try:
+        comps = [(str(k), v) for k, v in body.severance_components]
+        r = termination.settlement(
+            start_date=datetime.date.fromisoformat(str(d["start_date"])), end_date=body.end_date,
+            ended_by=body.ended_by, severance_components=comps, section14=body.section14,
+            unused_vacation_days=body.unused_vacation_days, vacation_day_value=body.vacation_day_value,
+            notice_days_unworked=body.notice_days_unworked, notice_day_value=body.notice_day_value)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(422, str(e))
+    audit(db, user.id, company_id, "termination_calc", "employee", emp.id, f"end={body.end_date}")
+    db.commit()
+    return {"months": r["months"], "overall_status": r["overall"], "notes": r["notes"],
+            "items": {k: {"value": (str(v["value"]) if v["value"] is not None else None),
+                          "status": v["status"], "note": v["note"]} for k, v in r["items"].items()}}
 
 
 @app.get("/templates")
