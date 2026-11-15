@@ -10,6 +10,7 @@ import bcrypt
 import jwt
 import card
 import payslip
+import templating
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import authpolicy
 import proposals
@@ -1144,6 +1145,7 @@ class PayslipIn(BaseModel):
     regular_hour_value: Optional[float] = Field(None, gt=0)    # ערך שעת עבודה רגילה (סעיף 24)
     seniority_override: Optional[str] = None                   # ותק מצטבר אם שונה מתאריך תחילת העבודה
     approve: bool = False               # אישור חשב השכר: מסיר סימן "טיוטה"
+    template: Optional[str] = Field(None, pattern="^[a-z0-9_]{1,40}$")   # שם תבנית מתיקיית templates (בלי נתיב)
 
 
 def _payslip_inputs(db, company_id, employee_id, body):
@@ -1197,6 +1199,21 @@ def override_item(company_id: str, employee_id: str, body: OverrideIn,
     return {"company_id": company_id, "employee_id": emp.id, **public_res(new_res)}
 
 
+@app.get("/templates")
+def list_templates(user: User = Depends(current_user)):
+    """תבניות התלוש הזמינות (קבצי JSON בתיקיית templates). רק שם ותיאור, בלי נתיבים."""
+    import glob
+    out = []
+    for path in sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "*.json"))):
+        try:
+            spec = templating.load(path)
+        except templating.TemplateError:
+            continue
+        out.append({"id": os.path.splitext(os.path.basename(path))[0], "name": spec.get("name", ""),
+                    "unmapped": spec.get("unmapped", [])})
+    return out
+
+
 @app.post("/companies/{company_id}/employees/{employee_id}/payslip/check")
 def payslip_check(company_id: str, employee_id: str, body: PayslipIn,
                   user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -1213,13 +1230,27 @@ def payslip_pdf(company_id: str, employee_id: str, body: PayslipIn,
                 user: User = Depends(current_user), db: Session = Depends(get_db)):
     require_company(company_id, user, db, "write")
     res, extras, d, company = _payslip_inputs(db, company_id, employee_id, body)
-    pdf, missing, reasons, draft = payslip.render(res, extras, d, company, approved=body.approve)
+    tpl_missing = []
+    if body.template:
+        spec_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", body.template + ".json")
+        if not os.path.isfile(spec_path):
+            raise HTTPException(404, "תבנית לא נמצאה")
+        try:
+            spec = templating.load(spec_path)
+            data, missing, reasons = payslip.prepare(res, extras, d, company)
+            draft = bool(missing or reasons) and not (body.approve and not missing and res.get("net") is not None)
+            pdf, tpl_missing = templating.render(spec, data, draft=draft)
+        except templating.TemplateError as e:
+            raise HTTPException(422, "תבנית לא תקינה: " + str(e))
+    else:
+        pdf, missing, reasons, draft = payslip.render(res, extras, d, company, approved=body.approve)
     audit(db, user.id, company_id, "payslip_pdf", "employee", employee_id,
-          f"{body.month:02d}/{body.year} draft={draft} approved={body.approve}")
+          f"{body.month:02d}/{body.year} draft={draft} approved={body.approve} template={body.template}")
     db.commit()
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="payslip-{body.year}-{body.month:02d}.pdf"',
-                             "X-Payslip-Draft": str(draft).lower()})
+                             "X-Payslip-Draft": str(draft).lower(),
+                             "X-Template-Missing": str(len(tpl_missing))})
 
 
 

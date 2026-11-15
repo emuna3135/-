@@ -1,0 +1,33 @@
+{
+  "name": "משפחה א' (תוכנת שכר עם תיבות ימין/שמאל; תלושי 2021 ו-2024)",
+  "source_note": "נכתב ידנית מקריאת התלוש המקורי. שדות במקור שאין להם נתון במערכת (תיק ניכויים, מספר תאגיד, מספר עובד, מחלקה, דרגה, בנק וחשבון, תאריך הדפסה) לא נכללים ורשומים ב-unmapped.",
+  "unmapped": ["תיק ניכויים", "מספר תאגיד", "תיק ביטוח לאומי", "מספר עובד", "מחלקה", "דרגה", "בנק/סניף/חשבון", "הודפס בתאריך", "מצב משפחתי", "קוד מדרגת מס"],
+  "elements": [
+    {"type": "box", "rect": [9, 20, 66, 17], "title": "", "border": true},
+    {"type": "text", "at": [73, 26], "text": "תלוש שכר לחודש {period}", "bold": true, "size": 9},
+    {"type": "text", "at": [73, 32], "text": "הופק במערכת שכר", "size": 7},
+
+    {"type": "kv", "rect": [88, 20, 113, 17], "title": "", "label_w": 20, "rows": [["חברה", "employer_name"], ["מספר ח.פ/ת.ז", "employer_id"], ["כתובת", "employer_address"]]},
+
+    {"type": "kv", "rect": [9, 40, 108, 32], "title": "פרטים אישיים", "title_fill": "#cfd8e1", "label_w": 24,
+     "rows": [["שם", "employee_name"], ["מספר זהות", "employee_id_masked"], ["תחילת עבודה", "start_date"], ["היקף משרה", "position_scope"], ["ותק", "seniority"], ["אופן תשלום", "payment"]]},
+
+    {"type": "table", "rect": [60, 84, 141, 98], "title": "", "source": "payments", "header_fill": "#dbe7f5",
+     "columns": [{"header": "תיאור התשלום", "col": "label", "w": 100}, {"header": "התשלום", "col": "amount", "w": 41, "align": "left"}],
+     "total": {"label": "סה\"כ תשלומים", "bind": "gross"}},
+
+    {"type": "table", "rect": [9, 84, 50, 98], "title": "", "source": "deductions", "header_fill": "#e6e6e6",
+     "columns": [{"header": "ניכויי חובה", "col": "label", "w": 28}, {"header": "הניכוי", "col": "amount", "w": 22, "align": "left"}],
+     "total": {"label": "סה\"כ ניכויים", "bind": "total_deductions"}},
+
+    {"type": "stat", "rect": [9, 186, 50, 9], "label": "שכר נטו", "bind": "net", "fill": "#dbe7f5", "heavy": true, "size": 10},
+
+    {"type": "table", "rect": [60, 186, 141, 40], "title": "נתונים מצטברים ומס", "title_fill": "#cfd8e1", "source": "tax_data", "header_fill": "#eef2f6",
+     "columns": [{"header": "תיאור", "col": "label", "w": 70}, {"header": "החודש", "col": "month", "w": 33, "align": "left"}, {"header": "מצטבר", "col": "cum", "w": 38, "align": "left"}]},
+
+    {"type": "kv", "rect": [9, 198, 50, 28], "title": "נתונים נוספים", "title_fill": "#cfd8e1", "label_w": 20,
+     "rows": [["נקודות זיכוי", "points"], ["ערך שעה", "regular_hour_value"], ["שכר מינימום", "min_wage"]]},
+
+    {"type": "stat", "rect": [9, 232, 192, 10], "label": "לתשלום", "bind": "net", "heavy": true, "size": 11}
+  ]
+}

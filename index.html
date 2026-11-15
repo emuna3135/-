@@ -347,7 +347,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const nav = NAV.map(([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label));
   return h("div", { class: "app" },
@@ -410,6 +410,64 @@ function slipView(r) {
       h("div", { class: "net" }, h("span", {}, "נטו לתשלום"), r.net == null ? h("span", { class: "big" }, "לא חושב") : h("span", { class: "big num" }, fmt(r.net)))),
     r.unresolved && r.unresolved.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "דורש טיפול ידני לפני שימוש בתלוש:"), h("ul", {}, r.unresolved.map(u => h("li", {}, u)))) : null,
     r.flags && r.flags.length ? h("div", { class: "flags" }, h("strong", {}, "שימי לב:"), h("ul", {}, r.flags.map(x => h("li", {}, x)))) : null);
+}
+
+/* ---------- הפקת תלוש לפי תבנית ---------- */
+function slipPageView() {
+  const today = new Date();
+  const emp = h("select", { required: true }, h("option", { value: "" }, "טוענת…"));
+  const tpl = h("select", {}, h("option", { value: "" }, "עיצוב ברירת המחדל של המערכת"));
+  const year = h("input", { type: "number", value: today.getFullYear(), required: true });
+  const month = h("input", { type: "number", min: 1, max: 12, value: today.getMonth() + 1, required: true });
+  const worked = h("input", { type: "text", placeholder: "למשל 22 ימים" });
+  const vac = h("input", { type: "text", placeholder: "ניצול / יתרה" });
+  const sick = h("input", { type: "text", placeholder: "ניצול / יתרה" });
+  const addr = h("input", { type: "text" });
+  const approve = h("input", { type: "checkbox" });
+  const out = h("div", { "aria-live": "polite" });
+  const unm = h("div", {});
+  api("GET", cp("/employees")).then(rows => emp.replaceChildren(h("option", { value: "" }, rows.length ? "בחירת עובד" : "אין עובדים"),
+    ...rows.map(r => h("option", { value: r.id }, r.full_name)))).catch(e => out.replaceChildren(h("div", { class: "err" }, e.message)));
+  let tpls = [];
+  api("GET", "/templates").then(t => { tpls = t; t.forEach(x => tpl.append(h("option", { value: x.id }, x.name))); }).catch(() => {});
+  tpl.addEventListener("change", () => {
+    const t = tpls.find(x => x.id === tpl.value);
+    unm.replaceChildren(t && t.unmapped.length ? h("div", { class: "flags" }, h("strong", {}, "שדות שקיימים בתלוש המקורי ואין להם נתון במערכת (לא יופיעו):"),
+      h("ul", {}, t.unmapped.map(x => h("li", {}, x)))) : "");
+  });
+  const body = () => ({ year: +year.value, month: +month.value, template: tpl.value || null, approve: approve.checked,
+    worked: worked.value || null, vacation: vac.value || null, sick: sick.value || null, employer_address: addr.value || null });
+  const base = () => state.api + cp("/employees/" + emp.value);
+  const check = async () => {
+    out.replaceChildren(h("p", {}, "בודקת…"));
+    try {
+      const r = await api("POST", cp("/employees/" + emp.value + "/payslip/check"), body());
+      out.replaceChildren(
+        r.missing_required_fields.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "שדות חובה שחסרים בתלוש:"), h("ul", {}, r.missing_required_fields.map(x => h("li", {}, x)))) : h("div", { class: "info" }, "כל שדות החובה קיימים."),
+        r.calculation_notes.length ? h("div", { class: "flags" }, h("strong", {}, "הערות על החישוב:"), h("ul", {}, r.calculation_notes.map(x => h("li", {}, x)))) : null,
+        r.would_be_draft ? h("div", { class: "flags" }, "התלוש יופק כטיוטה (לא לחלוקה) עד שיושלמו הנתונים ויאושר.") : null);
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
+  const make = async () => {
+    out.replaceChildren(h("p", {}, "מפיקה…"));
+    try {
+      const res = await fetch(base() + "/payslip", { method: "POST", headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" }, body: JSON.stringify(body()) });
+      if (!res.ok) { let m = "הפעולה נכשלה (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+      const blob = await res.blob(); const url = URL.createObjectURL(blob);
+      const draft = res.headers.get("X-Payslip-Draft") === "true";
+      out.replaceChildren(h("div", { class: draft ? "flags" : "info" }, draft ? "הופק כטיוטה (לא לחלוקה): חסרים נתונים או שהחישוב לא מאומת מלא." : "הופק תלוש."),
+        h("a", { class: "btn", href: url, download: "payslip-" + year.value + "-" + String(month.value).padStart(2, "0") + ".pdf" }, "הורדת ה-PDF"));
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
+  const form = h("div", {},
+    h("label", {}, "עובד", emp), h("label", {}, "תבנית", tpl), unm,
+    h("div", { class: "row2" }, h("label", {}, "שנה", year), h("label", {}, "חודש", month)),
+    h("details", {}, h("summary", {}, "פרטים נוספים לתלוש"), h("label", {}, "כתובת מקום העבודה", addr), h("label", {}, "עבודה בחודש", worked),
+      h("label", {}, "חופשה", vac), h("label", {}, "מחלה", sick)),
+    h("label", {}, h("span", {}, "אישור חשבת השכר (מסיר סימן טיוטה, רק אם הכל מלא)"), approve),
+    h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: () => emp.value ? check() : toast("בחרי עובד") }, "בדיקת חוסרים"),
+      h("button", { class: "btn", type: "button", onclick: () => emp.value ? make() : toast("בחרי עובד") }, "הפק תלוש")), out);
+  return shell("slip", "הפקת תלוש", h("div", {}, h("p", {}, "התלוש מופק מחישוב שכבר בוצע לחודש הזה. סביבת בדיקה: נתונים בדויים בלבד."), form));
 }
 
 /* ---------- העלאת אקסל ---------- */
@@ -520,7 +578,7 @@ const auditView = () => listView("audit", "יומן פעולות", "/audit-log",
 /* ---------- ניתוב ---------- */
 function render(view) {
   state.view = view;
-  const views = { upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
+  const views = { slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
