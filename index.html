@@ -348,7 +348,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["f101", "טופס 101"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const nav = NAV.map(([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label));
   return h("div", { class: "app" },
@@ -471,6 +471,42 @@ function slipPageView() {
   return shell("slip", "הפקת תלוש", h("div", {}, h("p", {}, "התלוש מופק מחישוב שכבר בוצע לחודש הזה. סביבת בדיקה: נתונים בדויים בלבד."), form));
 }
 
+/* ---------- טופס 101 ---------- */
+function form101View() {
+  const emp = h("select", { required: true }, h("option", { value: "" }, "טוענת…"));
+  const year = h("input", { type: "number", value: new Date().getFullYear(), required: true });
+  const signed = h("input", { type: "date", required: true });
+  const itype = h("select", {}, h("option", { value: "main" }, "משרה עיקרית (מקום עבודה ראשי)"), h("option", { value: "additional" }, "משרה נוספת"));
+  const other = h("input", { type: "checkbox" });
+  const marital = h("select", {}, h("option", { value: "" }, "לא צוין"), h("option", { value: "single" }, "רווק/ה"), h("option", { value: "married" }, "נשוי/אה"),
+    h("option", { value: "divorced" }, "גרוש/ה"), h("option", { value: "widowed" }, "אלמן/ה"), h("option", { value: "separated" }, "פרוד/ה"));
+  const kids = h("input", { type: "text", placeholder: "שנות לידה מופרדות בפסיק, למשל 2019, 2022" });
+  const manual = h("input", { type: "number", step: "0.25", min: 0, placeholder: "רק אם חשבת השכר קובעת את הסך בעצמה" });
+  const out = h("div", { "aria-live": "polite" });
+  api("GET", cp("/employees")).then(rows => emp.replaceChildren(h("option", { value: "" }, rows.length ? "בחירת עובד" : "אין עובדים. יש להוסיף עובד קודם"),
+    ...rows.map(r => h("option", { value: r.id }, r.full_name)))).catch(e => out.replaceChildren(h("div", { class: "err" }, e.message)));
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); out.replaceChildren(h("p", {}, "שומרת…"));
+    try {
+      const ys = kids.value.split(",").map(x => x.trim()).filter(Boolean).map(Number);
+      if (ys.some(n => !Number.isInteger(n) || n < 1900 || n > 2100)) throw new Error("שנות לידה לא תקינות");
+      const body = { signed_on: signed.value, income_type: itype.value, other_income: other.checked, custody_birth_years: ys };
+      if (marital.value) body.marital = marital.value;
+      if (manual.value !== "") body.manual_points = Number(manual.value);
+      const r = await api("PUT", cp("/employees/" + emp.value + "/form101/" + year.value), body);
+      out.replaceChildren(h("div", { class: r.credit_points == null ? "flags" : "info" },
+        r.credit_points == null ? "נקודות הזיכוי לא נגזרו אוטומטית: " + r.points_note
+          : "נשמר. נקודות זיכוי: " + r.credit_points + " (" + r.points_status + "). " + r.points_note));
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } },
+    h("label", {}, "עובד", emp), h("label", {}, "שנת מס", year), h("label", {}, "תאריך חתימת העובד על הטופס", signed),
+    h("label", {}, "סוג משרה", itype), h("label", {}, h("span", {}, "יש לעובד הכנסות אחרות (סומן בטופס)"), other),
+    h("label", {}, "מצב משפחתי", marital), h("label", {}, "שנות לידה של ילדים בחזקת העובד/ת", kids),
+    h("label", {}, "סך נקודות זיכוי ידני (אופציונלי)", manual),
+    h("button", { class: "btn", type: "submit" }, "שמירה וחישוב נקודות"));
+  return shell("f101", "טופס 101", h("div", {}, h("p", {}, "הנתונים נשמרים לשנה אחת. מהם נגזרות נקודות הזיכוי ושיטת המס בחישוב. מצבים מיוחדים (עולה, חייל משוחרר, תואר, נכות) עדיין לא בטופס זה: יש להזין סך ידני. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
+}
+
 /* ---------- העלאת אקסל ---------- */
 function uploadView() {
   const file = h("input", { type: "file", accept: ".xlsx,.csv", required: true });
@@ -581,7 +617,7 @@ const auditView = () => listView("audit", "יומן פעולות", "/audit-log",
 /* ---------- ניתוב ---------- */
 function render(view) {
   state.view = view;
-  const views = { slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
+  const views = { f101: form101View, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
