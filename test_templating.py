@@ -69,8 +69,9 @@ class AllTemplates(unittest.TestCase):
 
     def test_each_template_holds_many_payment_rows(self):
         d, _ = sample_d()
-        d["payments"] = [("רכיב", 100.0)] * 8
-        d["deductions"] = [("ניכוי", "", 10.0)] * 8
+        # המקסימום הריאלי ש-payslip.prepare מייצר: תשלומים עד 7 (יסוד, 3 הטבות, שעות נוספות, בונוס), ניכויים עד 6
+        d["payments"] = [("רכיב", 100.0)] * 7
+        d["deductions"] = [("ניכוי", "", 10.0)] * 6
         for n in self.NAMES:
             T.render(T.load(os.path.join(HERE, "templates", n + ".json")), d)
 
