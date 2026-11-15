@@ -4,6 +4,18 @@ import engine as e
 from test_payslips import NI_2025_CASES, KNOWN_UNEXPLAINED
 
 
+class CarYear2026Tests(unittest.TestCase):
+    def test_2026_cap_and_reductions(self):
+        e_ = e
+        self.assertEqual(e_.car_benefit(900000, 'regular', year=2026)['value'], e_.car_benefit(596860, 'regular', year=2026)['value'])
+        self.assertEqual(e_.car_benefit(596860, 'regular', year=2026)['value'] - e_.car_benefit(596860, 'electric', year=2026)['value'], 1380)
+        self.assertEqual(e_.car_benefit(596860, 'regular', year=2026)['value'] - e_.car_benefit(596860, 'plugin', year=2026)['value'], 1150)
+        self.assertEqual(e_.car_benefit(596860, 'regular', year=2026)['value'] - e_.car_benefit(596860, 'hybrid', year=2026)['value'], 580)
+
+    def test_other_years_manual(self):
+        self.assertIsNone(e.car_benefit(300000, 'regular', year=2024)['value'])
+
+
 class NI(unittest.TestCase):
     def test_verified_against_slips(self):
         for name, y, m, g, bl, h in NI_2025_CASES:

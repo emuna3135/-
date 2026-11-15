@@ -206,18 +206,32 @@ def is_operational_car(business_use_only, leaves_workplace_after_hours, workplac
             and workplace_is_residence is False)
 
 
-def car_benefit(price, kind="regular", operational=False, gross_weight_kg=None):
-    """שווי שימוש חודשי ברכב צמוד (נרשם מ-2010). מעוגל ל-10 ש"ח, כמו בטבלת הלשכה (נבדק על 8 דגמים)."""
-    if kind not in CAR_REDUCTION:
+# תקרת מחיר מתואם והפחתות לפי שנה. 2026: לוח עזר 2026 של רשות המסים, פרק ד (תקרה 596,860; הפחתות 580/1,150/1,380, הוראת שעה עד 31.12.2028).
+# 2025: תקרה 583,100 והפחתה לחשמלי 1,350 לפי מסמך מרכז המחקר והמידע של הכנסת המצטט את רשות המסים; הפחתות היברידי (560) ופלאג-אין (1,130)
+# נגזרו מטבלת הלשכה ולא אומתו מול מקור ראשוני.
+CAR_PARAMS = {
+    2025: (D("583100"), {"regular": D(0), "hybrid": D(560), "plugin": D(1130), "electric": D(1350)}),
+    2026: (D("596860"), {"regular": D(0), "hybrid": D(580), "plugin": D(1150), "electric": D(1380)}),
+}
+
+
+def car_benefit(price, kind="regular", operational=False, gross_weight_kg=None, year=None):
+    """שווי שימוש חודשי ברכב צמוד (נרשם מ-2010). מעוגל ל-10 ש"ח (תקנות שווי השימוש ברכב).
+    year: שנת המס; ללא שנה = ערכי 2025 (תאימות). שנה שאינה 2025/2026 -> ידני."""
+    cap, reductions = CAR_PARAMS.get(2025 if year is None else int(year), (None, None))
+    if cap is None:
+        return item(None, MANUAL, f"שנה {year}: תקרת מחיר והפחתות לא הוגדרו, נדרשת הזנה ידנית")
+    if kind not in reductions:
         return item(None, MANUAL, "סוג רכב לא מוכר")
     if gross_weight_kg is not None and D(str(gross_weight_kg)) > CAR_MAX_WEIGHT_KG:
         return item(D(0), BY_LAW, "משקל כולל מותר מעל 3,500 ק\"ג: אינו 'רכב' לעניין התקנות, אין שווי (תרגיל לשכת רו\"ח)")
     if operational:
         return item(D(0), BY_LAW, "רכב תפעולי: אין שווי שימוש (תקנות מס הכנסה, ניכוי הוצאות רכב)")
-    raw = min(D(str(price)), CAR_PRICE_CAP) * CAR_RATE
-    value = (raw / 10).quantize(D("1"), rounding=ROUND_HALF_UP) * 10 - CAR_REDUCTION[kind]
+    raw = min(D(str(price)), cap) * CAR_RATE
+    value = (raw / 10).quantize(D("1"), rounding=ROUND_HALF_UP) * 10 - reductions[kind]
+    src = "לוח עזר 2026 של רשות המסים" if year is not None and int(year) == 2026 else "טבלת 2025"
     return item(max(value, D(0)), BY_LAW,
-                "מודל ליניארי 2.48%, טבלת 2025; רכב שנרשם לפני 2010 וניכוי השתתפות עובד לא נתמכים")
+                f"מודל ליניארי 2.48%, {src}, תקרת מחיר {cap}; רכב שנרשם לפני 2010 וניכוי השתתפות עובד לא נתמכים")
 
 
 def works_committee_benefit(employer_amount_per_employee, specific_per_employee):

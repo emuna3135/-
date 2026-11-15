@@ -363,7 +363,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
     operational = pe.is_operational_car(p.car_business_use_only, p.car_leaves_workplace_after_hours,
                                         p.car_workplace_is_residence)
     if p.car_price > 0 or operational or p.car_gross_weight_kg:
-        car = pe.car_benefit(p.car_price, p.car_kind, operational, p.car_gross_weight_kg)
+        car = pe.car_benefit(p.car_price, p.car_kind, operational, p.car_gross_weight_kg, year=p.year)
         if car["value"] is None:
             raise ValueError("סוג רכב לא מוכר")
         if car["value"]:
