@@ -409,7 +409,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
                  "status": v["status"], "note": v["note"]}
              for k, v in r["items"].items()}
     return {
-        "emp_id_number": p.emp_id_number, "emp_name": p.emp_name, "period": p.period,
+        "emp_id_number": p.emp_id_number, "emp_name": p.emp_name, "period": p.period or f"{p.month:02d}/{p.year}",
         "year": p.year, "month": p.month,
         "gross": float(pe.r2(gross)), "overtime_pay": float(pe.r2(ot)),
         "taxable": float(pe.r2(taxable)), "bonus": float(p.bonus),
