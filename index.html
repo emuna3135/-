@@ -155,7 +155,7 @@ const fmt = (v) => v == null ? null : Number(v).toLocaleString("he-IL", { minimu
 /* ---------- סטטוסים: ארבעה, בלי לנחש ---------- */
 function statusInfo(s) {
   s = String(s || "");
-  if (s.startsWith("מאומת")) return { cls: "s-ok", text: "מאומת מול תלוש" };
+  if (s.startsWith("מאומת")) return { cls: "s-ok", text: "מאומת" };
   if (s.startsWith("לפי חוק")) return { cls: "s-law", text: "לפי חוק" };
   if (s.startsWith("לפי הקורס")) return { cls: "s-warn", text: "טרם נבדק מול החוק" };
   return { cls: "s-bad", text: "נדרש טיפול ידני" };
@@ -391,7 +391,7 @@ function calcView() {
 }
 function legend() {
   const it = (cls, t) => h("span", { class: cls }, h("i", { class: "dot" }), t);
-  return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "מאומת מול תלוש"), it("s-law", "לפי חוק"), it("s-warn", "טרם נבדק מול החוק"), it("s-bad", "נדרש טיפול ידני"));
+  return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "מאומת"), it("s-law", "לפי חוק"), it("s-warn", "טרם נבדק מול החוק"), it("s-bad", "נדרש טיפול ידני"));
 }
 function slipView(r) {
   const rows = Object.entries(r.items || {}).map(([k, v]) => {
