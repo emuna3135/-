@@ -482,6 +482,15 @@ function form101View() {
     h("option", { value: "divorced" }, "גרוש/ה"), h("option", { value: "widowed" }, "אלמן/ה"), h("option", { value: "separated" }, "פרוד/ה"));
   const kids = h("input", { type: "text", placeholder: "שנות לידה מופרדות בפסיק, למשל 2019, 2022" });
   const manual = h("input", { type: "number", step: "0.25", min: 0, placeholder: "רק אם חשבת השכר קובעת את הסך בעצמה" });
+  const aliyah = h("input", { type: "date" });
+  const discharge = h("input", { type: "date" });
+  const fullSvc = h("select", {}, h("option", { value: "" }, "לא צוין"), h("option", { value: "1" }, "שירות מלא"), h("option", { value: "0" }, "שירות חלקי"));
+  const degKind = h("select", {}, h("option", { value: "" }, "אין"), h("option", { value: "first" }, "תואר ראשון"), h("option", { value: "second" }, "תואר שני"), h("option", { value: "profession" }, "לימודי מקצוע"));
+  const degYears = h("input", { type: "number", min: 1, max: 10, placeholder: "שנות לימוד" });
+  const degDone = h("input", { type: "number", min: 1950, max: 2100, placeholder: "שנת סיום" });
+  const disabledKids = h("input", { type: "number", min: 0, max: 20, placeholder: "מספר ילדים" });
+  const reserve = h("input", { type: "number", min: 0, max: 366, placeholder: "ימי מילואים בשנה הקודמת" });
+  const alimony = h("input", { type: "checkbox" });
   const out = h("div", { "aria-live": "polite" });
   api("GET", cp("/employees")).then(rows => emp.replaceChildren(h("option", { value: "" }, rows.length ? "בחירת עובד" : "אין עובדים. יש להוסיף עובד קודם"),
     ...rows.map(r => h("option", { value: r.id }, r.full_name)))).catch(e => out.replaceChildren(h("div", { class: "err" }, e.message)));
@@ -493,6 +502,15 @@ function form101View() {
       const body = { signed_on: signed.value, income_type: itype.value, other_income: other.checked, custody_birth_years: ys };
       if (marital.value) body.marital = marital.value;
       if (manual.value !== "") body.manual_points = Number(manual.value);
+      if (aliyah.value) body.aliyah_date = aliyah.value;
+      if (discharge.value) { body.discharge_date = discharge.value; if (fullSvc.value !== "") body.soldier_full_service = fullSvc.value === "1"; }
+      if (degKind.value) {
+        if (!degYears.value || !degDone.value) throw new Error("בתואר/מקצוע יש להזין שנות לימוד ושנת סיום");
+        body.degrees = [{ kind: degKind.value, study_years: Number(degYears.value), completion_year: Number(degDone.value) }];
+      }
+      if (disabledKids.value !== "") body.disabled_children = Number(disabledKids.value);
+      if (reserve.value !== "") body.reserve_days_prev_year = Number(reserve.value);
+      if (alimony.checked) body.alimony_ex_spouse = true;
       const r = await api("PUT", cp("/employees/" + emp.value + "/form101/" + year.value), body);
       out.replaceChildren(h("div", { class: r.credit_points == null ? "flags" : "info" },
         r.credit_points == null ? "נקודות הזיכוי לא נגזרו אוטומטית: " + r.points_note
@@ -502,9 +520,14 @@ function form101View() {
     h("label", {}, "עובד", emp), h("label", {}, "שנת מס", year), h("label", {}, "תאריך חתימת העובד על הטופס", signed),
     h("label", {}, "סוג משרה", itype), h("label", {}, h("span", {}, "יש לעובד הכנסות אחרות (סומן בטופס)"), other),
     h("label", {}, "מצב משפחתי", marital), h("label", {}, "שנות לידה של ילדים בחזקת העובד/ת", kids),
-    h("label", {}, "סך נקודות זיכוי ידני (אופציונלי)", manual),
+    h("details", {}, h("summary", {}, "זיכויים נוספים"),
+      h("label", {}, "תאריך עלייה", aliyah), h("label", {}, "תאריך שחרור משירות צבאי", discharge), h("label", {}, "סוג השירות", fullSvc),
+      h("label", {}, "תואר או לימודי מקצוע", degKind), h("label", {}, "שנות לימוד", degYears), h("label", {}, "שנת סיום", degDone),
+      h("label", {}, "ילדים עם מוגבלות (§45)", disabledKids), h("label", {}, "ימי מילואים כלוחם בשנה הקודמת", reserve),
+      h("label", {}, h("span", {}, "גרוש/ה ששילם מזונות לבן/בת זוג לשעבר שנישאו (§40א)"), alimony)),
+    h("label", {}, "סך נקודות זיכוי ידני (אופציונלי, גובר על החישוב)", manual),
     h("button", { class: "btn", type: "submit" }, "שמירה וחישוב נקודות"));
-  return shell("f101", "טופס 101", h("div", {}, h("p", {}, "הנתונים נשמרים לשנה אחת. מהם נגזרות נקודות הזיכוי ושיטת המס בחישוב. מצבים מיוחדים (עולה, חייל משוחרר, תואר, נכות) עדיין לא בטופס זה: יש להזין סך ידני. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
+  return shell("f101", "טופס 101", h("div", {}, h("p", {}, "הנתונים נשמרים לשנה אחת. מהם נגזרות נקודות הזיכוי ושיטת המס בחישוב. מצבי משפחה מיוחדים (הורה יחיד, אלמן, פרוד ועוד) עדיין לא בטופס זה: יש להזין סך ידני. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
 }
 
 /* ---------- העלאת אקסל ---------- */
