@@ -347,7 +347,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const nav = NAV.map(([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label));
   return h("div", { class: "app" },
@@ -410,6 +410,26 @@ function slipView(r) {
       h("div", { class: "net" }, h("span", {}, "נטו לתשלום"), r.net == null ? h("span", { class: "big" }, "לא חושב") : h("span", { class: "big num" }, fmt(r.net)))),
     r.unresolved && r.unresolved.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "דורש טיפול ידני לפני שימוש בתלוש:"), h("ul", {}, r.unresolved.map(u => h("li", {}, u)))) : null,
     r.flags && r.flags.length ? h("div", { class: "flags" }, h("strong", {}, "שימי לב:"), h("ul", {}, r.flags.map(x => h("li", {}, x)))) : null);
+}
+
+/* ---------- העלאת אקסל ---------- */
+function uploadView() {
+  const file = h("input", { type: "file", accept: ".xlsx,.csv", required: true });
+  const out = h("div", { "aria-live": "polite" });
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); out.replaceChildren(h("p", {}, "מחשבת…"));
+    const fd = new FormData(); fd.append("file", file.files[0]);
+    try {
+      const r = await api("POST", cp("/upload-excel"), fd, true);
+      const nodes = [h("p", {}, "חושבו " + r.processed + " שורות, " + r.errors.length + " שגיאות.")];
+      if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו:"),
+        h("ul", {}, r.errors.map(x => h("li", {}, "שורה " + x.row + ": " + x.error)))));
+      r.paystubs.forEach(p => nodes.push(h("details", {}, h("summary", {}, (p.emp_name || "") + " | נטו: " + (p.net == null ? "לא חושב" : fmt(p.net)) +
+        (p.flags && p.flags.length ? " | יש דגלים" : "") + (p.unresolved && p.unresolved.length ? " | דורש טיפול ידני" : "")), slipView(p))));
+      out.replaceChildren(...nodes);
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } }, h("label", {}, "קובץ אקסל או CSV", file), h("button", { class: "btn", type: "submit" }, "העלאה וחישוב"));
+  return shell("upload", "העלאת אקסל", h("div", {}, h("p", {}, "הגיליון הראשון בקובץ נקרא. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
 }
 
 /* ---------- עובדים ---------- */
@@ -500,7 +520,7 @@ const auditView = () => listView("audit", "יומן פעולות", "/audit-log",
 /* ---------- ניתוב ---------- */
 function render(view) {
   state.view = view;
-  const views = { login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
+  const views = { upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
