@@ -52,6 +52,13 @@ class MonthlyCredits(unittest.TestCase):
             self.assertEqual(card.olim_points(d, y, m)[0], want, (y, m))
         self.assertEqual(card.olim_points(d, 2026, 3)[1], card.BY_LAW)
 
+    def test_olim_before_2022_uses_old_schedule(self):
+        d = self._dt.date(2021, 6, 10)
+        got = {(2021, 6): 3.0, (2022, 11): 3.0, (2022, 12): 2.0, (2023, 11): 2.0, (2023, 12): 1.0,
+               (2024, 11): 1.0, (2024, 12): 0.0}
+        for (y, m), want in got.items():
+            self.assertEqual(card.olim_points(d, y, m)[0], want, (y, m))
+
     def test_soldier_window(self):
         d = self._dt.date(2026, 1, 20)
         self.assertEqual(card.discharged_soldier_points(d, True, 2026, 1)[0], 0.0)
@@ -104,6 +111,16 @@ class AnnualCredits(unittest.TestCase):
             self.assertEqual(card.reserve_points(days)[0], want, days)
         self.assertEqual(card.reserve_points(-1)[1], card.MANUAL)
 
+    def test_reserve_only_2026_2027(self):
+        self.assertEqual(card.reserve_points(60, 2026)[0], 1.5)
+        self.assertEqual(card.reserve_points(60, 2027)[0], 1.5)
+        for y in (2025, 2028):
+            self.assertEqual(card.reserve_points(60, y)[1], card.MANUAL)
+
+    def test_degree_completed_before_2023_is_manual(self):
+        r = card.degree_points([{"kind": "first", "study_years": 3, "completion_year": 2022}], 2025)
+        self.assertEqual(r[1], card.MANUAL)
+
     def test_wrapper_combines_annual_and_monthly(self):
         y = {"degrees": [{"kind": "first", "study_years": 3, "completion_year": 2025}],
              "reserve_days_prev_year": 50, "aliyah_date": "2026-03-10"}
@@ -142,9 +159,9 @@ class DisabledChildren(unittest.TestCase):
 
 
 class AlimonyAndFlags(unittest.TestCase):
-    def test_alimony_adds_one_point(self):
+    def test_alimony_is_manual_because_simulator_conflicts(self):
         r = card.points_from_form101(2026, True, "M", {"alimony_ex_spouse": True}, 4)
-        self.assertEqual((r[0], r[1]), (3.25, card.BY_LAW))
+        self.assertEqual((r[0], r[1]), (None, card.MANUAL))
 
     def test_benef_married_no_children_matches_simulator_rule(self):
         r = card.points_from_form101(2026, True, "M", {"marital": "married", "family_flags": ["benef"]}, 4)

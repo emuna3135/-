@@ -484,7 +484,7 @@ function form101View() {
   const manual = h("input", { type: "number", step: "0.25", min: 0, placeholder: "רק אם חשבת השכר קובעת את הסך בעצמה" });
   const aliyah = h("input", { type: "date" });
   const discharge = h("input", { type: "date" });
-  const fullSvc = h("select", {}, h("option", { value: "" }, "לא צוין"), h("option", { value: "1" }, "שירות מלא"), h("option", { value: "0" }, "שירות חלקי"));
+  const fullSvc = h("select", {}, h("option", { value: "" }, "לא צוין"), h("option", { value: "1" }, "מלא (גבר 23 חודשים ומעלה, אישה 22 ומעלה)"), h("option", { value: "0" }, "חלקי (פחות מכך)"));
   const degKind = h("select", {}, h("option", { value: "" }, "אין"), h("option", { value: "first" }, "תואר ראשון"), h("option", { value: "second" }, "תואר שני"), h("option", { value: "profession" }, "לימודי מקצוע"));
   const degYears = h("input", { type: "number", min: 1, max: 10, placeholder: "שנות לימוד" });
   const degDone = h("input", { type: "number", min: 1950, max: 2100, placeholder: "שנת סיום" });
@@ -524,7 +524,7 @@ function form101View() {
       h("label", {}, "תאריך עלייה", aliyah), h("label", {}, "תאריך שחרור משירות צבאי", discharge), h("label", {}, "סוג השירות", fullSvc),
       h("label", {}, "תואר או לימודי מקצוע", degKind), h("label", {}, "שנות לימוד", degYears), h("label", {}, "שנת סיום", degDone),
       h("label", {}, "ילדים עם מוגבלות (§45)", disabledKids), h("label", {}, "ימי מילואים כלוחם בשנה הקודמת", reserve),
-      h("label", {}, h("span", {}, "גרוש/ה ששילם מזונות לבן/בת זוג לשעבר שנישאו (§40א)"), alimony)),
+      h("label", {}, h("span", {}, "נשוי/אה בשנית ומשלם/ת מזונות לבן/בת זוג לשעבר (המערכת תבקש סך ידני)"), alimony)),
     h("label", {}, "סך נקודות זיכוי ידני (אופציונלי, גובר על החישוב)", manual),
     h("button", { class: "btn", type: "submit" }, "שמירה וחישוב נקודות"));
   return shell("f101", "טופס 101", h("div", {}, h("p", {}, "הנתונים נשמרים לשנה אחת. מהם נגזרות נקודות הזיכוי ושיטת המס בחישוב. מצבי משפחה מיוחדים (הורה יחיד, אלמן, פרוד ועוד) עדיין לא בטופס זה: יש להזין סך ידני. סביבת בדיקה: נתונים בדויים בלבד."), form, out));

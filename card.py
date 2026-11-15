@@ -212,32 +212,38 @@ def _months_between(y1, m1, y2, m2):
 
 
 def olim_points(aliyah_date, year, month):
-    """aliyah_date: datetime.date. מחזיר (נקודות, סטטוס, הערה)."""
+    """aliyah_date: datetime.date. מחזיר (נקודות, סטטוס, הערה).
+    לוח לפי §35 לפקודה ולפי מכתב רשות המסים למעסיקים (תיקון 262): עולה מ-1.1.2022: 1/12 לחודש ב-12 החודשים הראשונים,
+    1/4 ב-18 הבאים, 1/6 ב-12 הבאים, 1/12 ב-12 הבאים (54 חודשים). עולה לפני 1.1.2022: 1/4 ב-18 החודשים הראשונים,
+    1/6 ב-12 הבאים, 1/12 ב-12 הבאים (42 חודשים). הערכים כאן "שנתיים-מקבילים" (שבר החודש x 12)."""
+    import datetime
     k = _months_between(aliyah_date.year, aliyah_date.month, year, month) + 1
     if k < 1:
         return 0.0, BY_LAW, "החודש לפני העלייה: אין זיכוי עולה"
-    if k <= 12:
-        pts = 1.0
-    elif k <= 30:
-        pts = 3.0
-    elif k <= 42:
-        pts = 2.0
-    elif k <= 54:
-        pts = 1.0
+    if aliyah_date >= datetime.date(2022, 1, 1):
+        schedule, total = [(12, 1.0), (30, 3.0), (42, 2.0), (54, 1.0)], 54
     else:
-        return 0.0, BY_LAW, "חלפו 54 חודשים מהעלייה: אין זיכוי עולה"
-    return pts, BY_LAW, (f"זיכוי עולה: חודש {k} מ-54 (חודש העלייה נספר כחודש 1; לא אומת מול מקור רשמי; "
+        schedule, total = [(18, 3.0), (30, 2.0), (42, 1.0)], 42
+    pts = None
+    for upto, value in schedule:
+        if k <= upto:
+            pts = value
+            break
+    if pts is None:
+        return 0.0, BY_LAW, f"חלפו {total} חודשים מהעלייה: אין זיכוי עולה"
+    return pts, BY_LAW, (f"זיכוי עולה: חודש {k} מ-{total} (חודש העלייה נספר כחודש 1; לוח לפי §35 ומכתב רשות המסים; "
                          "היעדרויות מהארץ, זכאות קודמת וזיכוי בן/בת זוג לא נבדקו)")
 
 
 def discharged_soldier_points(discharge_date, full_service, year, month):
-    """full_service: True = גבר 23 חודשי שירות מלאים לפחות / אישה 22; False = פחות. None -> ידני."""
+    """full_service: True = גבר 23 חודשי שירות סדיר מלאים לפחות / אישה 22; False = פחות. None -> ידני.
+    מקור: gov.il (שו"ת רשות המסים) ואתר האגף לחיילים משוחררים: 36 חודשים לאחר חודש השחרור; 2 נקודות / נקודה אחת (שחרור מ-2013)."""
     if full_service is None:
         return None, MANUAL, "אורך השירות הסדיר לא ידוע: נדרשת הזנה ידנית"
     k = _months_between(discharge_date.year, discharge_date.month, year, month)
     if 1 <= k <= 36:
         return (2.0 if full_service else 1.0), BY_LAW, (
-            f"זיכוי חייל משוחרר: חודש {k} מ-36 לפי §39א (לפי חוק, לא נבדק מול הנחיית רשות המסים; חל על הכנסה מיגיעה אישית)")
+            f"זיכוי חייל משוחרר: חודש {k} מ-36 לפי §39א (אומת מול gov.il ואתר האגף לחיילים משוחררים; חל על הכנסה מיגיעה אישית)")
     return 0.0, BY_LAW, "מחוץ ל-36 החודשים שלאחר חודש השחרור: אין זיכוי"
 
 
@@ -273,7 +279,7 @@ def points_from_form101(tax_year, is_resident, gender, y, month=None):
         if not add(r):
             return r
     if rd:
-        r = reserve_points(rd)
+        r = reserve_points(rd, tax_year)
         if not add(r):
             return r
     if dk:
@@ -281,7 +287,8 @@ def points_from_form101(tax_year, is_resident, gender, y, month=None):
         if not add(r):
             return r
     if alim:
-        add((1.0, BY_LAW, "זיכוי גרוש שנשא אשה אחרת ומשלם מזונות §40א: נקודה אחת (לפי חוק; פסק הדין לא נבדק)"))
+        return None, MANUAL, ("זיכוי מזונות לבן/בת זוג לשעבר (נשואים בשנית): סימולטור רשות המסים (12.11.2026) כותב נקודה אחת "
+                              "אך לא הוסיף נקודה בהרצה. הסתירה לא הוכרעה: נדרשת הזנה ידנית של הסך")
     if ali or dis:
         if month is None:
             notes.append("תוספות עולה/חייל משוחרר יחושבו לפי חודש החישוב (בתצוגה זו לא נכללות)")
@@ -321,6 +328,9 @@ def degree_points(degrees, tax_year):
         k, n, c = d["kind"], d.get("study_years"), d.get("completion_year")
         if not (isinstance(n, int) and not isinstance(n, bool) and n >= 1 and isinstance(c, int) and not isinstance(c, bool)):
             return None, MANUAL, "שנות לימוד או שנת סיום חסרות: נדרשת הזנה ידנית"
+        if c < 2023:
+            return None, MANUAL, ("סיום לימודים לפני 2023: הכללים שונים (2014-2022: נקודה בשנה אחת לפי בחירה; לימודי מקצוע לפי שנת הסיום): "
+                                  "נדרשת הזנה ידנית")
         years = min(n, _DEG_CAP[k])
         if c < tax_year <= c + years:
             total += _DEG_PTS[k]
@@ -328,13 +338,18 @@ def degree_points(degrees, tax_year):
     return total, BY_LAW, ("; ".join(notes) + " (לפי חוק; אישור סיום לימודים/טופס 119 לא נבדק)") if notes else ""
 
 
-def reserve_points(days_prev_year):
-    """§39ב: זיכוי לשנת המס לפי ימי מילואים כלוחם בשנה הקודמת. ההנחה: 'בעד כל חמישה ימים נוספים' = בלוקים מלאים. לא אומת מול הנחיה."""
+def reserve_points(days_prev_year, tax_year=None):
+    """זיכוי מילואים כלוחם לפי ימי שירות בשנה הקודמת. הלוח (30-39: 0.5; 40-49: 0.75; 50-54: 1; ועוד רבע לכל 5 ימים, עד 4)
+    הוא הוראת השעה לשנות המס 2026 ו-2027 (חוק בספר החוקים 23.11.2025; מכתב רשות המסים למעסיקים 16.12.2025, אומת מול הטבלה שבו).
+    משנת 2028 יחול נוסח קבוע אחר, ולשנות קודמות אין זיכוי לפי חוק זה: tax_year מחוץ ל-2026/2027 -> ידני.
+    נדרש אישור צה"ל על שירות כלוחם."""
     if days_prev_year is None:
         return 0.0, BY_LAW, ""
     d = days_prev_year
     if not isinstance(d, int) or isinstance(d, bool) or d < 0:
         return None, MANUAL, "מספר ימי מילואים לא תקין: נדרשת הזנה ידנית"
+    if tax_year is not None and int(tax_year) not in (2026, 2027):
+        return None, MANUAL, "זיכוי מילואים כלוחם מחושב כאן רק לשנות המס 2026-2027 (הוראת שעה); שנה אחרת: הזנה ידנית"
     if d < 30:
         pts = 0.0
     elif d < 40:
@@ -343,7 +358,7 @@ def reserve_points(days_prev_year):
         pts = 0.75
     else:
         pts = min(4.0, 1.0 + 0.25 * ((d - 50) // 5))
-    note = f"זיכוי מילואים: {d} ימי לוחם בשנה הקודמת (§39ב; בלוקים מלאים של 5 ימים - הנחה לא מאומתת; נדרש אישור צה\"ל)"
+    note = f"זיכוי מילואים: {d} ימי לוחם בשנה הקודמת (לוח 2026-2027 לפי מכתב רשות המסים; נדרש אישור צה\"ל על שירות כלוחם)"
     return pts, BY_LAW, note
 
 
