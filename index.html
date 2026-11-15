@@ -236,7 +236,7 @@ function loginView(step) {
       state.token = r.access_token; state.user = email.value;
       if (r.two_factor_setup_required) return render("enroll");
       state.companies = r.companies || []; state.companyId = state.companies[0] && state.companies[0].id;
-      render("calc");
+      render(state.companyId ? "calc" : "newco");
     } catch (err) {
       if (/totp|דו-שלבי/.test(err.message)) { msg.replaceChildren(h("div", { class: "info" }, "נדרש קוד מאפליקציית האימות.")); form.querySelector(".codebox").hidden = false; }
       else msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message));
@@ -249,6 +249,7 @@ function loginView(step) {
     msg,
     h("button", { class: "btn", type: "submit" }, "כניסה"),
     h("button", { class: "linkish", type: "button", onclick: () => render("chpw") }, "החלפת סיסמה"),
+    h("button", { class: "linkish", type: "button", onclick: () => render("register") }, "משתמש חדש? הרשמה"),
     h("details", {}, h("summary", {}, "הגדרות חיבור"), h("label", {}, "כתובת השרת (ריק = אותו אתר)", apiBase)),
     h("button", { class: "linkish", type: "button", onclick: () => { state.demo = true; state.user = "דוגמה"; state.companies = [{ id: "demo", name: "משרד לדוגמה" }]; state.companyId = "demo"; render("calc"); } },
       "הצגת המערכת עם נתוני דוגמה, בלי חיבור לשרת"));
@@ -256,6 +257,49 @@ function loginView(step) {
     h("section", { class: "login-side" },
       h("div", {}, h("h1", {}, "שכר שאפשר לסמוך עליו"), h("p", {}, "חישוב שכר שמראה מאיפה כל מספר מגיע, ולא מנחש כשהוא לא יודע.")),
       h("div", { class: "principle" }, "מה שאין לו מקור, מסומן לטיפול ידני.")),
+    h("section", { class: "login-form" }, form));
+}
+
+/* ---------- הרשמה ויצירת משרד ---------- */
+function registerView() {
+  const email = h("input", { type: "email", autocomplete: "username", required: true });
+  const name = h("input", { type: "text", required: true });
+  const pw = h("input", { type: "password", autocomplete: "new-password", required: true, minlength: "12" });
+  const msg = h("div", { "aria-live": "polite" });
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); msg.replaceChildren();
+    try {
+      const r = await api("POST", "/auth/register", { email: email.value, password: pw.value, full_name: name.value });
+      state.token = r.access_token; state.user = email.value;
+      if (r.two_factor_setup_required) return render("enroll");
+      state.companies = []; state.companyId = null; render("newco");
+    } catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } },
+    h("h2", {}, "הרשמה"),
+    h("p", {}, "סביבת בדיקה: להשתמש בפרטים בדויים בלבד."),
+    h("label", {}, "שם מלא", name),
+    h("label", {}, "אימייל", email),
+    h("label", {}, "סיסמה (לפחות 12 תווים)", pw),
+    msg,
+    h("button", { class: "btn", type: "submit" }, "הרשמה"),
+    h("button", { class: "linkish", type: "button", onclick: () => render("login") }, "חזרה לכניסה"));
+  return h("div", { class: "login" },
+    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "יצירת משתמש"), h("p", {}, "אחרי ההרשמה תקימי משרד ותוכלי להוסיף עובדים.")), h("div")),
+    h("section", { class: "login-form" }, form));
+}
+function newcoView() {
+  const name = h("input", { type: "text", required: true });
+  const msg = h("div", { "aria-live": "polite" });
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); msg.replaceChildren();
+    try {
+      const c = await api("POST", "/companies", { name: name.value });
+      state.companies = await api("GET", "/companies"); state.companyId = c.id; render("calc");
+    } catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } },
+    h("h2", {}, "הקמת משרד"), h("label", {}, "שם המשרד", name), msg, h("button", { class: "btn", type: "submit" }, "יצירה"));
+  return h("div", { class: "login" },
+    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "עוד צעד קטן"), h("p", {}, "המשרד מחזיק את העובדים והתלושים. את הופכת לבעלת המשרד.")), h("div")),
     h("section", { class: "login-form" }, form));
 }
 
@@ -297,7 +341,7 @@ function enrollView() {
     h("section", { class: "login-form" }, h("form", { onsubmit: async (e) => {
       e.preventDefault();
       try { const r = await api("POST", "/auth/2fa/enable", { code: code.value }); state.token = r.access_token;
-        const cs = await api("GET", "/companies"); state.companies = cs; state.companyId = cs[0] && cs[0].id; render("calc"); }
+        const cs = await api("GET", "/companies"); state.companies = cs; state.companyId = cs[0] && cs[0].id; render(state.companyId ? "calc" : "newco"); }
       catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
     } }, h("h2", {}, "הקמת אימות דו-שלבי"), out, h("label", {}, "קוד מהאפליקציה", code), msg, h("button", { class: "btn", type: "submit" }, "הפעלה"))));
 }
@@ -369,7 +413,7 @@ function slipView(r) {
 }
 
 /* ---------- עובדים ---------- */
-function listView(view, title, path, cols, emptyMsg, onRow) {
+function listView(view, title, path, cols, emptyMsg, onRow, extra) {
   const box = h("div", {}, h("p", {}, "טוענת…"));
   api("GET", cp(path)).then(rows => {
     if (!rows.length) return box.replaceChildren(h("div", { class: "empty" }, emptyMsg));
@@ -377,11 +421,32 @@ function listView(view, title, path, cols, emptyMsg, onRow) {
       h("tbody", {}, rows.map(r => h("tr", { class: onRow ? "click" : "", tabindex: onRow ? "0" : false, onclick: onRow && (() => onRow(r)), onkeydown: onRow && ((e) => { if (e.key === "Enter") onRow(r); }) },
         cols.map(c => h("td", {}, c[1](r)))))))); })
     .catch(e => box.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)));
-  return shell(view, title, box);
+  return shell(view, title, extra ? h("div", {}, extra, box) : box);
+}
+function addEmpForm() {
+  const f = {
+    id_number: h("input", { type: "text", inputmode: "numeric", maxlength: "9", required: true }),
+    full_name: h("input", { type: "text", required: true }),
+    gender: h("select", { required: true }, h("option", { value: "F" }, "נקבה"), h("option", { value: "M" }, "זכר")),
+    birth_date: h("input", { type: "date" }), start_date: h("input", { type: "date" }),
+    base_salary: h("input", { type: "number", step: "0.01", min: "0.01", required: true }) };
+  const msg = h("div", { "aria-live": "polite" });
+  return h("details", {}, h("summary", {}, "הוספת עובד"),
+    h("form", { onsubmit: async (e) => {
+      e.preventDefault(); msg.replaceChildren();
+      const body = { id_number: f.id_number.value, full_name: f.full_name.value, gender: f.gender.value, base_salary: Number(f.base_salary.value) };
+      if (f.birth_date.value) body.birth_date = f.birth_date.value;
+      if (f.start_date.value) body.start_date = f.start_date.value;
+      try { await api("POST", cp("/employees"), body); toast("העובד נוסף"); render("emps"); }
+      catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+    } },
+      h("label", {}, "ת״ז (9 ספרות, תקינה)", f.id_number), h("label", {}, "שם מלא", f.full_name), h("label", {}, "מין", f.gender),
+      h("label", {}, "תאריך לידה", f.birth_date), h("label", {}, "תחילת עבודה", f.start_date), h("label", {}, "שכר חודשי (₪)", f.base_salary),
+      msg, h("button", { class: "btn", type: "submit" }, "הוספה")));
 }
 const empsView = () => listView("emps", "עובדים", "/employees",
   [["שם", r => r.full_name], ["ת״ז", r => h("span", { class: "num" }, r.id_number_masked)], ["שכר יסוד", r => h("span", { class: "num" }, fmt(r.base_salary))], ["תחילת עבודה", r => r.start_date ? h("span", { class: "num" }, r.start_date) : "—"]],
-  "עוד אין עובדים במשרד. עובדים נוספים דרך ה-API או בהעלאת קובץ אקסל.");
+  "עוד אין עובדים במשרד. אפשר להוסיף עובד בטופס שלמעלה.", undefined, addEmpForm());
 
 /* ---------- מסמכים לאישור ---------- */
 const KIND = { form101: "טופס 101", form106: "טופס 106", guideline: "הנחיה חדשה" };
@@ -435,7 +500,7 @@ const auditView = () => listView("audit", "יומן פעולות", "/audit-log",
 /* ---------- ניתוב ---------- */
 function render(view) {
   state.view = view;
-  const views = { login: () => loginView(), chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
+  const views = { login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
