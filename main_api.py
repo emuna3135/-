@@ -12,6 +12,7 @@ import card
 import payslip
 import templating
 import termination
+import attendance_pdf
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import authpolicy
 import proposals
@@ -1566,3 +1567,38 @@ async def upload_excel_card(
           f"rows={len(rows)} ok={len(results)} errors={len(errors)}")
     db.commit()
     return {"processed": len(results), "errors": errors, "paystubs": results}
+
+
+@app.post("/companies/{company_id}/parse-hours-pdf")
+async def parse_hours_pdf(
+    company_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    קריאת דוח שעות (כרטיס עובד, PDF) לתצוגה מקדימה בלבד: אינה מחשבת שכר ואינה שומרת דבר.
+    מחזירה ימים, שעות לפי עמודות, סיכום, ואימות מול שורת הסיכום של הדוח. אזהרות = דברים שלא נקלטו ודורשים בדיקה.
+    """
+    require_company(company_id, user, db, "write")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "הקובץ גדול מדי (מעל 5MB)")
+    if not (file.filename or "").lower().endswith(".pdf"):
+        raise HTTPException(400, "יש להעלות קובץ PDF")
+    try:
+        result = attendance_pdf.parse_pdf(content)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception:
+        raise HTTPException(400, "לא ניתן לקרוא את ה-PDF")
+    emp = None
+    if result.get("id_number"):
+        emp = db.query(Employee).filter(Employee.company_id == company_id,
+                                        Employee.id_hash == emp_key(company_id, result["id_number"])).first()
+    result["employee_found"] = bool(emp)
+    result["employee_id"] = emp.id if emp else None
+    result["id_number"] = None            # ת.ז לא מוחזרת ללקוח אחרי ההתאמה
+    audit(db, user.id, company_id, "parse_hours_pdf", "file", None, f"warnings={len(result['warnings'])}")
+    db.commit()
+    return result
