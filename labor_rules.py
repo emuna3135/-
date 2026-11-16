@@ -318,7 +318,7 @@ def hourly_pay(hourly_rate, shifts, break_hours, daily_threshold=DAILY_OT_THRESH
     pay = net_total * rate + D("0.25") * out["hours_125"] * rate + D("0.5") * d150 * rate
     defaults = (daily_threshold, weekly_threshold) == (DAILY_OT_THRESHOLD, WEEKLY_THRESHOLD)
     out.update(pay=pay, pay_shekel=r0(pay), status=MANUAL if defaults else _status("hours_law"),
-               note=f"הפסקה {brk} שעות ליום; ספים {daily_threshold}/{weekly_threshold}" + ("; הסף היומי לא הוכרע ממקור רשמי (8/8.6/9): יש להזין סף לפי ההסדר" if defaults else ""))
+               note=f"הפסקה {brk} שעות ליום; ספים {daily_threshold}/{weekly_threshold}" + ("; הסף היומי לא הוכרע בנוסח רשמי: צו קיצור שבוע העבודה 2018 (gov.il) קובע 42 שעות שבועיות ויום מקוצר ואינו קובע שעות יומיות; בחינת בודק שכר מוסמך של משרד העבודה (gov.il) מניחה 8.6 שעות בימים א-ד ו-7.6 ביום המקוצר; חוק שעות עבודה ומנוחה §2: 8. יש להזין סף ויום מקוצר לפי ההסדר" if defaults else ""))
     return out
 
 
