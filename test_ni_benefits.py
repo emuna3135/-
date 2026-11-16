@@ -257,3 +257,17 @@ class OfficialStatuses(unittest.TestCase):
         self.assertEqual(nb.reserve_full_month(2026, 100000)["value"], D("51910.00"))
         self.assertEqual(nb.reserve_full_month(2025, 100000)["value"], D("50695.00"))
         self.assertEqual(nb.reserve_via_employer("daily", 75)["status"], e.BY_LAW)
+
+
+class ParamsStatus(unittest.TestCase):
+    def test_2026_up_to_date(self):
+        import params
+        s = params.params_status(2026)
+        self.assertTrue(s["up_to_date"])
+        self.assertIn("2026", s["label"])
+
+    def test_future_year_requires_manual(self):
+        import params
+        s = params.params_status(2027)
+        self.assertFalse(s["up_to_date"])
+        self.assertTrue(all(r["status"] == e.MANUAL for r in s["params"]))

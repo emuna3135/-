@@ -612,6 +612,13 @@ def root():
     return {"status": "online", "service": "AI Payroll API"}
 
 
+@app.get("/params-status")
+def params_status_endpoint():
+    """סטטוס חלק הפרמטרים המשתנים לפי שנה (מעודכן ל-2026 / דרושה התערבות ידנית)."""
+    import params
+    return params.params_status()
+
+
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
     try:

@@ -44,3 +44,28 @@ def param(name, year):
         return item(None, MANUAL, f"פרמטר {name} לא מוגדר לשנת {year}")
     value, source, status = row
     return item(value, status, f"מקור: {source}")
+
+
+SYSTEM_YEAR = 2026   # שנת המערכת: ערכים משתנים חייבים להיות מעודכנים לשנה זו
+
+
+def params_status(system_year=SYSTEM_YEAR):
+    """
+    חלק משתנה (ערכים שמתעדכנים כל שנה): מדווח לכל פרמטר אם יש ערך רשמי לשנת המערכת.
+    חסר ערך לשנה -> דרושה התערבות ידנית (המערכת לא מעתיקה משנה קודמת). אין עדכון אוטומטי שמחליף ערכים בלי אישור אנושי.
+    """
+    rows, missing = [], []
+    for name, years in PARAMS.items():
+        row = years.get(system_year)
+        if row is None:
+            missing.append(name)
+            rows.append({"name": name, "year": system_year, "value": None, "source": None, "status": MANUAL,
+                         "note": "אין ערך לשנה זו: נדרשת התערבות ידנית"})
+        else:
+            value, source, status = row
+            rows.append({"name": name, "year": system_year, "value": str(value), "source": source, "status": status,
+                         "note": ""})
+    return {"system_year": system_year,
+            "up_to_date": not missing,
+            "label": (f"מעודכן ל-{system_year}" if not missing else f"לא מעודכן ל-{system_year}: נדרשת התערבות ידנית ({len(missing)} פרמטרים)"),
+            "missing": missing, "params": rows}
