@@ -2,7 +2,7 @@ import unittest
 from decimal import Decimal as D
 
 import labor_rules as lr
-from engine import COURSE, MANUAL
+from engine import MANUAL
 
 
 class Severance(unittest.TestCase):

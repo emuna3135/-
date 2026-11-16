@@ -7,7 +7,7 @@
 import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
-from engine import BY_LAW, COURSE, MANUAL, VERIFIED, item, r0, r2  # noqa: F401
+from engine import BY_LAW, MANUAL, VERIFIED, item, r0, r2  # noqa: F401
 
 D = Decimal
 

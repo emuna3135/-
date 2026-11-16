@@ -9,7 +9,7 @@
                  הבסיסי 10,139 לפי תקציב ב"ל 2025). נקראו 16.11.2026.
 """
 from decimal import Decimal as D
-from engine import BY_LAW, COURSE, MANUAL, item
+from engine import BY_LAW, MANUAL, item
 
 OFFICIAL_BTL = "אתר ביטוח לאומי"
 OFFICIAL_BTL_2025 = "ביטוח לאומי: דוח שנתי 2025 ואגרת למעסיק 01.2025"

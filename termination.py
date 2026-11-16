@@ -7,7 +7,7 @@ import datetime
 from decimal import Decimal
 
 import labor_rules as lr
-from engine import BY_LAW, COURSE, MANUAL, item, r2
+from engine import BY_LAW, MANUAL, item, r2
 
 D = Decimal
 

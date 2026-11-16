@@ -14,8 +14,6 @@ D = Decimal
 VERIFIED = "מאומת"
 BY_LAW = "לפי חוק - לא נבדק מול תלוש"
 MANUAL = "נדרש טיפול ידני"
-# כלל שנלמד מתרגילי קורס (עקבי בין תרגילים) ולא נבדק מול החוק/תלוש. נמוך מ-BY_LAW.
-COURSE = "לפי הקורס - לא נבדק מול החוק"
 ACCOUNTANT = "לפי רואת חשבון (אין מקור ראשוני)"
 
 
@@ -77,8 +75,8 @@ def ni_health(year, gross, month=None):
         status = BY_LAW
         note += f"שכר מעל 20,000: תקרה {cap} לפי ביטוח לאומי; שיעורים לפי הטבלה, לא נבדק מול תלוש"
     elif high_zone:
-        status = COURSE
-        note += "שכר מעל 20,000: תלוי בתקרה מהקורס, לא נבדק מול תלוש"
+        status = MANUAL
+        note += "שכר מעל 20,000: אין תקרה רשמית לשנה זו"
     elif g <= NI_VERIFIED_MAX:
         status = VERIFIED
     else:
@@ -451,8 +449,6 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
     statuses = {v["status"] for v in items.values()}
     if unresolved or MANUAL in statuses:
         overall = MANUAL
-    elif COURSE in statuses:
-        overall = COURSE
     elif BY_LAW in statuses:
         overall = BY_LAW
     elif ACCOUNTANT in statuses:
