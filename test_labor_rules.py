@@ -363,10 +363,12 @@ class AnnualLeaveFiveDay(unittest.TestCase):
         for y in (1, 2, 4, 5):
             r = lr.annual_leave_net_days_five_day_week(y)
             self.assertEqual((r["value"], r["status"]), (12, lr.BY_LAW), y)
-        for y, yr in ((6, 2026), (8, 2026), (1, 2015)):
-            r = lr.annual_leave_net_days_five_day_week(y, yr)
-            self.assertIsNone(r["value"])
-            self.assertEqual(r["status"], MANUAL)
+        for y in (6, 7, 8):
+            r = lr.annual_leave_net_days_five_day_week(y)
+            self.assertEqual((r["value"], r["status"]), (17, lr.BY_LAW), y)
+        r = lr.annual_leave_net_days_five_day_week(1, 2015)   # לפני 2017: ידני
+        self.assertIsNone(r["value"])
+        self.assertEqual(r["status"], MANUAL)
 
     def test_year9_is_23(self):
         import labor_rules as lr
