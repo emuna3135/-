@@ -322,3 +322,30 @@ class UnemploymentDuration(unittest.TestCase):
     def test_bad_input_manual(self):
         import labor_rules as lr
         self.assertEqual(lr.unemployment_max_days(None, 0)["status"], lr.MANUAL)
+
+
+class UnemploymentAmount(unittest.TestCase):
+    """שורות הטבלה ב-btl.gov.il sum.aspx (נקרא 16.11.2026); שכר חודשי -> 6 חודשים = x6, /150."""
+    def test_28_plus(self):
+        import labor_rules as lr
+        rows = {3000: "96.00", 4000: "128.00", 5000: "160.00", 6000: "182.25", 8000: "221.81", 10000: "257.81",
+                12000: "284.06", 20000: "380.06", 33000: "536.06"}
+        for m, v in rows.items():
+            r = lr.unemployment_daily_benefit(m * 6, 30)
+            self.assertEqual(str(r["value"]), v, m)
+            self.assertEqual(r["status"], lr.BY_LAW)
+
+    def test_under_28(self):
+        import labor_rules as lr
+        rows = {3000: "72.00", 6000: "137.50", 8000: "169.06", 10000: "197.06", 28000: "378.56"}
+        for m, v in rows.items():
+            self.assertEqual(str(lr.unemployment_daily_benefit(m * 6, 25)["value"]), v, m)
+
+    def test_caps(self):
+        import labor_rules as lr
+        self.assertEqual(str(lr.unemployment_daily_benefit(40000 * 6, 40)["value"]), "550.76")
+        self.assertEqual(str(lr.unemployment_daily_benefit(40000 * 6, 40, 126)["value"]), "367.17")
+
+    def test_bad_input(self):
+        import labor_rules as lr
+        self.assertIsNone(lr.unemployment_daily_benefit(-1, 30)["value"])
