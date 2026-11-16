@@ -110,6 +110,38 @@ PENSION_CREDIT_CAP_MONTHLY = D("679")
 LIFE_CREDIT_RATE = D("0.25")
 NO_COORDINATION_RATE = D("0.47")
 
+# ---------------------------------------------------------------------------
+# לוח ניכוי יומי לעובד יומי (הכנסה מיגיעה אישית), 2026. מקור ראשוני: לוח עזר רשות המסים 2026, פרק ב' עמ' 10
+# (אומת מול תמונת העמוד 16.11.2026): 280.40 / 402.40 / 760.00 / 1,004.00 / 1,867.60 ליום; = המדרגה החודשית / 25.
+# נדרש לפי טופס 101: שכר עבודה (פחות מ-18 יום בחודש, לפחות 8 שעות בשבוע) מנוכה לפי לוח יומי כשזו הכנסה יחידה.
+# לא מחובר ל-card.tax_mode (הזיכוי בנקודות לעובד יומי והעיגול היומי לא נבדקו מול לוח).
+DAILY_BRACKETS_2026 = [(D("280.40"), D("0.10")), (D("402.40"), D("0.14")), (D("760.00"), D("0.20")),
+                       (D("1004.00"), D("0.31")), (D("1867.60"), D("0.35")), (None, D("0.47"))]
+
+
+def daily_tax_before_credits(daily_income, year=2026):
+    if year != 2026:
+        return item(None, MANUAL, "לוח יומי מאומת רק ל-2026")
+    g = D(str(daily_income))
+    if g < 0:
+        return item(None, MANUAL, "הכנסה יומית שלילית")
+    tax, prev = D(0), D(0)
+    for upper, rate in DAILY_BRACKETS_2026:
+        top = g if upper is None else min(g, upper)
+        if top > prev:
+            tax += (top - prev) * rate
+        if upper is None or g <= upper:
+            break
+        prev = upper
+    return item(r2(tax), BY_LAW, "לוח יומי 2026 (לוח עזר רשות המסים, עמ' 10); לפני נקודות זיכוי; עיגול היומי לא נבדק")
+
+
+# תקרות לפי לוח עזר 2026 פרק ג' (עמ' 12, אומת מול תמונת העמוד): 3(ה3) תקרת הפרשות המעביד לקופת גמל לקצבה 34,423 לחודש;
+# תקרת סכום הפיצויים להפקדה 3(ה3): 45,600 לשנה; תקרת ניכוי הוצאות על מתנות 240 לאדם לשנה (עמ' 13-14).
+EMPLOYER_PENSION_CEILING_3E3_MONTHLY_2026 = D("34423")
+SEVERANCE_DEPOSIT_CEILING_3E3_ANNUAL_2026 = D("45600")
+GIFT_EXPENSE_CEILING_ANNUAL_2026 = D("240")
+
 
 def tax_before_credits(cum_taxable, months, year=2025):
     g, tax, prev = D(str(cum_taxable)), D(0), D(0)

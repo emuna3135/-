@@ -288,3 +288,27 @@ class IrregularPaymentSafety(unittest.TestCase):
     def test_regular_month_unchanged(self):
         r = e.compute_month(year=2025, month=7, gross="10000")
         self.assertNotEqual(r["overall_status"], e.MANUAL)
+
+
+class DailyTax2026(unittest.TestCase):
+    """לוח יומי 2026 מאומת מול לוח עזר רשות המסים (עמ' 10); מדרגה יומית = חודשית / 25."""
+    def test_thresholds_equal_monthly_div_25(self):
+        import engine as e
+        for (m, _), (d, _) in zip(e.BRACKETS[2026][:5], e.DAILY_BRACKETS_2026[:5]):
+            self.assertEqual(m / 25, d)
+
+    def test_values(self):
+        import engine as e
+        from decimal import Decimal as D
+        self.assertEqual(e.daily_tax_before_credits(280.40)["value"], D("28.04"))
+        self.assertEqual(e.daily_tax_before_credits(402.40)["value"], D("28.04") + D("17.08"))
+        self.assertEqual(e.daily_tax_before_credits(0)["value"], D("0.00"))
+
+    def test_other_year_manual(self):
+        import engine as e
+        self.assertEqual(e.daily_tax_before_credits(300, 2025)["status"], e.MANUAL)
+
+    def test_ceilings(self):
+        import engine as e
+        self.assertEqual(e.EMPLOYER_PENSION_CEILING_3E3_MONTHLY_2026, 34423)
+        self.assertEqual(e.SEVERANCE_DEPOSIT_CEILING_3E3_ANNUAL_2026, 45600)
