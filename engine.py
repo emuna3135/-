@@ -347,22 +347,22 @@ RECUPERATION_DAY_2025 = D("418")
 RECUPERATION_LOW_SALARY_2025 = D("6150")
 
 
-# ימי הבראה לפי שנת ותק (מגזר פרטי). שנים 1-4, 11, 16 ו-21 נבדקו מול תרגילים (5, 6, 6, 7, 8, 9, 10); השאר מהצו, לא נבדקו מול תרגיל.
+# ימי הבראה לפי שנת ותק (מגזר פרטי), לפי "לוח 1" במסמך מרכז המחקר והמידע של הכנסת (20.1.2025, מצטט את משרד העבודה): 1->5, 2-3->6, 4-10->7, 11-15->8, 16-19->9, 20+->10.
 def recuperation_days(seniority_year):
     y = int(seniority_year)
     if y < 1:
         return item(None, MANUAL, "שנת ותק לא תקינה")
     if y == 1:
-        return item(D(5), BY_LAW, "שנה 1: 5 ימים (תרגיל)")
+        return item(D(5), BY_LAW, "שנה 1: 5 ימים (לוח 1, מרכז המחקר והמידע של הכנסת)")
     if y in (2, 3):
-        return item(D(6), BY_LAW, f"שנה {y}: 6 ימים (תרגיל)")
+        return item(D(6), BY_LAW, f"שנה {y}: 6 ימים (לוח 1, מרכז המחקר והמידע של הכנסת)")
     if 4 <= y <= 10:
-        return item(D(7), BY_LAW, "שנים 4-10: 7 ימים (תרגיל: נבדקה שנה 4, הטווח מהסבר הפתרון)")
+        return item(D(7), BY_LAW, "שנים 4-10: 7 ימים")
     if 11 <= y <= 15:
-        return item(D(8), BY_LAW, "שנים 11-15: 8 ימים (תרגיל: נבדקה שנה 11, הטווח מהסבר הפתרון)")
+        return item(D(8), BY_LAW, "שנים 11-15: 8 ימים")
     if 16 <= y <= 19:
-        return item(D(9), BY_LAW, "שנים 16-19: 9 ימים (תרגיל: נבדקה שנה 16, הטווח מהסבר הפתרון)")
-    return item(D(10), BY_LAW, "משנה 20 ואילך: 10 ימים (תרגיל: נבדקה שנה 21, הטווח מהסבר הפתרון)")
+        return item(D(9), BY_LAW, "שנים 16-19: 9 ימים")
+    return item(D(10), BY_LAW, "משנה 20 ואילך: 10 ימים")
 
 
 def recuperation_pay(year, entitled_days, job_fraction="1", period_fraction="1", reduced_partial=None):
