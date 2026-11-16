@@ -11,7 +11,7 @@ class Severance(unittest.TestCase):
         w = lr.severance_wage([("base", 6200), ("commissions_avg12", "2083.33"), ("car_maintenance", 900),
                                ("phone_upkeep", 150), ("one_time_bonus", 5000)])
         self.assertEqual(w["value"], D("8283.33"))
-        self.assertEqual(w["status"], MANUAL)
+        self.assertEqual(w["status"], lr.BY_LAW)   # תקנות 1 ו-9 (btl.gov.il)
 
     def test_unknown_component_is_manual(self):
         w = lr.severance_wage([("base", 6000), ("mystery_allowance", 300)])
@@ -217,9 +217,10 @@ class VerifiedStatuses(unittest.TestCase):
         self.assertEqual(lr.sick_pay(300, 3)["status"], lr.BY_LAW)
         self.assertEqual(lr.severance_pay(6000, 12)["status"], lr.BY_LAW)
 
-    def test_severance_wage_stays_course_with_conflict_recorded(self):
-        self.assertEqual(lr.severance_wage([("base", 6000)])["status"], MANUAL)
-        self.assertIn("severance_wage", lr.CONFLICTS)
+    def test_severance_wage_by_regulation(self):
+        self.assertEqual(lr.severance_wage([("base", 6000)])["status"], lr.BY_LAW)
+        self.assertEqual(lr.severance_wage([("base", 6000), ("fixed_premium", 500)])["status"], MANUAL)
+        self.assertIn("severance_wage", lr.SOURCES)
 
     def test_global_overtime_is_manual_not_guessed(self):
         r = lr.severance_wage([("base", 6000), ("global_overtime", 1000)])
