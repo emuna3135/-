@@ -1212,6 +1212,7 @@ class TerminationIn(BaseModel):
     end_date: datetime.date
     ended_by: str = Field(..., pattern="^(dismissed|resigned)$")
     section14: bool = False
+    section14_terms: Optional[dict] = Field(None, description="route(pension|insurance), deposit_rate, completion_rate, disability_insurance, agreement_ok, covered_fraction")
     severance_components: list = Field(default_factory=list, description="רשימת [סוג, סכום]; ראו labor_rules.severance_wage")
     unused_vacation_days: Optional[float] = Field(None, ge=0)
     vacation_day_value: Optional[float] = Field(None, ge=0)
@@ -1235,7 +1236,7 @@ def termination_settlement(company_id: str, employee_id: str, body: TerminationI
         mw = payslip.min_wage(body.end_date.year, body.end_date.month)   # שכר מינימום בחודש הסיום; None = לא מאומת
         r = termination.settlement(
             start_date=datetime.date.fromisoformat(str(d["start_date"])), end_date=body.end_date,
-            ended_by=body.ended_by, severance_components=comps, section14=body.section14,
+            ended_by=body.ended_by, severance_components=comps, section14=body.section14, section14_terms=body.section14_terms,
             unused_vacation_days=body.unused_vacation_days, vacation_day_value=body.vacation_day_value,
             notice_days_unworked=body.notice_days_unworked, notice_day_value=body.notice_day_value,
             min_wage_monthly=(mw[0] if mw else None), job_scope=body.job_scope,

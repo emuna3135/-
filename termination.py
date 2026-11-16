@@ -26,7 +26,7 @@ def full_months_of_service(start, end):
 def settlement(*, start_date, end_date, ended_by, severance_components, section14=False,
                unused_vacation_days=None, vacation_day_value=None,
                notice_days_unworked=None, notice_day_value=None, pay_type="monthly",
-               min_wage_monthly=None, job_scope=None, quarter_wage=None):
+               min_wage_monthly=None, job_scope=None, quarter_wage=None, section14_terms=None):
     """
     ended_by: "dismissed" | "resigned".
     section14: האם יש הסדר סעיף 14 (תשלומי המעסיק לקרן במקום פיצויים). אם כן הפיצויים משולמים מהקרן, והמעסיק חב רק
@@ -34,6 +34,8 @@ def settlement(*, start_date, end_date, ended_by, severance_components, section1
     unused_vacation_days / vacation_day_value: חשב השכר מזין (שווי יום חופשה לא הוכרע במערכת).
     notice_days_unworked / notice_day_value: ימי הודעה מוקדמת שלא ניתנו בפועל והשווי היומי (מוזנים).
     quarter_wage: לעובד בשכר - שכר רבע השנה לפני סיום (או רבע העבודה המלאה ביותר ב-12 חודשים לפי בחירת העובד) לחישוב שווי יום חופשה.
+    section14_terms: dict לפי האישור הכללי (route, deposit_rate, completion_rate, disability_insurance, agreement_ok, covered_fraction=1 = חלק
+      מהתקופה/השכר שהופקד עליו במלואו); חישוב: פיצויים מלאים x (1 - חלק מוחלף x covered_fraction) = השלמת מעסיק. ללא פרטים -> ידני.
     min_wage_monthly / job_scope: רצפת שכר מינימום לפי היקף משרה (§13ב לחוק פיצויי פיטורים); חסרים -> הפיצויים ידניים.
     מחזיר {"months": int, "items": {...}, "overall": סטטוס, "notes": [...]}
     """
@@ -46,8 +48,21 @@ def settlement(*, start_date, end_date, ended_by, severance_components, section1
     items["severance_wage"] = wage
     if ended_by == "resigned":
         items["severance"] = item(None, MANUAL, "התפטרות: זכאות לפיצויים רק בחריגים (§6-§11); לא מחושב אוטומטית")
+    elif section14 and section14_terms and wage["value"] is not None:
+        full = lr.severance_pay(wage["value"], months, pay_type, min_wage_monthly, job_scope)
+        rep = lr.section14_replacement(section14_terms.get("route"), section14_terms.get("deposit_rate", 0),
+                                       section14_terms.get("completion_rate", 0),
+                                       section14_terms.get("disability_insurance", False),
+                                       section14_terms.get("agreement_ok", False))
+        if full["value"] is None or rep["value"] is None:
+            items["severance"] = item(None, MANUAL, "סעיף 14: " + (rep["note"] if rep["value"] is None else full["note"]))
+        else:
+            cov = Decimal(str(section14_terms.get("covered_fraction", 1)))
+            top_up = r2(D(str(full["value"])) * (1 - rep["value"] * cov))
+            st = rep["status"] if full["status"] == rep["status"] else MANUAL
+            items["severance"] = item(top_up, st, f"השלמת מעסיק אחרי סעיף 14: פיצויים מלאים {full['value']} x (1 - {rep['value']} x {cov}); " + rep["note"])
     elif section14:
-        items["severance"] = item(None, MANUAL, "הסדר סעיף 14: הפיצויים משולמים מהקרן; השלמת מעסיק לא ממומשת")
+        items["severance"] = item(None, MANUAL, "הסדר סעיף 14: הפיצויים משולמים מהקרן; להשלמה יש להעביר section14_terms")
     elif wage["value"] is None:
         items["severance"] = item(None, MANUAL, "השכר הקובע לא הוכרע: " + wage["note"])
     else:

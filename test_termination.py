@@ -96,3 +96,33 @@ class VacationWageWorker(unittest.TestCase):
         self.assertEqual(r["items"]["vacation_redemption"]["status"], BY_LAW)
         r = t.settlement(ended_by="resigned", unused_vacation_days=3, quarter_wage=9000, **b)   # חודשי: לא נגזר
         self.assertEqual(r["items"]["vacation_redemption"]["status"], MANUAL)
+
+
+class Section14Approval(unittest.TestCase):
+    base = dict(start_date=d(2020, 1, 1), end_date=d(2024, 12, 31), severance_components=[("base", 10000)])
+
+    def _s(self, **terms):
+        t_ = dict(route="pension", deposit_rate=14.33, completion_rate=0, disability_insurance=False, agreement_ok=True)
+        t_.update(terms)
+        return t.settlement(ended_by="dismissed", section14=True, section14_terms=t_, min_wage_monthly=6000, job_scope=1, **self.base)
+
+    def test_full_replacement_no_topup(self):
+        r = self._s()
+        self.assertEqual(r["items"]["severance"]["value"], D("0.00"))
+
+    def test_12_percent_only_replaces_72(self):
+        r = self._s(deposit_rate=12)        # 5 שנים x 10000 = 50000; נשאר 28%
+        self.assertEqual(r["items"]["severance"]["value"], D("14000.00"))
+
+    def test_12_plus_233_full(self):
+        self.assertEqual(self._s(deposit_rate=12, completion_rate=2.33)["items"]["severance"]["value"], D("0.00"))
+
+    def test_insurance_11_with_disability(self):
+        r = self._s(route="insurance", deposit_rate=11, disability_insurance=True)
+        self.assertEqual(r["items"]["severance"]["value"], D("14000.00"))
+
+    def test_no_written_agreement_manual(self):
+        self.assertEqual(self._s(agreement_ok=False)["items"]["severance"]["status"], MANUAL)
+
+    def test_below_thresholds_full_severance_owed(self):
+        self.assertEqual(self._s(deposit_rate=10)["items"]["severance"]["value"], D("50000.00"))
