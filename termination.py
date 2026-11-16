@@ -26,13 +26,14 @@ def full_months_of_service(start, end):
 def settlement(*, start_date, end_date, ended_by, severance_components, section14=False,
                unused_vacation_days=None, vacation_day_value=None,
                notice_days_unworked=None, notice_day_value=None, pay_type="monthly",
-               min_wage_monthly=None, job_scope=None):
+               min_wage_monthly=None, job_scope=None, quarter_wage=None):
     """
     ended_by: "dismissed" | "resigned".
     section14: האם יש הסדר סעיף 14 (תשלומי המעסיק לקרן במקום פיצויים). אם כן הפיצויים משולמים מהקרן, והמעסיק חב רק
       בהשלמה אם ההפרשות נמוכות מהשכר הקובע; חישוב ההשלמה אינו ממומש -> ידני.
     unused_vacation_days / vacation_day_value: חשב השכר מזין (שווי יום חופשה לא הוכרע במערכת).
     notice_days_unworked / notice_day_value: ימי הודעה מוקדמת שלא ניתנו בפועל והשווי היומי (מוזנים).
+    quarter_wage: לעובד בשכר - שכר רבע השנה לפני סיום (או רבע העבודה המלאה ביותר ב-12 חודשים לפי בחירת העובד) לחישוב שווי יום חופשה.
     min_wage_monthly / job_scope: רצפת שכר מינימום לפי היקף משרה (§13ב לחוק פיצויי פיטורים); חסרים -> הפיצויים ידניים.
     מחזיר {"months": int, "items": {...}, "overall": סטטוס, "notes": [...]}
     """
@@ -52,7 +53,16 @@ def settlement(*, start_date, end_date, ended_by, severance_components, section1
     else:
         items["severance"] = lr.severance_pay(wage["value"], months, pay_type, min_wage_monthly, job_scope)
 
-    if unused_vacation_days is None or vacation_day_value is None:
+    if vacation_day_value is None and quarter_wage is not None and pay_type != "monthly":
+        dv = lr.vacation_day_value_wage_worker(quarter_wage)   # §10(ב)(2): שכר רבעון / 90
+        vacation_day_value = dv["value"]
+        notes.append("שווי יום חופשה נגזר משכר רבע השנה (§10(ב)(2) לחוק חופשה שנתית)")
+        if unused_vacation_days is not None:
+            items["vacation_redemption"] = item(r2(D(str(unused_vacation_days)) * D(str(vacation_day_value))), dv["status"],
+                                                "פדיון = ימים x (שכר רבע שנה / 90), §10(ב)(2), §13")
+    if "vacation_redemption" in items:
+        pass
+    elif unused_vacation_days is None or vacation_day_value is None:
         items["vacation_redemption"] = item(None, MANUAL, "יש להזין ימי חופשה שלא נוצלו ושווי יום (§13 לחוק חופשה שנתית)")
     else:
         items["vacation_redemption"] = item(r2(D(str(unused_vacation_days)) * D(str(vacation_day_value))),

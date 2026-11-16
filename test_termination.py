@@ -80,3 +80,19 @@ class Settlement(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VacationWageWorker(unittest.TestCase):
+    def test_day_value_quarter_over_90(self):
+        import labor_rules as lr
+        r = lr.vacation_day_value_wage_worker(9000)
+        self.assertEqual(r["value"], D(100))
+        self.assertEqual(r["status"], BY_LAW)
+
+    def test_termination_wage_worker_redemption(self):
+        b = dict(start_date=d(2024, 1, 1), end_date=d(2026, 6, 30), severance_components=[("base", 6000)])
+        r = t.settlement(ended_by="resigned", pay_type="daily_hourly", unused_vacation_days=3, quarter_wage=9000, **b)
+        self.assertEqual(r["items"]["vacation_redemption"]["value"], D(300))
+        self.assertEqual(r["items"]["vacation_redemption"]["status"], BY_LAW)
+        r = t.settlement(ended_by="resigned", unused_vacation_days=3, quarter_wage=9000, **b)   # חודשי: לא נגזר
+        self.assertEqual(r["items"]["vacation_redemption"]["status"], MANUAL)

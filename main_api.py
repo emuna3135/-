@@ -1218,6 +1218,8 @@ class TerminationIn(BaseModel):
     notice_days_unworked: Optional[float] = Field(None, ge=0)
     notice_day_value: Optional[float] = Field(None, ge=0)
     job_scope: Optional[float] = Field(None, gt=0, le=1, description="היקף משרה (1 = מלאה) לרצפת שכר מינימום §13ב")
+    pay_type: str = Field("monthly", pattern="^(monthly|daily_hourly)$")
+    quarter_wage: Optional[float] = Field(None, ge=0, description="עובד בשכר: שכר רבע השנה לחישוב שווי יום חופשה (§10(ב)(2))")
 
 
 @app.post("/companies/{company_id}/employees/{employee_id}/termination")
@@ -1236,7 +1238,8 @@ def termination_settlement(company_id: str, employee_id: str, body: TerminationI
             ended_by=body.ended_by, severance_components=comps, section14=body.section14,
             unused_vacation_days=body.unused_vacation_days, vacation_day_value=body.vacation_day_value,
             notice_days_unworked=body.notice_days_unworked, notice_day_value=body.notice_day_value,
-            min_wage_monthly=(mw[0] if mw else None), job_scope=body.job_scope)
+            min_wage_monthly=(mw[0] if mw else None), job_scope=body.job_scope,
+            pay_type=body.pay_type, quarter_wage=body.quarter_wage)
     except (ValueError, TypeError) as e:
         raise HTTPException(422, str(e))
     audit(db, user.id, company_id, "termination_calc", "employee", emp.id, f"end={body.end_date}")
