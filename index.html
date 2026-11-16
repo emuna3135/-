@@ -155,12 +155,11 @@ const fmt = (v) => v == null ? null : Number(v).toLocaleString("he-IL", { minimu
 
 /* ---------- סטטוסים: ארבעה, בלי לנחש ---------- */
 function statusInfo(s) {
+  // שלוש תוויות בלבד: מאושר לפי החוק / מאושר ע"י רואה חשבון / מצריך בדיקה ידנית. כל שאר המצבים (כולל "לפי הקורס") = בדיקה ידנית
   s = String(s || "");
-  if (s.startsWith("מאומת")) return { cls: "s-ok", text: "מאומת (מקור רשמי)" };
-  if (s.startsWith("לפי רואת חשבון")) return { cls: "s-law", text: "לפי רואת חשבון" };
-  if (s.startsWith("לפי חוק")) return { cls: "s-law", text: "לפי חוק" };
-  if (s.startsWith("לפי הקורס")) return { cls: "s-warn", text: "טרם נבדק מול החוק" };
-  return { cls: "s-bad", text: "נדרש טיפול ידני" };
+  if (s.startsWith("מאומת") || s.startsWith("לפי חוק")) return { cls: "s-ok", text: "מאושר לפי החוק" };
+  if (s.startsWith("לפי רואת חשבון")) return { cls: "s-law", text: "מאושר ע\"י רואה חשבון" };
+  return { cls: "s-bad", text: "מצריך בדיקה ידנית" };
 }
 const LABELS = { income_tax: "מס הכנסה", national_insurance: "ביטוח לאומי", health: "מס בריאות",
   pension_employee: "פנסיה (עובד)", study_fund_employee: "קרן השתלמות (עובד)", life_insurance: "ביטוח חיים",
@@ -393,7 +392,7 @@ function calcView() {
 }
 function legend() {
   const it = (cls, t) => h("span", { class: cls }, h("i", { class: "dot" }), t);
-  return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "מאומת (מקור רשמי)"), it("s-law", "לפי חוק / לפי רואת חשבון"), it("s-warn", "טרם נבדק מול החוק"), it("s-bad", "נדרש טיפול ידני"));
+  return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "מאושר לפי החוק"), it("s-law", "מאושר ע\"י רואה חשבון"), it("s-bad", "מצריך בדיקה ידנית"));
 }
 function slipView(r) {
   const rows = Object.entries(r.items || {}).map(([k, v]) => {
