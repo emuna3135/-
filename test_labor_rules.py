@@ -349,3 +349,13 @@ class UnemploymentAmount(unittest.TestCase):
     def test_bad_input(self):
         import labor_rules as lr
         self.assertIsNone(lr.unemployment_daily_benefit(-1, 30)["value"])
+
+
+class AnnualLeaveFiveDay(unittest.TestCase):
+    def test_table(self):
+        import labor_rules as lr
+        for y, d in [(1, 12), (2, 12), (4, 12), (5, 12), (6, 17), (8, 17), (9, 23), (15, 23)]:
+            self.assertEqual(lr.annual_leave_net_days_five_day_week(y)["value"], d, y)
+        self.assertEqual(lr.annual_leave_net_days_five_day_week(1, 2015)["value"], 10)
+        self.assertEqual(lr.annual_leave_net_days_five_day_week(3, 2016)["value"], 11)
+        self.assertEqual(lr.annual_leave_net_days_five_day_week(5, 2016)["value"], 12)
