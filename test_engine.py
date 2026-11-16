@@ -333,3 +333,24 @@ class IrregularSalaryReg4(unittest.TestCase):
     def test_negative_manual(self):
         import engine as e
         self.assertEqual(e.irregular_salary_tax(10000, -1, 2.25)["status"], e.MANUAL)
+
+
+class DailyWageRegulation(unittest.TestCase):
+    """תוספת ב' ותקנה 4(ב) לתקנות ניכוי ממשכורת (btl.gov.il/Laws1/02_0103_100076.pdf)."""
+
+    def test_daily_equals_monthly_over_25(self):
+        # יומי x300 = חודשי x12 -> הניכוי היומי = חודשי / 25 (כאן ללא שבר)
+        self.assertEqual(e.daily_wage_deduction(300, 2.25)["value"], 9)
+        self.assertEqual(e.monthly_deduction_by_regulation(D("7500"), 2.25), 225)
+
+    def test_no_negative(self):
+        self.assertEqual(e.daily_wage_deduction(50, 2.25)["value"], 0)
+
+    def test_irregular_daily_is_difference_times_300(self):
+        r = e.irregular_daily_tax(300, 3000, 2.25)
+        self.assertEqual(r["value"], 300)
+        self.assertEqual(r["status"], e.BY_LAW)
+
+    def test_reg6_rates(self):
+        self.assertEqual(e.REG6_SPECIAL_RATES["shabbaton"], D("0.35"))
+        self.assertEqual(e.REG6_SPECIAL_RATES["gemel_leave_sick_holiday"], D("0.25"))
