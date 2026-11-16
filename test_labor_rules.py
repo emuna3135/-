@@ -302,3 +302,23 @@ class Youth(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnemploymentDuration(unittest.TestCase):
+    """משך דמי אבטלה לפי btl.gov.il tkufat_zakaut.aspx (נקרא 16.11.2026)."""
+    def test_table(self):
+        import labor_rules as lr
+        cases = [(24, 0, 50), (24, 3, 138), (26, 2, 67), (30, 1, 100), (34, 3, 138), (35, 2, 138), (35, 3, 175), (44, 0, 138), (45, 0, 175), (60, 5, 175)]
+        for age, dep, days in cases:
+            r = lr.unemployment_max_days(age, dep)
+            self.assertEqual(r["value"], days, (age, dep))
+            self.assertEqual(r["status"], lr.BY_LAW)
+
+    def test_women_57_67(self):
+        import labor_rules as lr
+        self.assertEqual(lr.unemployment_max_days(60, 0, True)["value"], 300)
+        self.assertEqual(lr.unemployment_max_days(67, 0, True)["value"], 175)
+
+    def test_bad_input_manual(self):
+        import labor_rules as lr
+        self.assertEqual(lr.unemployment_max_days(None, 0)["status"], lr.MANUAL)
