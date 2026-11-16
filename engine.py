@@ -382,7 +382,7 @@ def recuperation_pay(year, entitled_days, job_fraction="1", period_fraction="1",
     frac = D(str(job_fraction)) * D(str(period_fraction))
     gross = D(str(entitled_days)) * RECUPERATION_DAY_2025 * frac
     cut = RECUPERATION_DAY_2025 * (D("0.5") if reduced_partial else D(1)) * frac
-    return item(r2(max(gross - cut, D(0))), BY_LAW, "ימים x 418 x חלקיות, פחות הפחתת 2025")
+    return item(r2(max(gross - cut, D(0))), MANUAL, "מקור משני בלבד (כל זכות); ימים x 418 x חלקיות, פחות הפחתת 2025")
 
 
 # ---------------------------------------------------------------------------

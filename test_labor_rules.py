@@ -132,8 +132,9 @@ class Recreation(unittest.TestCase):
         self.assertEqual(lr.recreation_reduction_type(3075, "0.5"), "partial")
         self.assertEqual(lr.recreation_reduction_type(3076, "0.5"), "full")
 
-    def test_status_by_law_after_days_table_verified(self):
-        self.assertEqual(lr.recreation_pay_2025(1)["status"], lr.BY_LAW)
+    def test_recreation_secondary_source_is_manual(self):
+        # מקור משני (כל זכות) אינו מספיק ל"לפי החוק"
+        self.assertEqual(lr.recreation_pay_2025(1)["status"], MANUAL)
         self.assertIn("recreation", lr.SOURCES)
 
     def test_bad_reduction(self):

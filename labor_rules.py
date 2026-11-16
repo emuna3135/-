@@ -47,7 +47,9 @@ CONFLICTS = {
 
 
 def _status(topic):
-    return BY_LAW if topic in SOURCES else MANUAL
+    """BY_LAW רק אם יש מקור מסוג רשמי/רשמי-מסחרי (נוסח החוק). מקור משני (כל זכות, אתרים מקצועיים) -> ידני."""
+    src = SOURCES.get(topic)
+    return BY_LAW if src and src[0] in ("רשמי", "רשמי-מסחרי") else MANUAL
 
 
 def _floor(x):

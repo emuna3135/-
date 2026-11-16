@@ -191,8 +191,8 @@ def spread_threshold(year, month):
     mw = min_wage_monthly(year, month)
     if mw is None:
         return _manual("שכר מינימום לחודש הזה לא הוזן: הרף לא ידוע")
-    return item(r2(mw * SPREAD_MIN_WAGE_PCT), "לפי חוק - לא נבדק מול תלוש",
-                f"25% x שכר מינימום {mw}; חודש התשלום קובע (Q25 פתוחה); שכר המינימום מקור משני")
+    return item(r2(mw * SPREAD_MIN_WAGE_PCT), MANUAL,
+                f"25% x שכר מינימום {mw}; חודש התשלום קובע (Q25 פתוחה); שכר המינימום ממקור משני/דוגמה בלבד - לא נקרא מקור ראשוני")
 
 
 BELOW_THRESHOLD_RULES = ("add_in_full", "ignore")
