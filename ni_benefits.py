@@ -219,9 +219,16 @@ def regular_monthly_wage_335(regular_wage, extra_payments, start_date, pay_year,
         return _manual("חודש התלוש לפני תחילת העבודה")
     divisor = min(12, months)
 
+    official = False
+    if threshold is None and total > 0:
+        th = spread_threshold(pay_year, pay_month)      # 25% משכר המינימום בחודש התשלום (ביטוח לאומי, אגרת למעסיק)
+        if th["value"] is not None:
+            threshold, official = th["value"], True
     if total == 0:
         spread = False
     elif threshold is not None:
+        if official and total == _d(threshold):
+            return _manual("התשלום הנוסף שווה בדיוק לרף 25%: הנוסח הרשמי מבחין 'נמוך מ' ו'גבוה מ' ולא קובע לשוויון; יש להכריע ידנית")
         spread = total > _d(threshold)
     elif total <= NOT_SPREAD_MAX_TOTAL and total * NOT_SPREAD_PCT[1] <= NOT_SPREAD_PCT[0] * wage:
         spread = False
@@ -236,10 +243,12 @@ def regular_monthly_wage_335(regular_wage, extra_payments, start_date, pay_year,
         value = wage + total     # תשלום שלא עולה על הרף: לא נפרס, מתווסף במלואו
     else:
         value = wage             # הכלל הישן: התעלמות מהתשלום שמתחת לרף
-    res = item(r2(value), MANUAL,
+    ok_official = official and below_threshold_rule == "add_in_full"
+    res = item(r2(value), BY_LAW if ok_official else MANUAL,
                (f"נפרס על {divisor} חודשים" if spread else
                 ("לא נפרס (לא עולה על הרף), נוסף במלואו" if below_threshold_rule == "add_in_full"
                  else "לא נפרס (לא עולה על הרף), לא נוסף (כלל ישן)")) +
-               "; הרף עצמו לא ידוע, הוכרע לפי תרגילי הקורס בלבד")
+               ("; לפי תקנה 5 לתקנות הביטוח הלאומי (תשלום ופטור): רף 25% משכר המינימום; מעל הרף - מחולק ב-12 (או במספר חודשי העבודה אם פחות מ-12) ומצורף לחודש התשלום ו-11 הקודמים; מתחת - מצורף במלואו לחודש התשלום (ביטוח לאומי, חוזר קיזוז יום הבראה 2024 ואגרת למעסיק 2026)"
+                if ok_official else "; הרף עצמו הוכרע לפי תרגילי הקורס בלבד"))
     res["divisor"] = divisor if spread else None
     return res

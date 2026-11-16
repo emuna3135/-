@@ -144,13 +144,13 @@ class RegularWage335(unittest.TestCase):
             with self.subTest(start=str(start), month=f"{m}/{y}"):
                 r = nb.regular_monthly_wage_335(wage, extras, start, y, m)
                 self.assertEqual(r["value"], D(expected))
-                self.assertEqual(r["status"], e.MANUAL)
+                self.assertEqual(r["status"], e.BY_LAW)   # רף 25% משכר המינימום: ביטוח לאומי (רשמי)
 
     def test_below_threshold_added_in_full(self):
         # הגרסה המתוקנת של הקורס: תשלום שלא עולה על הרף לא נפרס ומתווסף במלואו
         s0 = date(2025, 1, 1)
         r = nb.regular_monthly_wage_335(21900, [900, 500], s0, 2025, 7)
-        self.assertEqual((r["value"], r["status"]), (D("23300.00"), e.MANUAL))
+        self.assertEqual((r["value"], r["status"]), (D("23300.00"), e.BY_LAW))
         r = nb.regular_monthly_wage_335(17500, [1560], s0, 2025, 5)
         self.assertEqual(r["value"], D("19060.00"))
 
@@ -171,9 +171,14 @@ class RegularWage335(unittest.TestCase):
         r = nb.regular_monthly_wage_335(18600, [1200, 600], date(2024, 12, 1), 2025, 8)
         self.assertEqual(r["value"], D("18800.00"))
 
-    def test_undecided_threshold_is_manual(self):
-        # 1,700 על שכר 10,000: בין הערכים שנבדקו, ושתי ההשערות על הרף נותנות תשובות שונות
+    def test_official_threshold_decides(self):
+        # רף 25% משכר המינימום 6,247.67 = 1,561.92 (יוני 2025): 1,700 עולה עליו -> נפרס על 12
         r = nb.regular_monthly_wage_335(10000, [1700], self.D1, 2025, 6)
+        self.assertEqual(r["value"], D("10141.67")); self.assertEqual(r["status"], e.BY_LAW)
+
+    def test_equal_to_threshold_is_manual(self):
+        # הנוסח הרשמי: 'נמוך מ' / 'גבוה מ' - שוויון לא מוכרע
+        r = nb.regular_monthly_wage_335(10000, [1561.92], self.D1, 2025, 6)
         self.assertIsNone(r["value"]); self.assertEqual(r["status"], e.MANUAL)
 
     def test_explicit_threshold_overrides(self):
