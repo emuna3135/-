@@ -19,7 +19,10 @@ class Severance(unittest.TestCase):
         self.assertEqual(w["status"], MANUAL)
 
     def test_pay_is_wage_times_months_over_12(self):
-        self.assertEqual(lr.severance_pay(6550, 36)["value"], D(19650))   # תרגיל קרן
+        self.assertEqual(lr.severance_pay(6550, 36)["value"], D(19650))   # תרגיל קרן (ללא רצפה: MANUAL)
+        r = lr.severance_pay(4000, 12, min_wage_monthly="6443.85", job_scope=1)
+        self.assertEqual(r["value"], D("6443.85")); self.assertEqual(r["status"], lr.BY_LAW)
+        self.assertEqual(lr.severance_pay(3000, 12, min_wage_monthly="6443.85", job_scope="0.5")["value"], D("3221.925"))
         self.assertIsNone(lr.severance_pay(6550, 36.5)["value"])           # חודש חלקי לא נלמד
 
 
@@ -216,7 +219,8 @@ class VerifiedStatuses(unittest.TestCase):
 
     def test_sick_pay_and_severance_amount_by_law(self):
         self.assertEqual(lr.sick_pay(300, 3)["status"], lr.BY_LAW)
-        self.assertEqual(lr.severance_pay(6000, 12)["status"], lr.BY_LAW)
+        self.assertEqual(lr.severance_pay(6000, 12)["status"], lr.MANUAL)
+        self.assertEqual(lr.severance_pay(6000, 12, min_wage_monthly="6443.85", job_scope=1)["status"], lr.BY_LAW)
 
     def test_severance_wage_by_regulation(self):
         self.assertEqual(lr.severance_wage([("base", 6000)])["status"], lr.BY_LAW)

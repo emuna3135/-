@@ -3,7 +3,7 @@ import unittest
 from decimal import Decimal as D
 
 import termination as t
-from engine import MANUAL
+from engine import BY_LAW, MANUAL
 
 d = datetime.date
 
@@ -28,6 +28,14 @@ class Settlement(unittest.TestCase):
         r = t.settlement(ended_by="dismissed", **self.base)
         self.assertEqual(r["months"], 36)
         self.assertEqual(r["items"]["severance"]["value"], D(19650))
+
+    def test_severance_floor_min_wage_13b(self):
+        b = dict(start_date=d(2024, 1, 1), end_date=d(2026, 12, 31), severance_components=[("base", 5000)])
+        r = t.settlement(ended_by="dismissed", min_wage_monthly="6443.85", job_scope=1, **b)
+        self.assertEqual(r["items"]["severance"]["value"], D("6443.85") * 3)   # רצפה 13ב
+        self.assertEqual(r["items"]["severance"]["status"], BY_LAW)
+        r2_ = t.settlement(ended_by="dismissed", **b)   # בלי שכר מינימום -> ידני
+        self.assertEqual(r2_["items"]["severance"]["status"], MANUAL)
 
     def test_resigned_severance_manual(self):
         r = t.settlement(ended_by="resigned", **self.base)

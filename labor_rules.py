@@ -82,12 +82,14 @@ def severance_wage(components):
                 "שכר קובע לפי תקנה 1: יסוד + ותק/יוקר/משפחה (תוספת מחלקתית/מקצועית כיסוד); שכר לפי תוצרת/פדיון - ממוצע 12 חודשים (תקנה 9)")
 
 
-def severance_pay(determining_wage, full_months, pay_type="monthly"):
+def severance_pay(determining_wage, full_months, pay_type="monthly", min_wage_monthly=None, job_scope=None):
     """
     סעיף 12(א) (נוסח נבו נכון ל-30.01.2025): עובד במשכורת - שכר חודש לכל שנת עבודה, חלק משנה - יחסי.
     עובד בשכר (יומי/שעתי) - שכר שבועיים לכל שנת עבודה: חישוב "שכר שבועיים" לא הוגדר כאן -> ידני.
     סעיף 1(א): זכאות מלאה לאחר שנה רצופה (עונתי: שתי עונות); פחות משנה -> ידני (חריגים: §3, §6-§11).
-    סעיף 13ב: שכר קובע לא יפחת משכר המינימום לפי היקף המשרה - לא ממומש כאן (ראו DATA_LEDGER).
+    סעיף 13ב (נוסח מעודכן, נקרא מילה במילה): "לא יפחת שכר העבודה שיובא בחשבון לענין חישוב פיצויי פיטורים משיעור שכר המינימום ... לפי היקף המשרה".
+    ממומש כשמועברים min_wage_monthly (מהמקור הרשמי לתקופה, ראו payslip.min_wage) ו-job_scope (1 = משרה מלאה, 0.5 = חצי).
+    לא הועברו -> הרצפה לא נבדקה, והתוצאה MANUAL (לא מניחים שהשכר מעל המינימום).
     """
     if pay_type != "monthly":
         return item(None, MANUAL, "עובד בשכר: שכר שבועיים לכל שנת עבודה (§12(א)); שיטת חישוב שכר שבועיים לא הוגדרה")
@@ -95,8 +97,17 @@ def severance_pay(determining_wage, full_months, pay_type="monthly"):
         return item(None, MANUAL, "חודשים חלקיים לא נלמדו")
     if int(full_months) < 12:
         return item(None, MANUAL, "פחות משנת עבודה: זכאות רק בחריגים (§1(א), §3, §6-§11) - ידני")
-    return item(D(str(determining_wage)) * int(full_months) / 12, _status("severance_amount"),
-                "עובד במשכורת: שכר חודש לכל שנת עבודה (סעיף 12(א)); השכר הקובע עצמו - ראו severance_wage")
+    wage = D(str(determining_wage))
+    if min_wage_monthly is None or job_scope is None:
+        return item(wage * int(full_months) / 12, MANUAL,
+                    "עובד במשכורת: שכר חודש לכל שנת עבודה (§12(א)); רצפת שכר מינימום לפי היקף משרה (§13ב) לא נבדקה - חסרים שכר מינימום והיקף משרה")
+    floor = D(str(min_wage_monthly)) * D(str(job_scope))
+    note = ""
+    if wage < floor:
+        note = f" §13ב הופעל: השכר הקובע {wage} הועלה לרצפה {floor} (שכר מינימום {min_wage_monthly} x היקף {job_scope});"
+        wage = floor
+    return item(wage * int(full_months) / 12, _status("severance_amount"),
+                "עובד במשכורת: שכר חודש לכל שנת עבודה (סעיף 12(א));" + note + " השכר הקובע עצמו - ראו severance_wage")
 
 
 # ---------------------------------------------------------------------------

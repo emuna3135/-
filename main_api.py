@@ -1217,6 +1217,7 @@ class TerminationIn(BaseModel):
     vacation_day_value: Optional[float] = Field(None, ge=0)
     notice_days_unworked: Optional[float] = Field(None, ge=0)
     notice_day_value: Optional[float] = Field(None, ge=0)
+    job_scope: Optional[float] = Field(None, gt=0, le=1, description="היקף משרה (1 = מלאה) לרצפת שכר מינימום §13ב")
 
 
 @app.post("/companies/{company_id}/employees/{employee_id}/termination")
@@ -1229,11 +1230,13 @@ def termination_settlement(company_id: str, employee_id: str, body: TerminationI
         raise HTTPException(422, "חסר תאריך תחילת עבודה בכרטיס העובד")
     try:
         comps = [(str(k), v) for k, v in body.severance_components]
+        mw = payslip.min_wage(body.end_date.year, body.end_date.month)   # שכר מינימום בחודש הסיום; None = לא מאומת
         r = termination.settlement(
             start_date=datetime.date.fromisoformat(str(d["start_date"])), end_date=body.end_date,
             ended_by=body.ended_by, severance_components=comps, section14=body.section14,
             unused_vacation_days=body.unused_vacation_days, vacation_day_value=body.vacation_day_value,
-            notice_days_unworked=body.notice_days_unworked, notice_day_value=body.notice_day_value)
+            notice_days_unworked=body.notice_days_unworked, notice_day_value=body.notice_day_value,
+            min_wage_monthly=(mw[0] if mw else None), job_scope=body.job_scope)
     except (ValueError, TypeError) as e:
         raise HTTPException(422, str(e))
     audit(db, user.id, company_id, "termination_calc", "employee", emp.id, f"end={body.end_date}")

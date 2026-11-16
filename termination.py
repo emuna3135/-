@@ -25,13 +25,15 @@ def full_months_of_service(start, end):
 
 def settlement(*, start_date, end_date, ended_by, severance_components, section14=False,
                unused_vacation_days=None, vacation_day_value=None,
-               notice_days_unworked=None, notice_day_value=None, pay_type="monthly"):
+               notice_days_unworked=None, notice_day_value=None, pay_type="monthly",
+               min_wage_monthly=None, job_scope=None):
     """
     ended_by: "dismissed" | "resigned".
     section14: האם יש הסדר סעיף 14 (תשלומי המעסיק לקרן במקום פיצויים). אם כן הפיצויים משולמים מהקרן, והמעסיק חב רק
       בהשלמה אם ההפרשות נמוכות מהשכר הקובע; חישוב ההשלמה אינו ממומש -> ידני.
     unused_vacation_days / vacation_day_value: חשב השכר מזין (שווי יום חופשה לא הוכרע במערכת).
     notice_days_unworked / notice_day_value: ימי הודעה מוקדמת שלא ניתנו בפועל והשווי היומי (מוזנים).
+    min_wage_monthly / job_scope: רצפת שכר מינימום לפי היקף משרה (§13ב לחוק פיצויי פיטורים); חסרים -> הפיצויים ידניים.
     מחזיר {"months": int, "items": {...}, "overall": סטטוס, "notes": [...]}
     """
     if ended_by not in ("dismissed", "resigned"):
@@ -48,7 +50,7 @@ def settlement(*, start_date, end_date, ended_by, severance_components, section1
     elif wage["value"] is None:
         items["severance"] = item(None, MANUAL, "השכר הקובע לא הוכרע: " + wage["note"])
     else:
-        items["severance"] = lr.severance_pay(wage["value"], months, pay_type)
+        items["severance"] = lr.severance_pay(wage["value"], months, pay_type, min_wage_monthly, job_scope)
 
     if unused_vacation_days is None or vacation_day_value is None:
         items["vacation_redemption"] = item(None, MANUAL, "יש להזין ימי חופשה שלא נוצלו ושווי יום (§13 לחוק חופשה שנתית)")
