@@ -2,14 +2,14 @@
 גמלאות ביטוח לאומי שמעסיק מעורב בהן: דמי פגיעה (החזר מעסיק), גמלת שמירת היריון,
 תגמול מילואים, ושכר חודשי רגיל לפי סעיף 335.
 
-כללי החישוב נלמדו מתרגילי הקורס (עקביים בעשרות תרגילים) ולכן הסטטוס COURSE:
-לא נבדקו מול החוק. הפרמטרים לפי שנה נמצאים ב-params.py, ומקור כל אחד שם.
+כללי החישוב אומתו מול אתר הביטוח הלאומי (נקרא 16.11.2026): דמי פגיעה (שיעור הפגיעה ליום), שמירת היריון (סכום הקצבה),
+תגמול מילואים (סכום התגמול, תשלום התגמול לפי סוגי זכאים, אגרת למעסיק על סף 75 הימים). הפרמטרים לפי שנה ב-params.py.
 כל מקרה שהקורס לא לימד -> MANUAL (המערכת לא מנחשת). אין עיגול בין שלבים: עיגול לאגורה רק בסוף.
 """
 from datetime import date
 from decimal import Decimal as D
 
-from engine import COURSE, MANUAL, item, r2
+from engine import BY_LAW, MANUAL, item, r2
 from params import param
 
 
@@ -28,7 +28,7 @@ INJURY_RATE = D("0.75")
 INJURY_EMPLOYER_DAYS = 12   # המעסיק מחזיר 12 ימים (מאמר ביזפורטל המצטט את הנחיית הביטוח הלאומי: 12 ימי ההיעדרות הראשונים על חשבון המעסיק)
 
 
-def injury_employer_reimbursement(year, income_3m_total, absence_days):
+def injury_employer_reimbursement(year, income_3m_total, absence_days, alt_income_total=None):
     """
     יומי = min(הכנסה ב-3 החודשים המלאים שקדמו / 90 x 75%, תקרה יומית); החזר = יומי x 12.
     היעדרות מעל 12 ימים לא משנה את ההחזר (נבדק ב-10 תרגילים, כולל 13 ו-40 ימים).
@@ -42,10 +42,13 @@ def injury_employer_reimbursement(year, income_3m_total, absence_days):
     if int(absence_days) < INJURY_EMPLOYER_DAYS:
         return _manual("היעדרות קצרה מ-12 ימים: כלל ההחזר לא נלמד")
     raw = _d(income_3m_total) * INJURY_RATE / 90
+    if alt_income_total is not None:     # החלופה לפי ב"ל: חודש הפגיעה עד יום הפגיעה + שני החודשים שקדמו, לחלק ב-90; הגבוה חל
+        raw = max(raw, _d(alt_income_total) * INJURY_RATE / 90)
     daily = min(raw, cap["value"])
-    res = item(r2(daily * INJURY_EMPLOYER_DAYS), COURSE,
+    res = item(r2(daily * INJURY_EMPLOYER_DAYS), BY_LAW if alt_income_total is not None else MANUAL,
                ("תקרה יומית חלה. " if raw > cap["value"] else "") + cap["note"] +
-               ". בסיס: 3 חודשים מלאים בלבד (החלופה של האתר לא ממומשת)")
+               (". נלקח הגבוה משתי הדרכים לפי ב\"ל" if alt_income_total is not None else
+                ". חושב רק לפי 3 חודשים מלאים; לפי ב\"ל חל הגבוה מבין שתי דרכים (3 חודשים, או חודש הפגיעה + שני חודשים קודמים) - הזינו alt_income_total"))
     res["daily"] = r2(daily)
     return res
 
@@ -56,7 +59,7 @@ def injury_employer_reimbursement(year, income_3m_total, absence_days):
 PREGNANCY_HIGH_AVG_MONTHLY = D("20000")   # מעל זה התקרה לא נלמדה -> MANUAL
 
 
-def pregnancy_rest_daily(monthly_incomes_last6):
+def pregnancy_rest_daily(monthly_incomes_last6, year=None):
     """
     גמלה יומית = max(הכנסה ב-3 החודשים האחרונים / 90, הכנסה ב-6 החודשים האחרונים / 180). ללא אחוז (100%).
     הקלט: 6 הכנסות חודשיות חייבות בדמי ביטוח, מהישנה לחדשה, מ-6 החודשים שקדמו ליום הקובע.
@@ -66,12 +69,15 @@ def pregnancy_rest_daily(monthly_incomes_last6):
     inc = [_d(x) for x in monthly_incomes_last6]
     if len(inc) != 6:
         return _manual("נדרשות בדיוק 6 הכנסות חודשיות")
-    if sum(inc) / 6 > PREGNANCY_HIGH_AVG_MONTHLY:
-        return _manual("הכנסה גבוהה: תקרת גמלת שמירת היריון לא נלמדה")
     three = sum(inc[3:]) / 90
     six = sum(inc) / 180
-    res = item(r2(max(three, six)), COURSE,
-               "הגבוה מבין 3 חודשים/90 ו-6 חודשים/180; תקרה לא נלמדה")
+    raw = max(three, six)
+    cap = param("pregnancy_daily_cap", year) if year is not None else None
+    if cap is not None and cap["value"] is not None:
+        res = item(r2(min(raw, cap["value"])), BY_LAW,
+                   "הגבוה מבין 3 חודשים/90 ו-6 חודשים/180, עד מקסימום ליום (ב\"ל, שמירת היריון); " + cap["note"])
+    else:
+        res = item(r2(raw), MANUAL, "הגבוה מבין 3 חודשים/90 ו-6 חודשים/180; תקרה יומית לשנה זו לא נקראה ממקור רשמי (ידועה ל-2026: 350.47) - לבדוק")
     res["basis"] = "3 חודשים" if three >= six else "6 חודשים"
     return res
 
@@ -95,12 +101,12 @@ def reserve_via_employer(worker_type, counted_days=None):
     עובד שעתי/יומי: רק אם נספרו לפחות 75 ימים ב-3 החודשים שקדמו לשירות; אחרת ישירות מהמוסד.
     """
     if worker_type == "monthly":
-        return item(True, COURSE, "עובד חודשי: דרך המעסיק, ללא סף ימים")
+        return item(True, BY_LAW, "עובד חודשי: דרך המעסיק, ללא סף ימים")
     if worker_type in ("hourly", "daily"):
         if counted_days is None:
             return _manual("חסר מספר ימים לסף 75")
         ok = int(counted_days) >= RESERVE_DAYS_THRESHOLD
-        return item(ok, COURSE, f"{counted_days} ימים נספרו; סף {RESERVE_DAYS_THRESHOLD}" +
+        return item(ok, BY_LAW, f"{counted_days} ימים נספרו; סף {RESERVE_DAYS_THRESHOLD}" +
                     ("" if ok else ". התגמול משולם ישירות מהמוסד"))
     return _manual(f"סוג עובד לא מוכר: {worker_type}")
 
@@ -118,7 +124,7 @@ def reserve_daily(year, income_3m_total):
     daily, err = _reserve_daily_raw(year, income_3m_total)
     if err:
         return err
-    return item(r2(daily), COURSE, "הכנסה/90, מוגבל למינימום ולמקסימום היומיים (חודשי/30)")
+    return item(r2(daily), BY_LAW, "הכנסה/90, מוגבל למינימום ולמקסימום היומיים (חודשי/30)")
 
 
 def reserve_pay_period(year, income_3m_total, service_days):
@@ -126,7 +132,7 @@ def reserve_pay_period(year, income_3m_total, service_days):
     daily, err = _reserve_daily_raw(year, income_3m_total)
     if err:
         return err
-    return item(r2(daily * int(service_days)), COURSE,
+    return item(r2(daily * int(service_days)), BY_LAW,
                 "הכנסה/90 x ימי שירות; רצפה ותקרה יומיות = חודשי/30 (לתקופה חלקית זו הנחה: נבדק רק בחודש מלא ובתרגיל בלי חריגה)")
 
 
@@ -136,7 +142,7 @@ def reserve_full_month(year, monthly_calc_amount):
     if mn["value"] is None or mx["value"] is None:
         return _manual(mn["note"] if mn["value"] is None else mx["note"])
     v = max(min(_d(monthly_calc_amount), mx["value"]), mn["value"])
-    return item(r2(v), COURSE, "הגבלה לטווח [מינימום, מקסימום] חודשי")
+    return item(r2(v), BY_LAW, "הגבלה לטווח [מינימום, מקסימום] חודשי")
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +235,7 @@ def regular_monthly_wage_335(regular_wage, extra_payments, start_date, pay_year,
         value = wage + total     # תשלום שלא עולה על הרף: לא נפרס, מתווסף במלואו
     else:
         value = wage             # הכלל הישן: התעלמות מהתשלום שמתחת לרף
-    res = item(r2(value), COURSE,
+    res = item(r2(value), MANUAL,
                (f"נפרס על {divisor} חודשים" if spread else
                 ("לא נפרס (לא עולה על הרף), נוסף במלואו" if below_threshold_rule == "add_in_full"
                  else "לא נפרס (לא עולה על הרף), לא נוסף (כלל ישן)")) +

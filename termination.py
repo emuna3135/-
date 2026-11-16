@@ -54,7 +54,7 @@ def settlement(*, start_date, end_date, ended_by, severance_components, section1
         items["vacation_redemption"] = item(None, MANUAL, "יש להזין ימי חופשה שלא נוצלו ושווי יום (§13 לחוק חופשה שנתית)")
     else:
         items["vacation_redemption"] = item(r2(D(str(unused_vacation_days)) * D(str(vacation_day_value))),
-                                            COURSE, "ימים x שווי יום שהוזן; שווי היום לא נבדק מול הנוסח")
+                                            MANUAL, "ימים x שווי יום שהוזן; שווי היום לא נבדק מול הנוסח")
 
     if notice_days_unworked is None or notice_day_value is None:
         items["notice_pay"] = item(None, MANUAL, "יש להזין ימי הודעה מוקדמת שלא ניתנו והשווי היומי")
@@ -65,12 +65,12 @@ def settlement(*, start_date, end_date, ended_by, severance_components, section1
             items["notice_pay"] = item(None, MANUAL,
                                        f"ימי ההודעה שהוזנו ({notice_days_unworked}) מעל הטבלה ({due['value']}); לבדוק")
         else:
-            items["notice_pay"] = item(r2(D(str(notice_days_unworked)) * D(str(notice_day_value))), COURSE,
+            items["notice_pay"] = item(r2(D(str(notice_days_unworked)) * D(str(notice_day_value))), MANUAL,
                                        note + f"; לפי הטבלה בחוק עד {due['value']} ימים (טבלת התפטרות)")
         if ended_by == "dismissed":
             notes.append("טבלת ההודעה המוקדמת אומתה לנוסח ההתפטרות; זהותה לפיטורים לא נבדקה")
 
     notes.append("מס הכנסה, ביטוח לאומי ופטור/פריסה על רכיבי הסיום (טופס 161) לא מחושבים כאן")
     statuses = {v["status"] for v in items.values()}
-    overall = MANUAL if MANUAL in statuses else (COURSE if COURSE in statuses else BY_LAW)
+    overall = MANUAL if MANUAL in statuses else BY_LAW
     return {"months": months, "items": items, "overall": overall, "notes": notes}

@@ -11,7 +11,7 @@ class Severance(unittest.TestCase):
         w = lr.severance_wage([("base", 6200), ("commissions_avg12", "2083.33"), ("car_maintenance", 900),
                                ("phone_upkeep", 150), ("one_time_bonus", 5000)])
         self.assertEqual(w["value"], D("8283.33"))
-        self.assertEqual(w["status"], COURSE)
+        self.assertEqual(w["status"], MANUAL)
 
     def test_unknown_component_is_manual(self):
         w = lr.severance_wage([("base", 6000), ("mystery_allowance", 300)])
@@ -218,15 +218,15 @@ class VerifiedStatuses(unittest.TestCase):
         self.assertEqual(lr.severance_pay(6000, 12)["status"], lr.BY_LAW)
 
     def test_severance_wage_stays_course_with_conflict_recorded(self):
-        self.assertEqual(lr.severance_wage([("base", 6000)])["status"], COURSE)
+        self.assertEqual(lr.severance_wage([("base", 6000)])["status"], MANUAL)
         self.assertIn("severance_wage", lr.CONFLICTS)
 
     def test_global_overtime_is_manual_not_guessed(self):
         r = lr.severance_wage([("base", 6000), ("global_overtime", 1000)])
         self.assertEqual(r["status"], MANUAL)
 
-    def test_unemployment_stays_course(self):
-        self.assertEqual(lr.unemployment_eligibility(True)["status"], COURSE)
+    def test_unemployment_eligibility_by_law(self):
+        self.assertEqual(lr.unemployment_eligibility(True)["status"], lr.BY_LAW)
 
 
 class OldAge(unittest.TestCase):
@@ -354,8 +354,17 @@ class UnemploymentAmount(unittest.TestCase):
 class AnnualLeaveFiveDay(unittest.TestCase):
     def test_table(self):
         import labor_rules as lr
-        for y, d in [(1, 12), (2, 12), (4, 12), (5, 12), (6, 17), (8, 17), (9, 23), (15, 23)]:
-            self.assertEqual(lr.annual_leave_net_days_five_day_week(y)["value"], d, y)
-        self.assertEqual(lr.annual_leave_net_days_five_day_week(1, 2015)["value"], 10)
-        self.assertEqual(lr.annual_leave_net_days_five_day_week(3, 2016)["value"], 11)
-        self.assertEqual(lr.annual_leave_net_days_five_day_week(5, 2016)["value"], 12)
+        for y in (1, 2, 4, 5):
+            r = lr.annual_leave_net_days_five_day_week(y)
+            self.assertEqual((r["value"], r["status"]), (12, lr.BY_LAW), y)
+        for y, yr in ((6, 2026), (9, 2026), (1, 2015)):
+            r = lr.annual_leave_net_days_five_day_week(y, yr)
+            self.assertIsNone(r["value"])
+            self.assertEqual(r["status"], MANUAL)
+
+    def test_hourly_defaults_are_manual(self):
+        import labor_rules as lr
+        r = lr.hourly_pay(50, [("08:00", "17:00")], 1)
+        self.assertEqual(r["status"], MANUAL)
+        r = lr.hourly_pay(50, [("08:00", "17:00")], 1, daily_threshold=lr.D(8), weekly_threshold=lr.D(42))
+        self.assertEqual(r["status"], lr.BY_LAW)

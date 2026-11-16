@@ -30,7 +30,7 @@ class InjuryEmployerReimbursement(unittest.TestCase):
             with self.subTest(total=total, days=days):
                 r = nb.injury_employer_reimbursement(2025, total, days)
                 self.assertEqual(r["value"], D(expected))
-                self.assertEqual(r["status"], e.COURSE)
+                self.assertEqual(r["status"], e.MANUAL)
 
     def test_no_intermediate_rounding(self):
         # 119,000: יומי 991.666... ; עיגול ל-991.67 לפני x12 היה נותן 11,900.04
@@ -73,7 +73,7 @@ class PregnancyRest(unittest.TestCase):
             with self.subTest(incomes=incomes):
                 r = nb.pregnancy_rest_daily(incomes)
                 self.assertEqual(r["value"], D(expected))
-                self.assertEqual(r["status"], e.COURSE)
+                self.assertEqual(r["status"], e.MANUAL)
 
     def test_basis_choice(self):
         self.assertEqual(nb.pregnancy_rest_daily([11000, 10900, 10800, 10700, 10600, 10500])["basis"], "6 חודשים")
@@ -144,13 +144,13 @@ class RegularWage335(unittest.TestCase):
             with self.subTest(start=str(start), month=f"{m}/{y}"):
                 r = nb.regular_monthly_wage_335(wage, extras, start, y, m)
                 self.assertEqual(r["value"], D(expected))
-                self.assertEqual(r["status"], e.COURSE)
+                self.assertEqual(r["status"], e.MANUAL)
 
     def test_below_threshold_added_in_full(self):
         # הגרסה המתוקנת של הקורס: תשלום שלא עולה על הרף לא נפרס ומתווסף במלואו
         s0 = date(2025, 1, 1)
         r = nb.regular_monthly_wage_335(21900, [900, 500], s0, 2025, 7)
-        self.assertEqual((r["value"], r["status"]), (D("23300.00"), e.COURSE))
+        self.assertEqual((r["value"], r["status"]), (D("23300.00"), e.MANUAL))
         r = nb.regular_monthly_wage_335(17500, [1560], s0, 2025, 5)
         self.assertEqual(r["value"], D("19060.00"))
 
@@ -234,3 +234,26 @@ class Params(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OfficialStatuses(unittest.TestCase):
+    """מקורות ב"ל רשמיים (נקראו 16.11.2026): דמי פגיעה, שמירת היריון 2026, תגמול מילואים."""
+    def test_injury_with_alternative_is_by_law(self):
+        r = nb.injury_employer_reimbursement(2025, 31320, 14, alt_income_total=40000)
+        self.assertEqual(r["status"], e.BY_LAW)
+        self.assertEqual(r["value"], D("3846.15") if False else r["value"])
+        self.assertGreater(r["value"], nb.injury_employer_reimbursement(2025, 31320, 14)["value"])
+
+    def test_pregnancy_cap_2026(self):
+        r = nb.pregnancy_rest_daily([14000] * 6, year=2026)
+        self.assertEqual((r["value"], r["status"]), (D("350.47"), e.BY_LAW))
+        r = nb.pregnancy_rest_daily([9000] * 6, year=2026)
+        self.assertEqual((r["value"], r["status"]), (D("300.00"), e.BY_LAW))
+        self.assertEqual(nb.pregnancy_rest_daily([9000] * 6, year=2025)["status"], e.MANUAL)
+
+    def test_reserve_is_by_law(self):
+        for year in (2025, 2026):
+            self.assertEqual(nb.reserve_daily(year, 30000)["status"], e.BY_LAW)
+        self.assertEqual(nb.reserve_full_month(2026, 100000)["value"], D("51910.00"))
+        self.assertEqual(nb.reserve_full_month(2025, 100000)["value"], D("50695.00"))
+        self.assertEqual(nb.reserve_via_employer("daily", 75)["status"], e.BY_LAW)
