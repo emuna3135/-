@@ -271,3 +271,12 @@ class ParamsStatus(unittest.TestCase):
         s = params.params_status(2027)
         self.assertFalse(s["up_to_date"])
         self.assertTrue(all(r["status"] == e.MANUAL for r in s["params"]))
+
+
+class RecreationDayValueParam(unittest.TestCase):
+    def test_2026_official_and_other_years_manual(self):
+        import params
+        r = params.param("recreation_day_value", 2026)
+        self.assertEqual(r["value"], D("451.50"))
+        self.assertEqual(r["status"], e.BY_LAW)
+        self.assertEqual(params.param("recreation_day_value", 2027)["status"], e.MANUAL)
