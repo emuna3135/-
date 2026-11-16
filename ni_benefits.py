@@ -191,8 +191,9 @@ def spread_threshold(year, month):
     mw = min_wage_monthly(year, month)
     if mw is None:
         return _manual("שכר מינימום לחודש הזה לא הוזן: הרף לא ידוע")
-    return item(r2(mw * SPREAD_MIN_WAGE_PCT), MANUAL,
-                f"25% x שכר מינימום {mw}; חודש התשלום קובע (Q25 פתוחה); שכר המינימום מאומת רשמית (ביטוח לאומי + ילקוט פרסומים); נשאר ידני כי נוסח תקנה 5 (רף 25%, חודש קובע) לא נקרא ממקור רשמי")
+    return item(r2(mw * SPREAD_MIN_WAGE_PCT), BY_LAW,
+                f"25% x שכר מינימום {mw} (חודש התשלום). מקור רשמי: ביטוח לאומי, 'אגרת למעסיק לשנת 2026' (בל/651): "
+                "'הסכום הקובע לפריסת שכר נוסף הנו 25% משכר המינימום'; אגרות 2023/2025 מראות שהרף עוקב אחרי שכר המינימום בכל עדכון")
 
 
 BELOW_THRESHOLD_RULES = ("add_in_full", "ignore")
