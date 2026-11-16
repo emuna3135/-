@@ -312,3 +312,24 @@ class DailyTax2026(unittest.TestCase):
         import engine as e
         self.assertEqual(e.EMPLOYER_PENSION_CEILING_3E3_MONTHLY_2026, 34423)
         self.assertEqual(e.SEVERANCE_DEPOSIT_CEILING_3E3_ANNUAL_2026, 45600)
+
+
+class IrregularSalaryReg4(unittest.TestCase):
+    """תקנה 4(א) לתקנות הניכוי: (מס על חודש + 1/12 בונוס - מס על חודש) x12. חישוב ידני ללוח 2026:
+    חודש 10,000: 701 + 0.14*2,990 = 1,119.6; פחות 2.25*242=544.5 -> 575.1 -> 575.
+    חודש 11,000 (10,000+12,000/12): 701+427+0.20*940 = 1,316; פחות 544.5 = 771.5 -> 772. הפרש 197 x12 = 2,364."""
+    def test_manual_example(self):
+        import engine as e
+        self.assertEqual(e.monthly_deduction_by_regulation(10000, 2.25), 575)
+        self.assertEqual(e.monthly_deduction_by_regulation(11000, 2.25), 772)
+        r = e.irregular_salary_tax(10000, 12000, 2.25)
+        self.assertEqual(r["value"], 2364)
+        self.assertEqual(r["status"], e.BY_LAW)
+
+    def test_zero_bonus_zero_tax(self):
+        import engine as e
+        self.assertEqual(e.irregular_salary_tax(10000, 0, 2.25)["value"], 0)
+
+    def test_negative_manual(self):
+        import engine as e
+        self.assertEqual(e.irregular_salary_tax(10000, -1, 2.25)["status"], e.MANUAL)
