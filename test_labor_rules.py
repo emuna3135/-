@@ -2,7 +2,7 @@ import unittest
 from decimal import Decimal as D
 
 import labor_rules as lr
-from engine import MANUAL
+from engine import BY_LAW, MANUAL
 
 
 class Severance(unittest.TestCase):
@@ -135,10 +135,10 @@ class Recreation(unittest.TestCase):
         self.assertEqual(lr.recreation_reduction_type(3075, "0.5"), "partial")
         self.assertEqual(lr.recreation_reduction_type(3076, "0.5"), "full")
 
-    def test_recreation_secondary_source_is_manual(self):
-        # מקור משני (כל זכות) אינו מספיק ל"לפי החוק"
-        self.assertEqual(lr.recreation_pay_2025(1)["status"], MANUAL)
-        self.assertIn("recreation", lr.SOURCES)
+    def test_recreation_official_source_is_by_law(self):
+        # טבלת הימים: הכנסת, מרכז המחקר והמידע, לוח 1 (20.1.2025) - מקור רשמי
+        self.assertEqual(lr.SOURCES["recreation"][0], "רשמי")
+        self.assertEqual(lr.recreation_pay_2025(1)["status"], BY_LAW)
 
     def test_bad_reduction(self):
         self.assertIsNone(lr.recreation_pay_2025(1, reduction="odd")["value"])
