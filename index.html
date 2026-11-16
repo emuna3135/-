@@ -117,6 +117,7 @@ table.t tr.click{cursor:pointer} table.t tr.click:hover{background:#F7FAFF}
   main{padding:20px 16px 48px} .split{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.comp-row{display:flex;gap:8px;margin-bottom:6px}.comp-row select,.comp-row input{flex:1}
 </style>
 </head>
 <body>
@@ -349,7 +350,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["f101", "טופס 101"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const nav = NAV.map(([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label));
   return h("div", { class: "app" },
@@ -531,6 +532,58 @@ function form101View() {
   return shell("f101", "טופס 101", h("div", {}, h("p", {}, "הנתונים נשמרים לשנה אחת. מהם נגזרות נקודות הזיכוי ושיטת המס בחישוב. מצבי משפחה מיוחדים (הורה יחיד, אלמן, פרוד ועוד) עדיין לא בטופס זה: יש להזין סך ידני. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
 }
 
+/* ---------- סיום העסקה ---------- */
+const SEV_KINDS = [["base", "שכר יסוד"], ["fixed_premium", "פרמיה קבועה"], ["fixed_supplement", "תוספת קבועה"], ["commissions_avg12", "עמלות (ממוצע 12 חודשים)"],
+  ["overtime_pay", "שעות נוספות"], ["one_time_bonus", "בונוס חד-פעמי"], ["convalescence_pay", "הבראה"], ["thirteenth_salary", "משכורת 13"],
+  ["clothing_allowance", "ביגוד"], ["car_use_value", "שווי רכב"], ["car_maintenance", "אחזקת רכב"], ["phone_upkeep", "אחזקת טלפון"],
+  ["travel_reimbursement", "החזר נסיעות"], ["meals_allowance", "אש\"ל"], ["per_diem", "דמי כלכלה"]];
+const TERM_LABELS = { severance_wage: "שכר קובע לפיצויים", severance: "פיצויי פיטורים", vacation_redemption: "פדיון חופשה", notice_pay: "הודעה מוקדמת שלא ניתנה" };
+function terminationView() {
+  const emp = h("select", { required: true }, h("option", { value: "" }, "טוענת…"));
+  const endDate = h("input", { type: "date", required: true });
+  const by = h("select", {}, h("option", { value: "dismissed" }, "פיטורים"), h("option", { value: "resigned" }, "התפטרות"));
+  const s14 = h("input", { type: "checkbox" });
+  const compBox = h("div", {});
+  const addComp = (kind, amount) => {
+    const k = h("select", {}, ...SEV_KINDS.map(([v, t]) => h("option", { value: v, selected: v === kind }, t)));
+    const a = h("input", { type: "number", step: "0.01", min: 0, placeholder: "סכום חודשי", value: amount ?? "" });
+    const row = h("div", { class: "comp-row" }, k, a, h("button", { type: "button", onclick: () => row.remove() }, "הסרה"));
+    row._get = () => [k.value, a.value === "" ? 0 : Number(a.value)];
+    compBox.appendChild(row);
+  };
+  addComp("base");
+  const vDays = h("input", { type: "number", step: "0.5", min: 0 }), vVal = h("input", { type: "number", step: "0.01", min: 0 });
+  const nDays = h("input", { type: "number", step: "0.5", min: 0 }), nVal = h("input", { type: "number", step: "0.01", min: 0 });
+  const out = h("div", { "aria-live": "polite" });
+  api("GET", cp("/employees")).then(rows => emp.replaceChildren(h("option", { value: "" }, rows.length ? "בחירת עובד" : "אין עובדים. יש להוסיף עובד קודם"),
+    ...rows.map(r => h("option", { value: r.id }, r.full_name)))).catch(e => out.replaceChildren(h("div", { class: "err" }, e.message)));
+  const num = (el) => el.value === "" ? null : Number(el.value);
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); out.replaceChildren(h("p", {}, "מחשבת…"));
+    try {
+      const body = { end_date: endDate.value, ended_by: by.value, section14: s14.checked,
+        severance_components: [...compBox.children].map(r => r._get()),
+        unused_vacation_days: num(vDays), vacation_day_value: num(vVal), notice_days_unworked: num(nDays), notice_day_value: num(nVal) };
+      const r = await api("POST", cp("/employees/" + emp.value + "/termination"), body);
+      const rows = Object.entries(r.items).map(([k, v]) => {
+        const st = statusInfo(v.status);
+        return h("div", { class: "row" }, h("span", { class: "lbl " + st.cls }, h("i", { class: "dot" }), h("span", {}, TERM_LABELS[k] || k), h("span", { class: "chip" }, st.text)),
+          v.value == null ? h("span", { class: "amt none" }, "לא חושב") : h("span", { class: "amt num" }, fmt(v.value)),
+          h("div", { class: "note open" }, v.note || ""));
+      });
+      out.replaceChildren(h("p", {}, "חודשי עבודה מלאים: " + r.months), ...rows,
+        ...(r.notes || []).map(n => h("div", { class: "flags" }, n)));
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } },
+    h("label", {}, "עובד", emp), h("label", {}, "תאריך סיום העבודה", endDate), h("label", {}, "סיבת הסיום", by),
+    h("label", {}, h("span", {}, "קיים הסדר סעיף 14 (הפיצויים בקרן)"), s14),
+    h("fieldset", {}, h("legend", {}, "רכיבי שכר חודשיים לשכר הקובע"), compBox, h("button", { type: "button", onclick: () => addComp("base") }, "הוספת רכיב")),
+    h("label", {}, "ימי חופשה שלא נוצלו", vDays), h("label", {}, "שווי יום חופשה (ש\"ח)", vVal),
+    h("label", {}, "ימי הודעה מוקדמת שלא ניתנו", nDays), h("label", {}, "שווי יום הודעה (ש\"ח)", nVal),
+    h("button", { class: "btn", type: "submit" }, "חישוב זכויות"));
+  return shell("term", "סיום העסקה", h("div", {}, h("p", {}, "מחשבון עזר. רכיב שלא נלמד או נתון שלא הוזן מסומן ידני ולא מנוחש. מס על רכיבי הסיום (טופס 161) לא מחושב. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
+}
+
 /* ---------- העלאת אקסל ---------- */
 function uploadView() {
   const file = h("input", { type: "file", accept: ".xlsx,.csv", required: true });
@@ -641,7 +694,7 @@ const auditView = () => listView("audit", "יומן פעולות", "/audit-log",
 /* ---------- ניתוב ---------- */
 function render(view) {
   state.view = view;
-  const views = { f101: form101View, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
+  const views = { f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
