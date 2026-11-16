@@ -217,7 +217,7 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
     if mode == "no_coordination":
         month_tax = r0(tg * NO_COORDINATION_RATE)
         new["cum_tax"] = prev["cum_tax"] + month_tax
-        return item(month_tax, VERIFIED, "47% בלי תיאום מס (נבדק במרץ 2025 ובמשרה נוספת 2024)"), new
+        return item(month_tax, VERIFIED, "47% בלי תיאום מס (נבדק במרץ 2025 ובמשרה נוספת 2024); בסיס בנוסח: תקנה 5(א) לתקנות ניכוי ממשכורת - שיעור מרבי (ללא טופס 101 / משכורת חלקית / משרה נוספת), btl.gov.il/Laws1/02_0103_100076.pdf"), new
     if year not in (2025, 2026):
         new["cum_tax"] = prev["cum_tax"]
         return item(None, MANUAL, "שנת המס לא נתמכת; הזינו את המס ידנית"), new
