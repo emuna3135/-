@@ -350,7 +350,7 @@ function enrollView() {
     h("p", { class: "info" }, "שמרי את המפתח במקום בטוח. אי אפשר להציג אותו שוב.")
   )).catch(e => out.replaceChildren(h("div", { class: "err" }, e.message)));
   return h("div", { class: "login" },
-    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "עוד שלב אחד לאבטחה"), h("p", {}, "ב"חשבות בקליק" נדרש אימות דו-שלבי לכל משתמש.")), h("div")),
+    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "עוד שלב אחד לאבטחה"), h("p", {}, "ב־חשבות בקליק נדרש אימות דו-שלבי לכל משתמש.")), h("div")),
     h("section", { class: "login-form" }, h("form", { onsubmit: async (e) => {
       e.preventDefault();
       try { const r = await api("POST", "/auth/2fa/enable", { code: code.value }); state.token = r.access_token;
