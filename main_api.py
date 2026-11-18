@@ -1690,6 +1690,15 @@ def pick(row: dict, key: str, default=None):
     return default
 
 
+@app.get("/upload-template")
+def upload_template_file():
+    """תבנית אקסל ריקה להעלאה. בלי נתונים של משתמשים, ולכן פתוחה לכולם."""
+    import upload_template
+    return Response(content=upload_template.build_template(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="payroll-template.xlsx"'})
+
+
 @app.post("/companies/{company_id}/upload-excel")
 async def upload_excel(
     company_id: str,
