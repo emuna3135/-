@@ -24,7 +24,7 @@ import upload_rules
 import localities
 import secure
 import totp
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -1779,6 +1779,20 @@ def report126_file(company_id: str, body: Report126In, user: User = Depends(curr
     name = f"126-{body.year}{'' if ok else '-DRAFT'}.txt"
     return Response(content=data, media_type="text/plain",
                     headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Report-Draft": "false" if ok else "true"})
+
+
+@app.get("/companies/{company_id}/payments-summary")
+def payments_summary_view(company_id: str, year: int = Query(..., ge=2000, le=2100),
+                          user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """סיכום העברות לתשלום לפי חודש מהתלושים השמורים. המערכת לא משלמת: החשב מעביר בעצמו."""
+    require_company(company_id, user, db, "read")
+    import payments_summary
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == year)
+             .order_by(PaystubV2.created_at).all()]
+    audit(db, user.id, company_id, "payments_summary", "report", None, f"year={year}")
+    db.commit()
+    return {"year": year, "months": payments_summary.summarize(year, stubs)}
 
 
 @app.get("/upload-template")

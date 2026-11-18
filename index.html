@@ -1003,6 +1003,19 @@ function reportsView() {
         h("a", { class: "btn", href: url, download: "126-" + f.year.value + (draft ? "-DRAFT" : "") + ".txt" }, "הורדת הקובץ"));
     } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   };
+  const payOut = h("div", { "aria-live": "polite" });
+  const payments = async () => {
+    payOut.replaceChildren(h("p", {}, "מסכמת…"));
+    try {
+      const r = await api("GET", cp("/payments-summary?year=" + encodeURIComponent(f.year.value)));
+      if (!r.months.length) { payOut.replaceChildren(h("p", {}, "אין תלושים שמורים לשנה הזו.")); return; }
+      const n = (v) => Number(v).toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const rows = r.months.map(m => h("tr", {}, h("td", {}, String(m.month)), h("td", {}, String(m.employees)), h("td", {}, n(m.income_tax)),
+        h("td", {}, n(m.btl_total)), h("td", {}, m.btl_deadline), h("td", {}, n(m.pension_employer + m.severance_employer + m.study_fund_employer))));
+      payOut.replaceChildren(h("table", {}, h("thead", {}, h("tr", {}, ["חודש", "עובדים", "מס הכנסה", "ביטוח לאומי ובריאות (עובד+מעביד)", "מועד ב\"ל (15 בחודש הבא)", "פנסיה/פיצויים/השתלמות מעביד"].map(t => h("th", {}, t)))), h("tbody", {}, rows)),
+        h("p", { class: "muted" }, "מועד תשלום מס הכנסה והפקדות לפנסיה/השתלמות: נדרש טיפול ידני (אין מקור במערכת). יום לא עסקי, ריבית והצמדה: לבדוק ידנית. המערכת לא מעבירה כסף: ההעברה בבנק נעשית בידי חשבת השכר."));
+    } catch (err) { payOut.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
   const form = h("form", { onsubmit: (e) => { e.preventDefault(); check(); } },
     h("fieldset", {}, h("legend", {}, "פרטי המעביד (דמו: ערכים בדויים)"),
       field("name", "שם המעביד (עד 18 תווים)", { maxlength: 18 }),
@@ -1019,11 +1032,12 @@ function reportsView() {
       pick("order", "סדר אותיות עבריות", [["logical", "רגיל (לוגי)"], ["visual", "הפוך (ויזואלי)"]]),
       h("p", { class: "muted" }, "המפרט של הרשות מתיר את שני הקידודים ולא מבהיר את סדר האותיות. יש לאמת את הבחירה בבדיקה של הרשות לפני הגשה.")),
     h("div", { class: "actions" }, h("button", { class: "btn", type: "submit" }, "בדיקה: מה חסר"),
-      h("button", { class: "btn ghost", type: "button", onclick: download }, "הורדת קובץ (טיוטה אם יש חסמים)")));
+      h("button", { class: "btn ghost", type: "button", onclick: download }, "הורדת קובץ (טיוטה אם יש חסמים)"),
+      h("button", { class: "btn ghost", type: "button", onclick: payments }, "סיכום העברות לתשלום")));
   load();
   return shell("reports", "4. דיווחים לרשויות", h("div", {}, flowBar(4),
     h("p", {}, "הדוח השנתי למס הכנסה (טופס 126) נבנה מהתלושים ומטופס 101. המערכת לא שולחת דבר לרשות: היא בודקת מה חסר ומכינה קובץ. את הקובץ יש להריץ בבדיקה של הרשות ולהגיש בעצמך."),
-    h("p", {}, "סביבת בדיקה: נתוני דמה בלבד. פרטי תיק הניכויים כאן בדויים, והקובץ לא מיועד להגשה."), form, out));
+    h("p", {}, "סביבת בדיקה: נתוני דמה בלבד. פרטי תיק הניכויים כאן בדויים, והקובץ לא מיועד להגשה."), form, out, payOut));
 }
 
 function homeView() {
