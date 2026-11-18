@@ -91,9 +91,17 @@ class Render(unittest.TestCase):
         pdf, miss, reasons, draft = p.render(sample(), {}, EMP, CO, approved=True)
         self.assertTrue(draft); self.assertTrue(pdf.startswith(b"%PDF"))
 
-    def test_draft_when_not_approved_and_not_verified(self):
-        _, _, reasons, draft = p.render(sample(), FULL, EMP, CO, approved=False)
+    def test_draft_when_not_approved_and_not_fully_by_law(self):
+        res = sample()
+        res["overall_status"] = e.ACCOUNTANT      # מרכיב לפי רואת חשבון -> נדרש אישור חשב לפני הפקה סופית
+        _, _, reasons, draft = p.render(res, FULL, EMP, CO, approved=False)
         self.assertTrue(draft)
+
+    def test_final_when_fully_by_law_even_unapproved(self):
+        # מאומת מול תלוש אינו קריטריון נפרד: חישוב שכולו עפ"י החוק וללא חסרים אינו טיוטה
+        _, miss, _, draft = p.render(sample(), FULL, EMP, CO, approved=False)
+        self.assertEqual(miss, [])
+        self.assertFalse(draft)
 
     def test_final_when_approved_and_complete(self):
         _, miss, _, draft = p.render(sample(), FULL, EMP, CO, approved=True)

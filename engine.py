@@ -11,10 +11,12 @@ from decimal import Decimal, ROUND_HALF_UP
 
 D = Decimal
 
-VERIFIED = "מאומת"
-BY_LAW = "לפי חוק - לא נבדק מול תלוש"
+# שני קריטריונים בלבד למקור הכלל: "עפ"י החוק" או "עפ"י רואת חשבון". אימות מול תלוש אינו קריטריון נפרד (הוחלט 18.11.2026),
+# לכן VERIFIED הוא כינוי ל-BY_LAW. MANUAL = אין מקור, המערכת לא מנחשת.
+BY_LAW = "עפ\"י החוק"
+VERIFIED = BY_LAW
 MANUAL = "נדרש טיפול ידני"
-ACCOUNTANT = "לפי רואת חשבון (אין מקור ראשוני)"
+ACCOUNTANT = "עפ\"י רואת חשבון"
 
 
 def r0(x) -> int:

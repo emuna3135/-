@@ -8,6 +8,7 @@ import io
 import os
 import unicodedata
 from datetime import date
+from engine import BY_LAW
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -368,7 +369,7 @@ def prepare(res: dict, extras: dict, employee: dict, company: dict):
     d["notes"] = ["התלוש הופק במערכת. בכל שאלה יש לפנות למעסיק או לחשב השכר."]
     miss = missing_fields(d)
     reasons = []
-    if res["overall_status"] != "מאומת":
+    if res["overall_status"] != BY_LAW:
         reasons.append(f"סטטוס החישוב: {res['overall_status']}")
     if res.get("unresolved"):
         reasons.append("חסרים רכיבי חישוב")

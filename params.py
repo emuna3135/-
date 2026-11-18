@@ -9,7 +9,7 @@
                  הבסיסי 10,139 לפי תקציב ב"ל 2025). נקראו 16.11.2026.
 """
 from decimal import Decimal as D
-from engine import BY_LAW, MANUAL, item
+from engine import ACCOUNTANT, BY_LAW, MANUAL, item
 
 OFFICIAL_BTL = "אתר ביטוח לאומי"
 OFFICIAL_YALKUT_14863 = "ילקוט הפרסומים 14863, 18.8.2026: צו הרחבה בדבר השתתפות המעסיק בהוצאות הבראה ונופש (הסכם 7011/2026), סעיף 3, נחתם ע''י שר העבודה 16.8.2026"
@@ -42,13 +42,40 @@ PARAMS = {
 }
 
 
+# שכבת שינוי של חשב השכר (הכפתור "שנה"): הערך שהוא מזין מחליף את ערך החוק בחישוב, מסומן "עפ"י רואת חשבון" ונשמר יחד עם הסיבה.
+# נטען לפי בקשה (משרד אחד): with use_overrides({(name, year): {"value": ..., "reason": ..., "by": ..., "at": ...}}):
+import contextlib
+import contextvars
+from decimal import InvalidOperation
+
+_OVERRIDES = contextvars.ContextVar("param_overrides", default={})
+
+
+@contextlib.contextmanager
+def use_overrides(overrides):
+    token = _OVERRIDES.set(dict(overrides or {}))
+    try:
+        yield
+    finally:
+        _OVERRIDES.reset(token)
+
+
 def param(name, year):
-    """מחזיר item(value, status, note). ערך חסר לשנה -> MANUAL."""
+    """מחזיר item(value, status, note). ערך חסר לשנה -> MANUAL. אם החשב שינה את הערך: הערך שלו, סטטוס עפ"י רואת חשבון, וערך החוק נשמר בהערה."""
     row = PARAMS.get(name, {}).get(year)
+    ov = _OVERRIDES.get().get((name, year))
+    if ov is not None:
+        try:
+            ov_value = D(str(ov["value"]))
+        except (InvalidOperation, KeyError, TypeError):
+            return item(None, MANUAL, f"שינוי ידני לפרמטר {name} לא תקין")
+        law = f"ערך החוק: {row[0]} ({row[1]})" if row else "אין ערך חוק לשנה זו"
+        return item(ov_value, ACCOUNTANT,
+                    f"שונה ע\"י חשב השכר ({ov.get('by', '?')}, {ov.get('at', '?')}): {ov.get('reason', 'ללא סיבה')}. {law}")
     if row is None:
         return item(None, MANUAL, f"פרמטר {name} לא מוגדר לשנת {year}")
     value, source, status = row
-    return item(value, status, f"מקור: {source}")
+    return item(value, status, f"{source} | מעודכן ל-{year}")
 
 
 SYSTEM_YEAR = 2026   # שנת המערכת: ערכים משתנים חייבים להיות מעודכנים לשנה זו

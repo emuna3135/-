@@ -103,7 +103,7 @@ class Form101Validation(unittest.TestCase):
         self.assertTrue(val.ok())
         cp = prop["validation"]["checks"]["credit_points"]
         self.assertEqual(cp["points"], 2.75)           # תושבת + אישה, כמו ב-card.py
-        self.assertEqual(cp["status"], "מאומת")
+        self.assertEqual(cp["status"], "עפ\"י החוק")
 
     def test_bad_check_digit_blocks(self):
         _, val = self.build(good101(id_number="123456789"), {"is_resident": True, "gender": "F"})

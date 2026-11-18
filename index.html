@@ -157,8 +157,8 @@ const fmt = (v) => v == null ? null : Number(v).toLocaleString("he-IL", { minimu
 function statusInfo(s) {
   // שלוש תוויות בלבד: מאושר לפי החוק / מאושר ע"י רואה חשבון / מצריך בדיקה ידנית. כל שאר המצבים (כולל "לפי הקורס") = בדיקה ידנית
   s = String(s || "");
-  if (s.startsWith("מאומת") || s.startsWith("לפי חוק")) return { cls: "s-ok", text: "מאושר לפי החוק" };
-  if (s.startsWith("לפי רואת חשבון")) return { cls: "s-law", text: "מאושר ע\"י רואה חשבון" };
+  if (s.startsWith("מאומת") || s.startsWith("לפי חוק") || s.startsWith("עפ\"י החוק")) return { cls: "s-ok", text: "עפ\"י החוק" };
+  if (s.startsWith("לפי רואת חשבון") || s.startsWith("עפ\"י רואת חשבון")) return { cls: "s-law", text: "עפ\"י רואת חשבון" };
   return { cls: "s-bad", text: "מצריך בדיקה ידנית" };
 }
 const LABELS = { income_tax: "מס הכנסה", national_insurance: "ביטוח לאומי", health: "מס בריאות",
