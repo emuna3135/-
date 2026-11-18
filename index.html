@@ -874,8 +874,16 @@ function issueView() {
         if (!res.ok) { let m = "נכשל (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
         const draft = res.headers.get("X-Payslip-Draft") === "true";
         const url = URL.createObjectURL(await res.blob());
+        let why = null;
+        if (draft) {
+          try {
+            const c = await api("POST", cp("/employees/" + p.employee_id + "/payslip/check"), { year: p.year, month: p.month, template: tpl.value || null, approve: true, employer_address: addr.value || null });
+            why = h("div", { class: "flags" }, c.missing_required_fields.length ? h("div", {}, h("strong", {}, "שדות חובה שחסרים: "), c.missing_required_fields.join(", ")) : null,
+              c.calculation_notes.length ? h("div", {}, h("strong", {}, "הערות על החישוב: "), c.calculation_notes.join(" | ")) : null);
+          } catch (e) { why = null; }
+        }
         links.push(h("li", {}, h("a", { href: url, download: "payslip-" + (p.emp_name || p.employee_id) + "-" + p.year + "-" + String(p.month).padStart(2, "0") + ".pdf" }, p.emp_name + " " + periodOf(p)),
-          draft ? " (טיוטה: חסרים נתונים בתלוש)" : ""));
+          draft ? " (טיוטה)" : " (סופי)", why));
       } catch (err) { fails.push(h("li", {}, (p.emp_name || "") + " " + periodOf(p) + ": " + err.message)); }
       out.replaceChildren(h("p", {}, "הופקו " + links.length + " מתוך " + approved.length + "…"));
     }
