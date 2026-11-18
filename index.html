@@ -44,6 +44,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 details>summary.nav{cursor:pointer;list-style:none}
 @media (max-width:900px){.flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(-90deg);justify-self:center}}
 .flowbar{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:14px}.flowbar-i{padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}.flowbar-i.on{background:var(--brand,#1f4fd8);color:#fff;border-color:transparent;font-weight:700}
+.pick{list-style:none;padding:0;margin:10px 0;display:grid;gap:6px;max-block-size:320px;overflow:auto}.pick input{inline-size:auto;min-block-size:0}
 .basis ul{margin:6px 0;padding-inline-start:18px}.basis li{margin-block-end:8px}
 .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
 .btn:hover{background:var(--blue-d)}
@@ -859,6 +860,20 @@ function reviewView() {
 
 function issueView() {
   const approved = state.flow.results.filter(p => state.flow.approved[flowKey(p)]);
+  const picked = {}; approved.forEach(p => picked[flowKey(p)] = true);
+  const listBox = h("div", {});
+  const drawList = () => {
+    const n = approved.filter(p => picked[flowKey(p)]).length;
+    listBox.replaceChildren(
+      h("div", { class: "actions" },
+        h("button", { class: "btn ghost", type: "button", onclick: () => { approved.forEach(p => picked[flowKey(p)] = true); drawList(); } }, "בחירת הכול"),
+        h("button", { class: "btn ghost", type: "button", onclick: () => { approved.forEach(p => delete picked[flowKey(p)]); drawList(); } }, "ניקוי בחירה"),
+        h("span", {}, n + " נבחרו מתוך " + approved.length)),
+      h("ul", { class: "pick" }, approved.map(p => h("li", {}, h("label", {},
+        h("input", { type: "checkbox", checked: !!picked[flowKey(p)], onchange: (e) => { if (e.target.checked) picked[flowKey(p)] = true; else delete picked[flowKey(p)]; drawList(); } }),
+        " " + (p.emp_name || "") + " | " + periodOf(p) + " | נטו " + (p.net == null ? "לא חושב" : fmt(p.net)))))));
+  };
+  drawList();
   const tpl = h("select", {}, h("option", { value: "" }, "עיצוב ברירת המחדל של המערכת"));
   api("GET", "/templates").then(t => t.forEach(x => tpl.append(h("option", { value: x.id }, x.name)))).catch(() => {});
   const out = h("div", { "aria-live": "polite" });
@@ -866,7 +881,9 @@ function issueView() {
   const make = async () => {
     out.replaceChildren(h("p", {}, "מפיקה…"));
     const links = [], fails = [];
-    for (const p of approved) {
+    const chosen = approved.filter(p => picked[flowKey(p)]);
+    if (!chosen.length) { out.replaceChildren(h("div", { class: "err", role: "alert" }, "לא נבחר אף עובד")); return; }
+    for (const p of chosen) {
       try {
         const res = await fetch(state.api + cp("/employees/" + p.employee_id + "/payslip"), { method: "POST",
           headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" },
@@ -885,13 +902,13 @@ function issueView() {
         links.push(h("li", {}, h("a", { href: url, download: "payslip-" + (p.emp_name || p.employee_id) + "-" + p.year + "-" + String(p.month).padStart(2, "0") + ".pdf" }, p.emp_name + " " + periodOf(p)),
           draft ? " (טיוטה)" : " (סופי)", why));
       } catch (err) { fails.push(h("li", {}, (p.emp_name || "") + " " + periodOf(p) + ": " + err.message)); }
-      out.replaceChildren(h("p", {}, "הופקו " + links.length + " מתוך " + approved.length + "…"));
+      out.replaceChildren(h("p", {}, "הופקו " + links.length + " מתוך " + chosen.length + "…"));
     }
     out.replaceChildren(h("p", {}, "הופקו " + links.length + " תלושים."), links.length ? h("ul", {}, links) : null,
       fails.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "לא הופקו:"), h("ul", {}, fails)) : null);
   };
   return shell("issue", "3. הפקת תלוש לפי תבנית", h("div", {}, flowBar(3),
-    approved.length ? h("div", {}, h("p", {}, approved.length + " תלושים מאושרים מחכים להפקה."), h("label", {}, "תבנית", tpl), h("label", {}, "כתובת המעסיק (מופיעה בכל התלושים; חובה בתלוש)", addr),
+    approved.length ? h("div", {}, h("p", {}, approved.length + " תלושים מאושרים. מסמנים למי להפיק."), listBox, h("label", {}, "תבנית", tpl), h("label", {}, "כתובת המעסיק (מופיעה בכל התלושים; חובה בתלוש)", addr),
       h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: make }, "הפקת התלושים המאושרים")), out)
       : h("div", { class: "empty" }, "אין תלושים מאושרים. אישור נעשה בשלב 2."),
     h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 2")));
