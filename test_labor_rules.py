@@ -397,3 +397,17 @@ class FiveDayWeekOrder1990(unittest.TestCase):
     def test_leave_6_to_8_and_9_plus_cite_yalkut_3799(self):
         self.assertIn("3799", lr.SOURCES["annual_leave_5day_years6_8"][1])
         self.assertIn("3799", lr.SOURCES["annual_leave_5day_year9"][1])
+
+
+class DailyOvertimeThresholdByLaw(unittest.TestCase):
+    def test_six_day_week_is_8_by_law(self):
+        r = lr.daily_overtime_threshold_by_law(6)
+        self.assertEqual(r["value"], D(8)); self.assertEqual(r["status"], BY_LAW)
+
+    def test_five_day_week_covered_is_9_by_law(self):
+        r = lr.daily_overtime_threshold_by_law(5, covered_by_order_1990=True)
+        self.assertEqual(r["value"], D(9)); self.assertEqual(r["status"], BY_LAW)
+
+    def test_five_day_week_not_covered_is_manual(self):
+        r = lr.daily_overtime_threshold_by_law(5)
+        self.assertIsNone(r["value"]); self.assertEqual(r["status"], MANUAL)
