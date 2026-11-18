@@ -381,3 +381,19 @@ class AnnualLeaveFiveDay(unittest.TestCase):
         self.assertEqual(r["status"], MANUAL)
         r = lr.hourly_pay(50, [("08:00", "17:00")], 1, daily_threshold=lr.D(8), weekly_threshold=lr.D(42))
         self.assertEqual(r["status"], lr.BY_LAW)
+
+
+class FiveDayWeekOrder1990(unittest.TestCase):
+    def test_covered_sector_is_by_law_with_primary_numbers(self):
+        r = lr.five_day_week_overtime_1990(True)
+        self.assertEqual(r["value"]["daily_hours"], D(9))
+        self.assertEqual(r["value"]["first_two_hours_extra"], D("0.25"))
+        self.assertEqual(r["value"]["from_third_hour_extra"], D("0.50"))
+        self.assertEqual(r["status"], BY_LAW)
+
+    def test_not_covered_is_manual(self):
+        self.assertEqual(lr.five_day_week_overtime_1990(False)["status"], MANUAL)
+
+    def test_leave_6_to_8_and_9_plus_cite_yalkut_3799(self):
+        self.assertIn("3799", lr.SOURCES["annual_leave_5day_years6_8"][1])
+        self.assertIn("3799", lr.SOURCES["annual_leave_5day_year9"][1])
