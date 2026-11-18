@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https:; img-src 'self' data:">
-<title>מערכת שכר</title>
+<title>חשבות בקליק</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap">
 <style>
@@ -267,7 +267,7 @@ function loginView(step) {
       "הצגת המערכת עם נתוני דוגמה, בלי חיבור לשרת"));
   return h("div", { class: "login" },
     h("section", { class: "login-side" },
-      h("div", {}, h("h1", {}, "שכר שאפשר לסמוך עליו"), h("p", {}, "חישוב שכר שמראה מאיפה כל מספר מגיע, ולא מנחש כשהוא לא יודע.")),
+      h("div", {}, h("h1", {}, "חשבות בקליק"), h("p", {}, "חשבות שאפשר לסמוך עליה. חישוב שכר שמראה מאיפה כל מספר מגיע, ולא מנחש כשהוא לא יודע.")),
       h("div", { class: "principle" }, "מה שאין לו מקור, מסומן לטיפול ידני.")),
     h("section", { class: "login-form" }, form));
 }
@@ -350,7 +350,7 @@ function enrollView() {
     h("p", { class: "info" }, "שמרי את המפתח במקום בטוח. אי אפשר להציג אותו שוב.")
   )).catch(e => out.replaceChildren(h("div", { class: "err" }, e.message)));
   return h("div", { class: "login" },
-    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "עוד שלב אחד לאבטחה"), h("p", {}, "במערכת שכר נדרש אימות דו-שלבי לכל משתמש.")), h("div")),
+    h("section", { class: "login-side" }, h("div", {}, h("h1", {}, "עוד שלב אחד לאבטחה"), h("p", {}, "ב"חשבות בקליק" נדרש אימות דו-שלבי לכל משתמש.")), h("div")),
     h("section", { class: "login-form" }, h("form", { onsubmit: async (e) => {
       e.preventDefault();
       try { const r = await api("POST", "/auth/2fa/enable", { code: code.value }); state.token = r.access_token;
@@ -367,7 +367,7 @@ function shell(view, title, content) {
     h("details", { open: NAV.some(([k]) => k === view) ? true : false }, h("summary", { class: "nav" }, "עוד"), NAV.map(navBtn))];
   return h("div", { class: "app" },
     h("nav", { class: "rail", "aria-label": "ניווט ראשי" },
-      h("div", { class: "brand" }, "מערכת שכר", h("small", {}, (state.companies.find(c => c.id === state.companyId) || {}).name || "")),
+      h("div", { class: "brand" }, "חשבות בקליק", h("small", {}, "חשבות שאפשר לסמוך עליה"), h("small", {}, (state.companies.find(c => c.id === state.companyId) || {}).name || "")),
       nav, h("div", { class: "spacer" }), h("div", { class: "who" }, state.user || ""),
       h("button", { class: "nav", onclick: async () => {
         try { if (state.token && !state.demo) await api("POST", "/auth/logout"); } catch (e) { /* יוצאים בכל מקרה */ }

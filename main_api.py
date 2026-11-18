@@ -574,7 +574,7 @@ def check_not_locked(db: Session, email: str) -> None:
         raise HTTPException(429, f"יותר מדי ניסיונות כושלים. נסי שוב בעוד {LOCK_MINUTES} דקות")
 
 
-app = FastAPI(title="AI Payroll API", version="3.1.0")
+app = FastAPI(title="חשבות בקליק API", version="3.1.0")
 # CORS: ברירת מחדל - אין גישה מאתרים אחרים. להגדרה: ALLOWED_ORIGINS=https://my-site.com,https://other.com
 _origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
