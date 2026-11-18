@@ -9,9 +9,8 @@ def test_all_specified_records_tile_964():
 
 
 def test_unspecified_records_are_refused():
-    for rec in ("20", "40"):
-        with pytest.raises(f.SpecError):
-            f.build_record(rec, {})
+    with pytest.raises(f.SpecError):
+        f.build_record("40", {})
 
 
 def test_record_10_positions():
@@ -85,3 +84,23 @@ def test_encoding_must_be_one_the_spec_allows():
 def test_id_check_digit():
     assert f.check_id_digit("000000018")
     assert not f.check_id_digit("000000019")
+
+
+def test_record_20_layout_and_key_columns():
+    assert len(f.SPEC["20"]) == 189
+    line = f.build_record("20", {"1": 912345678, "4": 2025, "5": 18, "14": 2, "15": 20,
+                                 "18": 19850314, "23": 20200101}, hebrew_visual=False)
+    assert len(line) == 964
+    assert line[11:13] == "20"
+    assert line[17:26] == "000000018"
+    assert line[118] == "2"                # gender, column 119
+    assert line[119:121] == "20"           # marital status, columns 120-121
+    assert line[131:139] == "19850314"     # birth date, columns 132-139
+    assert line[173:181] == "20200101"     # start date, columns 174-181
+    assert line[959:964] == "00000"        # last field, columns 960-964
+
+
+def test_record_20_fields_in_spec_order_and_unique_ranges():
+    ends = [x.end for x in f.SPEC["20"]]
+    assert ends == sorted(ends)
+    assert len({(x.start, x.end) for x in f.SPEC["20"]}) == len(ends)

@@ -4,11 +4,12 @@ Source: the Tax Authority's "מבנה רשומות דוח 126" specification (ta
 supplied by the user. Each record is 964 data columns followed by CRLF.
 
 Status of this module:
-  * record 10 (leading), record 30 (summary) and record 50 (monthly) are
-    specified here field by field and checked for contiguity 1..964;
-  * record 20 (employee) and record 40 (differences) are NOT specified yet -
-    ``SPEC`` has no entry for them and ``build_record`` refuses them, so no
-    incomplete file can be produced by mistake.
+  * records 10 (leading), 30 (summary) and 50 (monthly) are specified here
+    field by field and checked for contiguity 1..964;
+  * record 20 (employee) has its full column layout (see form126_rec20.py);
+  * record 40 (differences) is NOT specified yet - ``SPEC`` has no entry for
+    it and ``build_record`` refuses it, so no incomplete file can be produced
+    by mistake.
 
 Things the specification leaves open are never guessed. The caller must pass
 them explicitly:
@@ -142,6 +143,14 @@ SPEC: dict[str, list[Field]] = {
         _f("26", "מספר מפעל", 960, 964),
     ],
 }
+
+
+from form126_rec20 import REC20 as _REC20  # noqa: E402
+
+SPEC["20"] = [
+    _f(no, name, a, b, kind, "20" if no == "3" else None)
+    for no, name, a, b, kind in _REC20
+]
 
 
 class SpecError(ValueError):
