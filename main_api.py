@@ -621,6 +621,21 @@ class CompanyIn(BaseModel):
     tax_id: Optional[str] = None
 
 
+class FeedbackIn(BaseModel):
+    area: str = Field("general", pattern="^(general|calc|law|screens|other)$")
+    text: str = Field(..., min_length=3, max_length=2000)
+
+
+@app.post("/companies/{company_id}/feedback")
+def feedback(company_id: str, body: FeedbackIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """משוב ממשתמשי הניסוי. נשמר ביומן הפעולות וגם בלוג השרת. אין לכתוב נתונים אישיים."""
+    require_company(company_id, user, db, "read")
+    audit(db, user.id, company_id, "feedback", "feedback", body.area, body.text)
+    db.commit()
+    print("FEEDBACK", body.area, body.text.replace("\n", " ")[:2000], flush=True)
+    return {"ok": True}
+
+
 @app.get("/sources")
 def sources(user: User = Depends(current_user)):
     """קטלוג מקורות: כל כלל במערכת, החוק והסעיף, והסטטוס. נתוני חוק בלבד (לא נתוני משרד)."""

@@ -68,6 +68,7 @@ details>summary.nav{cursor:pointer;list-style:none}
 main{padding:32px 40px 64px;min-inline-size:0}
 .topline{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-block-end:24px}
 h2.page{margin:0;font-size:1.7rem}
+.trial{background:var(--warn-bg);color:var(--warn);padding:8px 14px;border-radius:8px;font-size:.9rem;margin-block-end:12px}
 .demo{background:var(--warn-bg);color:var(--warn);padding:8px 14px;border-radius:8px;font-weight:600;font-size:.9rem}
 
 /* טפסים בתוך מסכים */
@@ -361,7 +362,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["feedback", "משוב"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
   const nav = [navBtn(["home", "תהליך עבודה"]),
@@ -373,7 +374,7 @@ function shell(view, title, content) {
       h("button", { class: "nav", onclick: async () => {
         try { if (state.token && !state.demo) await api("POST", "/auth/logout"); } catch (e) { /* יוצאים בכל מקרה */ }
         state.token = null; state.demo = false; render("login"); } }, "יציאה")),
-    h("main", {}, h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
+    h("main", {}, h("div", { class: "trial", role: "note" }, "גרסת ניסוי חינמית: נתוני דמה בלבד. אין להזין נתונים אמיתיים של עובדים, ואין להסתמך על התוצאה בלי בדיקה. הנתונים עשויים להימחק."), h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
 }
 const cp = (p) => "/companies/" + state.companyId + p;
 
@@ -917,6 +918,20 @@ function sourcesView() {
     h("div", { class: "row2" }, h("label", {}, "סטטוס", stSel), h("label", {}, "חיפוש", q)), box));
 }
 
+
+/* ---------- משוב ---------- */
+function feedbackView() {
+  const area = h("select", {}, [["general", "כללי"], ["calc", "החישוב"], ["law", "החוק והמקורות"], ["screens", "המסכים והשימוש"], ["other", "אחר"]].map(([v, t]) => h("option", { value: v }, t)));
+  const text = h("textarea", { rows: 6, required: true, minlength: 3, maxlength: 2000, placeholder: "מה לא נראה נכון, מה חסר, מה היה מבלבל. בלי שמות או ת״ז אמיתיים." });
+  const msg = h("div", { "aria-live": "polite" });
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); msg.replaceChildren();
+    try { await api("POST", cp("/feedback"), { area: area.value, text: text.value }); text.value = ""; msg.replaceChildren(h("div", { class: "info" }, "תודה, המשוב נקלט.")); }
+    catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } }, h("label", {}, "נושא", area), h("label", {}, "המשוב שלך", text), msg, h("button", { class: "btn", type: "submit" }, "שליחה"));
+  return shell("feedback", "משוב", h("div", {}, h("p", {}, "הניסוי נועד לבדוק אם החישוב נכון ואם המסכים ברורים. כל הערה עוזרת."), form));
+}
+
 /* ---------- מסך הבית: שלושה צעדים ---------- */
 function homeView() {
   const step = (n, title, text, label, view) => h("section", { class: "flow-step" },
@@ -934,7 +949,7 @@ function homeView() {
 
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
