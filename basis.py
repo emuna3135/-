@@ -19,6 +19,9 @@ _NI_REF = {"kind": "law", "law": "דמי ביטוח לאומי לשכיר: שי�
 _HEALTH_REF = {"kind": "law", "law": "דמי ביטוח בריאות לשכיר: שיעורים וסף מופחת", "section": None,
                "ref": "אתר ביטוח לאומי, שיעורי דמי ביטוח (נקרא 16.11.2026): 3.23% עד הסף המופחת, 5.17% מעליו (מ-1.2.2025)",
                "url": "https://www.btl.gov.il/Insurance/Rates"}
+_NI_EMP_REF = {"kind": "law", "law": "דמי ביטוח לאומי למעסיק: שיעורים וסף מופחת", "section": None,
+               "ref": "אתר ביטוח לאומי, שיעורי דמי ביטוח לשכיר (נקרא 18.11.2026): מעסיק 4.51% עד הסף המופחת (7,703 ב-2026), 7.6% מעליו, הכנסה מרבית 51,910; אין ביטוח בריאות למעסיק. חוזר ב\"ל 1522 (1.4.2026)",
+               "url": "https://www.btl.gov.il/Insurance/Rates"}
 _AGREEMENT = {"kind": "none", "law": "אין כלל חוק: שיעור לפי הסכם / תקנון הקופה של העובד",
               "section": None, "ref": "השיעור מוזן על ידי חשב השכר", "url": None}
 
@@ -26,6 +29,7 @@ BASIS = {
     "income_tax": _INCOME_TAX,
     "national_insurance": [_NI_REF],
     "health": [_HEALTH_REF],
+    "national_insurance_employer": [_NI_EMP_REF],
     "pension_employee": [_AGREEMENT],
     "study_fund_employee": [_AGREEMENT],
 }

@@ -450,7 +450,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         "health": items["health"]["value"],
         "pension_employee": items["pension_employee"]["value"],
         "net": float(r["net"]) if r["net"] is not None else None,
-        "employer": {k: float(v["value"]) for k, v in r["employer"].items()},
+        "employer": {k: (float(v["value"]) if v["value"] is not None else None) for k, v in r["employer"].items()},
         "pension_base": float(r["pension_base"]),
         "cumulative_taxable": float(r["cumulative"]["cum_taxable"]),
         "cumulative_tax": int(r["cumulative"]["cum_tax"]),

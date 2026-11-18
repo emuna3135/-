@@ -13,7 +13,7 @@ def sample(year=2025, month=5, gross="10000", **kw):
            "income_tax": float(r["items"]["income_tax"]["value"] or 0),
            "net": float(r["net"]) if r["net"] is not None else None,
            "overall_status": r["overall_status"], "unresolved": r["unresolved"],
-           "employer": {k: float(v["value"]) for k, v in r["employer"].items()},
+           "employer": {k: (float(v["value"]) if v["value"] is not None else None) for k, v in r["employer"].items()},
            "pension_base": float(gross), "cumulative_taxable": float(gross) * month, "cumulative_tax": 0,
            "cumulative_ni_base": float(gross) * month}
     return res

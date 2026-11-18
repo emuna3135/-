@@ -91,6 +91,34 @@ def ni_health(year, gross, month=None):
             item(lo * h_lo + hi * h_hi, status, note))
 
 
+# ביטוח לאומי של המעסיק (שכיר תושב ישראל בגיל 18 עד גיל פרישה): שיעורים לפי btl.gov.il/Insurance/Rates (לעובדים שכירים), נקרא 18.11.2026:
+# מעסיק 4.51% עד הסף המופחת ו-7.6% מעליו (עד ההכנסה המרבית); אין דמי ביטוח בריאות למעסיק. סף מופחת 7,703 והכנסה מרבית 51,910 מ-1.1.2026.
+# אסמכתא נוספת: חוזר ביטוח לאומי 1522 (1.4.2026) "שינוי בתשלום דמי ביטוח לאומי ודמי ביטוח בריאות לשנת 2026".
+# הערה: בחוזר מוגדר שכר ממוצע 13,769 ו-60% ממנו הם 8,261.40, ואילו הסף המופחת שפורסם הוא 7,703; המערכת משתמשת בסף שפורסם ולא בחישוב עצמי.
+# 2025: אותם שיעורי מעסיק לפי טבלת האתר (4.51% "החל ב-01.01.2025"), עם הסף וההכנסה המרבית של 2025.
+# הערה: הסעיף בחוק לא תועד; לוח השיעורים הוא הוראת שעה עד סוף 2026 לפי החוזר.
+NI_EMPLOYER_RATES = {
+    2025: (D("7522"), D("0.0451"), D("0.076")),
+    2026: (D("7703"), D("0.0451"), D("0.076")),
+}
+
+
+def ni_employer(year, gross):
+    """ביטוח לאומי של המעסיק לשכיר רגיל. מחזיר item. שנה לא נתמכת או שכר מעל סף בלי תקרה -> MANUAL."""
+    g = D(str(gross))
+    if year not in NI_EMPLOYER_RATES or year not in NI_MAX_INSURED:
+        return item(None, MANUAL, f"שנה {year} לא נתמכת")
+    cap = NI_MAX_INSURED[year]
+    note = ""
+    if g > cap:
+        g = cap
+        note = f"הכנסה מעל התקרה, חויב עד {cap}. "
+    t, lo_r, hi_r = NI_EMPLOYER_RATES[year]
+    lo, hi = min(g, t), max(g - t, D(0))
+    note += "שכיר תושב ישראל בן 18 עד גיל פרישה; ללא עיגול (ערך מלא)"
+    return item(lo * lo_r + hi * hi_r, BY_LAW, note)
+
+
 # ---------------------------------------------------------------------------
 # מס הכנסה
 # ---------------------------------------------------------------------------
@@ -516,6 +544,10 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
         "severance": deposit(base, employer_severance_rate),
         "study_fund": deposit(base, employer_study_fund_rate),
     }
+    ni_emp = ni_employer(year, gross)
+    if irregular_payment and D(str(irregular_payment)) > 0 and ni_emp["value"] is not None:
+        ni_emp = dict(ni_emp, status=MANUAL, note=ni_emp["note"] + " | תשלום חריג בחודש: לא מאומת")
+    employer["national_insurance"] = dict(ni_emp, basis=basis.for_item("national_insurance_employer"))
     return {"year": year, "month": month, "gross": r2(gross), "items": items,
             "employer": employer, "pension_base": r2(base),
             "net": net, "overall_status": overall, "unresolved": unresolved,
