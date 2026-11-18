@@ -224,7 +224,7 @@ def build(d: dict, draft: bool) -> bytes:
     y = H - MARGIN
 
     _text_r(c, RIGHT, y - 4 * mm, f"תלוש שכר לחודש {d['month']:02d}/{d['year']}", "HE-B", 15)
-    _text_l(c, LEFT, y - 4 * mm, "הופק במערכת שכר", "HE", 7, MUTED)
+    _text_l(c, LEFT, y - 4 * mm, "הופק בחשבות בקליק", "HE", 7, MUTED)
     y -= 12 * mm
 
     # שתי תיבות: מעסיק (ימין) ועובד (שמאל)

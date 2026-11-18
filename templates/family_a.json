@@ -5,7 +5,7 @@
   "elements": [
     {"type": "box", "rect": [9, 20, 66, 17], "title": "", "border": true},
     {"type": "text", "at": [73, 26], "text": "תלוש שכר לחודש {period}", "bold": true, "size": 9},
-    {"type": "text", "at": [73, 32], "text": "הופק במערכת שכר", "size": 7},
+    {"type": "text", "at": [73, 32], "text": "הופק בחשבות בקליק", "size": 7},
 
     {"type": "kv", "rect": [88, 20, 113, 17], "title": "", "label_w": 20, "rows": [["חברה", "employer_name"], ["מספר ח.פ/ת.ז", "employer_id"], ["כתובת", "employer_address"]]},
 

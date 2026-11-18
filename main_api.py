@@ -1250,6 +1250,12 @@ class CalcFromCardIn(BaseModel):
     prev_cum_life: Optional[float] = None
     prev_cum_ni_base: Optional[float] = None
     period: Optional[str] = None
+    # נתוני תלוש שמגיעים מרישומי המעסיק (לא מחושבים בחוק): נשמרים עם החישוב ומוצגים בתלוש
+    worked: Optional[str] = Field(None, max_length=80)
+    vacation: Optional[str] = Field(None, max_length=80)
+    sick: Optional[str] = Field(None, max_length=80)
+    payment: Optional[str] = Field(None, max_length=80)
+    regular_hour_value: Optional[float] = Field(None, gt=0)   # הוזן על ידי חשב השכר
 
 
 @app.post("/companies/{company_id}/employees/{employee_id}/calculate")
@@ -1304,6 +1310,9 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         res["flags"].append(mode_note)
     if pts_note:
         res["flags"].append("נקודות זיכוי: " + pts_note)
+    ex = {k: getattr(body, k) for k in ("worked", "vacation", "sick", "payment", "regular_hour_value") if getattr(body, k) not in (None, "")}
+    if ex:
+        res["payslip_extras"] = ex
     save_stub(db, company_id, res)
     audit(db, user.id, company_id, "calculate", "employee", emp.id,
           f"{body.month:02d}/{body.year} status={res['overall_status']}")
@@ -1340,6 +1349,9 @@ def _payslip_inputs(db, company_id, employee_id, body):
               "vacation": body.vacation, "sick": body.sick, "payment": body.payment,
               "regular_hour_value": body.regular_hour_value, "seniority_override": body.seniority_override,
               "bonus": res.get("bonus", 0)}
+    for k, v in (res.get("payslip_extras") or {}).items():      # נתונים שהוזנו עם החישוב; מה שנשלח עכשיו גובר
+        if extras.get(k) in (None, ""):
+            extras[k] = v
     return res, extras, d, {"name": company.name, "tax_id": company.tax_id}
 
 
@@ -1696,6 +1708,15 @@ async def upload_excel(
 
 
 COLUMN_MAP["other_deductions"] = ["other_deductions", "ניכויים אחרים", "ניכוי אחר"]
+COLUMN_MAP["worked"] = ["worked", "ימי עבודה בחודש", "עבודה בחודש"]
+COLUMN_MAP["vacation"] = ["vacation", "חופשה (ניצול/יתרה)", "חופשה"]
+COLUMN_MAP["sick"] = ["sick", "מחלה (ניצול/יתרה)", "מחלה"]
+COLUMN_MAP["payment"] = ["payment", "אופן תשלום"]
+COLUMN_MAP["regular_hour_value"] = ["regular_hour_value", "ערך שעת עבודה רגילה", "ערך שעה"]
+
+
+def _txt(v):
+    return None if v is None or str(v).strip() == "" else str(v).strip()
 
 
 @app.post("/companies/{company_id}/upload-excel-card")
@@ -1736,7 +1757,10 @@ async def upload_excel_card(
                 bonus=float(pick(row, "bonus", 0)),
                 tax_exempt=float(pick(row, "tax_exempt", 0)),
                 other_deductions=float(pick(row, "other_deductions", 0)),
-                base_salary=float(base) if base is not None else None)
+                base_salary=float(base) if base is not None else None,
+                worked=_txt(pick(row, "worked")), vacation=_txt(pick(row, "vacation")),
+                sick=_txt(pick(row, "sick")), payment=_txt(pick(row, "payment")),
+                regular_hour_value=float(pick(row, "regular_hour_value")) if pick(row, "regular_hour_value") is not None else None)
             out = calculate_from_card(company_id, emp.id, body, user, db)
             results.append(out)
         except HTTPException as e:
