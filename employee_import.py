@@ -34,6 +34,7 @@ ALIASES = {
     "marital": ("מצב משפחתי", "marital"),
     "custody": ("שנות לידה ילדים בחזקתו", "custody_birth_years"),
     "noncustody": ("שנות לידה ילדים שלא בחזקתו", "noncustody_birth_years"),
+    "flags": ("מצבי חיים", "family_flags"),
 }
 
 
@@ -134,6 +135,30 @@ def parse_employee(row):
     return out
 
 
+_FLAGS = {"נער/ה 16-18": "teen", "נער 16-18": "teen", "teen": "teen",
+          "יחיד מוטב": "benef", "benef": "benef", "נשואה לאלמן": "widower", "widower": "widower",
+          "חי בנפרד ללא משק בית משותף": "nomesh", "nomesh": "nomesh",
+          "חי בנפרד עם משק בית משותף": "yesmesh", "yesmesh": "yesmesh",
+          "הורה יחיד": "niptar", "niptar": "niptar", "משלם מזונות": "mezonut", "mezonut": "mezonut"}
+
+
+def _flags(v):
+    """תא 'מצבי חיים': ערכים מופרדים בפסיק או נקודה-פסיק. ערך לא מזוהה = שגיאה (לא מנחשים)."""
+    if v is None:
+        return []
+    out = []
+    for part in str(v).replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        f = _FLAGS.get(part.lower() if part.isascii() else part)
+        if f is None:
+            raise RowError("מצב חיים לא מזוהה: " + part)
+        if f not in out:
+            out.append(f)
+    return out
+
+
 def parse_form101(row):
     """שורת טופס 101 -> (id_number, שנת מס, dict בפורמט Form101In)."""
     idn = str(_need(row, "id_number")).strip()
@@ -165,6 +190,7 @@ def parse_form101(row):
         "marital": m,
         "custody_birth_years": _years(_get(row, "custody")),
         "noncustody_birth_years": _years(_get(row, "noncustody")),
+        "family_flags": _flags(_get(row, "flags")),
     }
 
 

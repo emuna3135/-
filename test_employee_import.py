@@ -54,3 +54,17 @@ class ParseForm101(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FamilyFlags(unittest.TestCase):
+    def test_flags_parsed(self):
+        _id, _y, f = ei.parse_form101({"תעודת זהות": "1", "שנת מס": 2026, "מצבי חיים": "הורה יחיד; נער/ה 16-18"})
+        self.assertEqual(f["family_flags"], ["niptar", "teen"])
+
+    def test_no_flags_cell_is_empty(self):
+        _id, _y, f = ei.parse_form101({"תעודת זהות": "1", "שנת מס": 2026})
+        self.assertEqual(f["family_flags"], [])
+
+    def test_unknown_flag_is_error_not_guess(self):
+        with self.assertRaises(ei.RowError):
+            ei.parse_form101({"תעודת זהות": "1", "שנת מס": 2026, "מצבי חיים": "משהו"})
