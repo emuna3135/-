@@ -10,7 +10,18 @@ def test_all_specified_records_tile_964():
 
 def test_unspecified_records_are_refused():
     with pytest.raises(f.SpecError):
-        f.build_record("40", {})
+        f.build_record("99", {})
+
+
+def test_record_40_positions():
+    line = f.build_record("40", {"1": 912345678, "4": 2025, "8": 2, "29": "a@b.co",
+                                 "30": 3, "31": 9}, hebrew_visual=False)
+    assert len(line) == 964
+    assert line[11:13] == "40"
+    assert line[32] == "2"
+    assert line[233:239] == "a@b.co"
+    assert line[283:289] == "000003"
+    assert line[959:964] == "00009"
 
 
 def test_record_10_positions():

@@ -7,9 +7,9 @@ Status of this module:
   * records 10 (leading), 30 (summary) and 50 (monthly) are specified here
     field by field and checked for contiguity 1..964;
   * record 20 (employee) has its full column layout (see form126_rec20.py);
-  * record 40 (differences) is NOT specified yet - ``SPEC`` has no entry for
-    it and ``build_record`` refuses it, so no incomplete file can be produced
-    by mistake.
+  * record 40 (reconciliation with the monthly 102 reports) is specified too.
+    Names of the 30-series fields are shortened; the printed specification
+    governs the meaning of each value.
 
 Things the specification leaves open are never guessed. The caller must pass
 them explicitly:
@@ -36,7 +36,7 @@ class Field:
     name: str
     start: int         # first column, 1-based
     end: int           # last column, inclusive
-    kind: str          # "N" numeric, "A" alphanumeric, "F" filler (spaces)
+    kind: str          # "N" numeric, "A" alphanumeric, "E" e-mail (case kept), "F" filler
     const: str | None = None   # fixed value mandated by the spec
 
     @property
@@ -152,6 +152,60 @@ SPEC["20"] = [
     for no, name, a, b, kind in _REC20
 ]
 
+SPEC["40"] = [
+    _f("1", "מספר תיק ניכויים", 1, 9),
+    _f("2", "מספר אגיד", 10, 11),
+    _f("3", "סוג רשומה", 12, 13, const="40"),
+    _f("4", "שנת מס", 14, 17),
+    _f("5", "אפסים", 18, 26, const="0" * 9),
+    _f("6", "FILLER", 27, 31, "F"),
+    _f("7", "FILLER", 32, 32, "F"),
+    _f("8", "האם שודר/ישודר דוח משלים (1 כן, 2 לא)", 33, 33),
+    _f("9", "מספר תיק עצמאי או חברה במס הכנסה", 34, 42),
+    _f("10", "מעמד משפטי של המשלם (1 חברה, 2 יחיד, 3 שותפות, 4 עמותה, 5 רשות)", 43, 43),
+    _f("11", "סה\"כ משכורת ותשלומים לפי הדוח החודשי (102)", 44, 54),
+    _f("12", "דמי ביטוח לאומי ודמי ביטוח בריאות (סה\"כ חובה לפי 102)", 55, 65),
+    _f("13", "ריק", 66, 76, "F"),
+    _f("14", "סה\"כ השכר הפטור מדמי ביטוח (צבירת שדה 123 ברשומה 20)", 77, 87),
+    _f("15", "סה\"כ סכומים פטורים מעל המקסימום (צבירת שדה 127 ברשומה 20)", 88, 98),
+    _f("16", "ריק", 99, 109, "F"),
+    _f("17", "סה\"כ משכורת ותשלומים (צבירת שדה 39 ברשומה 20)", 110, 120),
+    _f("18", "ריק", 121, 131, "F"),
+    _f("19", "סה\"כ משכורת ותשלומים לפי דוח חודשי (102), ללא שירות התעסוקה", 132, 142),
+    _f("20", "סה\"כ שכר שדווח באמצעות שירות התעסוקה לעובדים פלסטינים", 143, 153),
+    _f("21", "מס מעסיקים לפי הדוח החודשי (102)", 154, 164),
+    _f("22", "ניכוי מס הכנסה לפי דוח חודשי (102)", 165, 175),
+    _f("23", "ההטבה להפחתת עלויות השכר באילת שקוזזה מניכוי המס", 176, 181),
+    _f("24", "סה\"כ מס הכנסה שנוכה (צבירת שדה 116 ברשומה 20)", 182, 192),
+    _f("25", "דמי פגיעה ששולמו על חשבון הביטוח הלאומי", 193, 203),
+    _f("26", "סה\"כ תגמולי מילואים ששולמו על חשבון הביטוח הלאומי", 204, 214),
+    _f("27", "סה\"כ קצובות הכלולות במשכורת לצורך חישובי המס", 215, 225),
+    _f("28", "היטל על העסקת עובדים זרים", 226, 233),
+    _f("29", "כתובת דואר אלקטרוני", 234, 283, "E"),
+    _f("30", "סה\"כ עובדים בדוח במקום שדה 6", 284, 289),
+    _f("30א'", "יתרת מס לאחר קיזוז", 290, 299),
+    _f("30ב'", "סיכום כללי 18+20", 300, 311),
+    _f("30ג'", "ההפרש בין 18 לטור ד'", 312, 321),
+    _f("30ד'", "ההפרש בין שדה 26 לטור ז'", 322, 331),
+    _f("30ה'", "מס מעסיקים בשירות התעסוקה", 332, 341),
+    _f("30ו'", "מס שכר שדווח בשירות התעסוקה", 342, 351),
+    _f("30ז'", "דמי ביטוח לאומי וביטוח בריאות (טור ו')", 352, 361),
+    _f("30ח'", "דמי ביטוח לאומי ומס בריאות", 362, 371),
+    _f("30ט'", "ניכוי מס הכנסה ומס (טור א')", 372, 381),
+    _f("30י'", "מס שכר למוסד ללא כוונת רווח (טור ט')", 382, 393),
+    _f("30י'1", "ההטבה להפחתת עלויות השכר (טור ח')", 394, 401),
+    _f("30י\"א", "מספר הטלפון של החברה", 402, 411),
+    _f("30יא'1", "FILLER", 412, 877, "F"),
+    _f("30יא'2", "מספר תיק ניכויים של ביטוח לאומי", 878, 888),
+    _f("30יא'3", "סה\"כ מחיר יום ההבראה", 889, 899),
+    _f("30יא'4", "סה\"כ חלקו של המעסיק", 900, 910),
+    _f("30יא'5", "סה\"כ משכורת להפחתה", 911, 921),
+    _f("30יא'6", "סה\"כ חיובים מהפחתה", 922, 932),
+    _f("30יא'7", "FILLER", 933, 957, "F"),
+    _f("30י\"ב", "רבעון בדיווח השנתי", 958, 959),
+    _f("31", "מספר מפעל", 960, 964),
+]
+
 
 class SpecError(ValueError):
     pass
@@ -189,6 +243,10 @@ def _num(f: Field, v) -> str:
 
 def _alpha(f: Field, v, hebrew_visual: bool | None) -> str:
     s = "" if v is None else str(v)
+    if f.kind == "E":
+        if len(s) > f.length:
+            raise ValueError(f"שדה {f.no}: הטקסט ארוך מ-{f.length} תווים")
+        return s.ljust(f.length)
     if len(s) > f.length:
         raise ValueError(f"שדה {f.no}: הטקסט ארוך מ-{f.length} תווים")
     if _is_hebrew(s):
@@ -219,7 +277,7 @@ def build_record(rec: str, values: dict, hebrew_visual: bool | None = None) -> s
             out.append(_alpha(f, f.const, hebrew_visual) if f.kind == "A" else f.const)
         elif f.kind == "N":
             out.append(_num(f, values.get(f.no, 0)))
-        else:
+        else:  # "A" or "E"
             out.append(_alpha(f, values.get(f.no), hebrew_visual))
     line = "".join(out)
     if len(line) != RECORD_WIDTH:
