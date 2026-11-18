@@ -1,0 +1,183 @@
+"""ייבוא עובדים וטופס 101 מאקסל. פונקציות טהורות (בלי FastAPI), נבדקות ב-test_employee_import.py.
+כל ערך שלא מזוהה = שגיאת שורה; המערכת לא מנחשת ערך חסר. תעודת זהות נבדקת בנפרד (secure.valid_israeli_id) בשרת."""
+import datetime
+import io
+
+SHEET_EMPLOYEES = "עובדים"
+SHEET_FORM101 = "טופס 101"
+
+_GENDER = {"f": "F", "m": "M", "נקבה": "F", "אישה": "F", "נ": "F", "זכר": "M", "גבר": "M", "ז": "M"}
+_MARITAL = {"single": "single", "married": "married", "divorced": "divorced", "widowed": "widowed", "separated": "separated",
+            "רווק": "single", "רווקה": "single", "רווק/ה": "single", "נשוי": "married", "נשואה": "married", "נשוי/אה": "married",
+            "גרוש": "divorced", "גרושה": "divorced", "גרוש/ה": "divorced", "אלמן": "widowed", "אלמנה": "widowed",
+            "אלמן/ה": "widowed", "פרוד": "separated", "פרודה": "separated", "פרוד/ה": "separated"}
+_YES = ("כן", "yes", "true", "1", "y")
+_NO = ("לא", "no", "false", "0", "n")
+
+ALIASES = {
+    "id_number": ("תעודת זהות", "ת.ז", "id_number"),
+    "full_name": ("שם מלא", "שם עובד", "שם", "full_name"),
+    "gender": ("מין", "gender"),
+    "birth_date": ("תאריך לידה", "birth_date"),
+    "start_date": ("תאריך תחילת עבודה", "תחילת עבודה", "start_date"),
+    "is_resident": ("תושב", "is_resident"),
+    "base_salary": ("שכר יסוד", "base_salary"),
+    "pension_employee_rate": ("אחוז פנסיה עובד", "pension_employee_rate"),
+    "employer_pension_rate": ("אחוז פנסיה מעסיק", "employer_pension_rate"),
+    "employer_severance_rate": ("אחוז פיצויים מעסיק", "employer_severance_rate"),
+    "position_scope_percent": ("היקף משרה %", "היקף משרה", "position_scope_percent"),
+    "tax_year": ("שנת מס", "שנה", "tax_year"),
+    "signed_on": ("תאריך חתימה", "signed_on"),
+    "income_type": ("סוג הכנסה", "income_type"),
+    "other_income": ("הכנסה אחרת", "other_income"),
+    "other_income_credit": ("זיכוי כנגד הכנסה זו", "other_income_credit"),
+    "marital": ("מצב משפחתי", "marital"),
+    "custody": ("שנות לידה ילדים בחזקתו", "custody_birth_years"),
+    "noncustody": ("שנות לידה ילדים שלא בחזקתו", "noncustody_birth_years"),
+}
+
+
+class RowError(ValueError):
+    pass
+
+
+def _get(row, key):
+    for a in ALIASES[key]:
+        if a in row and row[a] not in (None, ""):
+            return row[a]
+    return None
+
+
+def _need(row, key):
+    v = _get(row, key)
+    if v is None:
+        raise RowError(f"חסר ערך בעמודה '{ALIASES[key][0]}'")
+    return v
+
+
+def _date(v, label):
+    if v is None:
+        return None
+    if isinstance(v, datetime.datetime):
+        return v.date().isoformat()
+    if isinstance(v, datetime.date):
+        return v.isoformat()
+    try:
+        return datetime.date.fromisoformat(str(v).strip()[:10]).isoformat()
+    except ValueError:
+        raise RowError(f"תאריך לא תקין בעמודה '{label}' (נדרש YYYY-MM-DD)")
+
+
+def _num(v, label):
+    try:
+        return float(str(v).replace(",", "").replace("%", "").strip())
+    except ValueError:
+        raise RowError(f"מספר לא תקין בעמודה '{label}'")
+
+
+def _rate(v, label):
+    """שיעור כשבר עשרוני (0.06). ערך מעל 1 נקרא כאחוזים (6 = 6%)."""
+    x = _num(v, label)
+    return x / 100 if x > 1 else x
+
+
+def _yes_no(v, label):
+    s = str(v).strip().lower()
+    if s in _YES:
+        return True
+    if s in _NO:
+        return False
+    raise RowError(f"ערך לא מזוהה בעמודה '{label}' (כן/לא)")
+
+
+def _years(v):
+    if v is None:
+        return []
+    if isinstance(v, (int, float)):
+        return [int(v)]
+    out = []
+    for part in str(v).replace(";", ",").split(","):
+        part = part.strip()
+        if part:
+            if not part.isdigit() or not (1950 <= int(part) <= 2100):
+                raise RowError("שנות לידה של ילדים: מספרים מופרדים בפסיק")
+            out.append(int(part))
+    return out
+
+
+def parse_employee(row):
+    """שורת עובד -> dict בפורמט EmployeeIn. חסר ערך חובה = RowError."""
+    idn = str(_need(row, "id_number")).strip()
+    g = str(_need(row, "gender")).strip().lower()
+    if g not in _GENDER:
+        raise RowError("מין לא מזוהה (F/M או נקבה/זכר)")
+    res = _get(row, "is_resident")
+    out = {
+        "id_number": idn,
+        "full_name": str(_need(row, "full_name")).strip(),
+        "gender": _GENDER[g],
+        "birth_date": _date(_get(row, "birth_date"), "תאריך לידה"),
+        "start_date": _date(_get(row, "start_date"), "תאריך תחילת עבודה"),
+        "is_resident": True if res is None else _yes_no(res, "תושב"),
+        "base_salary": _num(_need(row, "base_salary"), "שכר יסוד"),
+        "pension_employee_rate": _rate(_need(row, "pension_employee_rate"), "אחוז פנסיה עובד"),
+    }
+    for key, label in (("employer_pension_rate", "אחוז פנסיה מעסיק"), ("employer_severance_rate", "אחוז פיצויים מעסיק")):
+        v = _get(row, key)
+        if v is not None:
+            out[key] = _rate(v, label)
+    scope = _get(row, "position_scope_percent")
+    if scope is not None:
+        out["position_scope_percent"] = _num(scope, "היקף משרה %")
+    if out["base_salary"] <= 0:
+        raise RowError("שכר יסוד חייב להיות חיובי")
+    return out
+
+
+def parse_form101(row):
+    """שורת טופס 101 -> (id_number, שנת מס, dict בפורמט Form101In)."""
+    idn = str(_need(row, "id_number")).strip()
+    year = int(_num(_get(row, "tax_year") if _get(row, "tax_year") is not None else _need(row, "tax_year"), "שנת מס"))
+    income = str(_get(row, "income_type") or "main").strip().lower()
+    income = {"משרה עיקרית": "main", "main": "main", "משרה נוספת": "additional", "additional": "additional"}.get(income)
+    if income is None:
+        raise RowError("סוג הכנסה לא מזוהה (משרה עיקרית / משרה נוספת)")
+    other = _get(row, "other_income")
+    credit = _get(row, "other_income_credit")
+    credit_val = None
+    if credit is not None:
+        c = str(credit).strip().lower()
+        credit_val = {"כאן": "here", "here": "here", "אצל מעסיק אחר": "elsewhere", "elsewhere": "elsewhere"}.get(c)
+        if credit_val is None:
+            raise RowError("זיכוי כנגד הכנסה זו: 'כאן' או 'אצל מעסיק אחר'")
+    marital = _get(row, "marital")
+    m = None
+    if marital is not None:
+        m = _MARITAL.get(str(marital).strip().lower())
+        if m is None:
+            raise RowError("מצב משפחתי לא מזוהה")
+    return idn, year, {
+        "signed_on": _date(_get(row, "signed_on"), "תאריך חתימה"),
+        "income_type": income,
+        "other_income": False if other is None else _yes_no(other, "הכנסה אחרת"),
+        "other_income_credit": credit_val,
+        "other_credits_claimed": False,
+        "marital": m,
+        "custody_birth_years": _years(_get(row, "custody")),
+        "noncustody_birth_years": _years(_get(row, "noncustody")),
+    }
+
+
+def read_sheets(content: bytes):
+    """כל הגיליונות של קובץ xlsx -> {שם גיליון: [dict לשורה לפי הכותרות]}."""
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    out = {}
+    for ws in wb.worksheets:
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            out[ws.title] = []
+            continue
+        head = [str(h).strip() if h is not None else "" for h in rows[0]]
+        out[ws.title] = [dict(zip(head, r)) for r in rows[1:] if any(c not in (None, "") for c in r)]
+    return out

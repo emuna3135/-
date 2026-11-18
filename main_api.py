@@ -15,6 +15,7 @@ import termination
 import attendance_pdf
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
+import employee_import
 import authpolicy
 import proposals
 import overrides
@@ -1147,6 +1148,77 @@ def set_form101(company_id: str, employee_id: str, year: int, body: Form101In,
     db.commit()
     pts, status, note = card.points_from_form101(year, d["is_resident"], d["gender"], data)
     return {"year": year, "credit_points": pts, "points_status": status, "points_note": note}
+
+
+def _err_text(e) -> str:
+    """הודעת שגיאה קצרה בעברית-חברותית: לשגיאת pydantic מציגים את השדה והסיבה הראשונה."""
+    try:
+        first = e.errors()[0]
+        return f"{'.'.join(str(x) for x in first['loc'])}: {first['msg']}"
+    except Exception:
+        return str(e)
+
+
+def _save_form101(db: Session, company_id: str, employee_id: str, year: int, data: dict) -> None:
+    row = db.query(EmployeeYear).filter(EmployeeYear.employee_id == employee_id, EmployeeYear.year == year).first()
+    if row:
+        row.payload_enc = seal(db, company_id, data)
+    else:
+        db.add(EmployeeYear(company_id=company_id, employee_id=employee_id, year=year,
+                            payload_enc=seal(db, company_id, data)))
+
+
+@app.post("/companies/{company_id}/employees/upload-excel")
+async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
+                                 user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """הקמת עובדים (גיליון 'עובדים') וטפסי 101 (גיליון 'טופס 101') מקובץ xlsx. עובד קיים לא נדרס; טופס 101 שלו מתעדכן."""
+    require_company(company_id, user, db, "write")
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(400, "נדרש קובץ xlsx")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "הקובץ גדול מדי (מעל 5MB)")
+    try:
+        sheets = employee_import.read_sheets(content)
+    except Exception:
+        raise HTTPException(400, "לא ניתן לקרוא את הקובץ")
+    emp_rows = sheets.get(employee_import.SHEET_EMPLOYEES)
+    if emp_rows is None:
+        raise HTTPException(400, "חסר גיליון בשם 'עובדים'")
+    f101_rows = sheets.get(employee_import.SHEET_FORM101, [])
+    if len(emp_rows) > 500 or len(f101_rows) > 2000:
+        raise HTTPException(400, "יותר מדי שורות (עד 500 עובדים)")
+    errors, f101_by_id = [], {}
+    for i, row in enumerate(f101_rows, start=2):
+        try:
+            idn, year, f = employee_import.parse_form101(row)
+            f101_by_id.setdefault(idn, []).append((year, Form101In(**f).model_dump(mode="json")))
+        except ValueError as e:
+            errors.append({"sheet": employee_import.SHEET_FORM101, "row": i, "error": _err_text(e)})
+    created = existing = forms = 0
+    for i, row in enumerate(emp_rows, start=2):
+        try:
+            body = EmployeeIn(**employee_import.parse_employee(row))
+            if not secure.valid_israeli_id(body.id_number):
+                raise ValueError("מספר תעודת זהות לא תקין (ספרת ביקורת)")
+            h = emp_key(company_id, body.id_number)
+            emp = db.query(Employee).filter(Employee.company_id == company_id, Employee.id_hash == h).first()
+            if emp:
+                existing += 1
+            else:
+                emp = Employee(company_id=company_id, id_hash=h, payload_enc=seal(db, company_id, body.model_dump(mode="json")))
+                db.add(emp)
+                db.flush()
+                created += 1
+            for year, data in f101_by_id.get(body.id_number, []):
+                _save_form101(db, company_id, emp.id, year, data)
+                forms += 1
+        except ValueError as e:
+            errors.append({"sheet": employee_import.SHEET_EMPLOYEES, "row": i, "error": _err_text(e)})
+    audit(db, user.id, company_id, "upload_employees_excel", "file", None,
+          f"rows={len(emp_rows)} created={created} existing={existing} form101={forms} errors={len(errors)}")
+    db.commit()
+    return {"created": created, "existing": existing, "form101_saved": forms, "errors": errors}
 
 
 class CalcFromCardIn(BaseModel):

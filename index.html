@@ -640,9 +640,30 @@ function addEmpForm() {
       h("label", {}, "תאריך לידה", f.birth_date), h("label", {}, "תחילת עבודה", f.start_date), h("label", {}, "שכר חודשי (₪)", f.base_salary),
       msg, h("button", { class: "btn", type: "submit" }, "הוספה")));
 }
+
+/* ---------- הקמת עובדים וטופס 101 מאקסל ---------- */
+function empImportForm() {
+  const file = h("input", { type: "file", accept: ".xlsx", required: true });
+  const out = h("div", { "aria-live": "polite" });
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); out.replaceChildren(h("p", {}, "טוענת…"));
+    const fd = new FormData(); fd.append("file", file.files[0]);
+    try {
+      const r = await api("POST", cp("/employees/upload-excel"), fd, true);
+      const nodes = [h("p", {}, "נוצרו " + r.created + " עובדים חדשים, " + r.existing + " כבר היו קיימים, נשמרו " + r.form101_saved + " טפסי 101, " + r.errors.length + " שגיאות.")];
+      if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא נקלטו:"),
+        h("ul", {}, r.errors.slice(0, 50).map(x => h("li", {}, x.sheet + ", שורה " + x.row + ": " + x.error))),
+        r.errors.length > 50 ? h("p", {}, "ועוד " + (r.errors.length - 50) + " שגיאות") : null));
+      nodes.push(h("button", { class: "btn ghost", type: "button", onclick: () => render("emps") }, "הצגת רשימת העובדים"));
+      out.replaceChildren(...nodes);
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } }, h("label", {}, "קובץ אקסל עם גיליונות 'עובדים' ו'טופס 101'", file), h("button", { class: "btn", type: "submit" }, "הקמת עובדים מהקובץ"));
+  return h("details", { class: "card" }, h("summary", {}, "הקמת עובדים וטופס 101 מאקסל"), h("p", {}, "עובד שכבר קיים לא נדרס; טופס 101 שלו מתעדכן. נתוני דמה בלבד."), form, out);
+}
+
 const empsView = () => listView("emps", "עובדים", "/employees",
   [["שם", r => r.full_name], ["ת״ז", r => h("span", { class: "num" }, r.id_number_masked)], ["שכר יסוד", r => h("span", { class: "num" }, fmt(r.base_salary))], ["תחילת עבודה", r => r.start_date ? h("span", { class: "num" }, r.start_date) : "—"]],
-  "עוד אין עובדים במשרד. אפשר להוסיף עובד בטופס שלמעלה.", undefined, addEmpForm());
+  "עוד אין עובדים במשרד. אפשר להוסיף עובד בטופס שלמעלה.", undefined, h("div", {}, empImportForm(), addEmpForm()));
 
 /* ---------- מסמכים לאישור ---------- */
 const KIND = { form101: "טופס 101", form106: "טופס 106", guideline: "הנחיה חדשה" };
