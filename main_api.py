@@ -154,6 +154,13 @@ class PaystubV2(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
+class CompanyProfile(Base):
+    """פרטי חברה לדיווח לרשויות (טופס 126), מוצפנים."""
+    __tablename__ = "company_profiles"
+    company_id = Column(String, ForeignKey("companies.id"), primary_key=True)
+    payload_enc = Column(String, nullable=False)
+
+
 class UserSecurity(Base):
     """הגדרות אבטחה למשתמש (2FA). טבלה נפרדת כדי לא לשנות את טבלת users הקיימת."""
     __tablename__ = "user_security"
@@ -1688,6 +1695,90 @@ def pick(row: dict, key: str, default=None):
         if alias in row and row[alias] not in (None, ""):
             return row[alias]
     return default
+
+
+class ProfileIn(BaseModel):
+    file_no: str = Field(..., pattern=r"^9\d{8}$")          # תיק ניכויים: 9 ספרות, מתחיל ב-9 (מפרט 126, שדה 1)
+    agid: int = Field(0, ge=0, le=99)
+    factory_no: Optional[str] = Field(None, pattern=r"^\d{1,5}$")
+    legal_status: int = Field(..., ge=1, le=5)               # 1 חברה, 2 יחיד, 3 שותפות, 4 עמותה, 5 רשות
+    tax_file_no: str = Field(..., pattern=r"^\d{1,9}$")
+    name: str = Field(..., min_length=1, max_length=18)      # שם המעביד: 18 תווים ברשומה 10
+    phone: str = Field(..., pattern=r"^\d{1,9}$")
+    employer_tax: int = Field(..., ge=1, le=2)               # 1 פטור, 2 חייב במס מעסיקים
+
+
+@app.get("/companies/{company_id}/profile")
+def get_profile(company_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "read")
+    row = db.get(CompanyProfile, company_id)
+    return unseal(db, company_id, row.payload_enc) if row else {}
+
+
+@app.put("/companies/{company_id}/profile")
+def put_profile(company_id: str, body: ProfileIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "write")
+    data = body.model_dump(mode="json")
+    row = db.get(CompanyProfile, company_id)
+    if row:
+        row.payload_enc = seal(db, company_id, data)
+    else:
+        db.add(CompanyProfile(company_id=company_id, payload_enc=seal(db, company_id, data)))
+    audit(db, user.id, company_id, "update_company_profile", "company", company_id)
+    db.commit()
+    return data
+
+
+class Report126In(BaseModel):
+    year: int = Field(..., ge=2000, le=2100)
+    hebrew_visual: bool                                      # המפרט לא מכריע: חובה לבחור
+    encoding: str = Field(..., pattern="^(cp862|cp1255)$")   # המפרט מתיר ASCII NEW CODE או ASCII WINDOWS
+
+
+def _report126(db: Session, company_id: str, body: Report126In):
+    import report126_data
+    row = db.get(CompanyProfile, company_id)
+    if not row:
+        raise HTTPException(422, "יש להגדיר קודם את פרטי החברה לדיווח")
+    profile = unseal(db, company_id, row.payload_enc)
+    emps, by_emp_id = [], {}
+    for e in db.query(Employee).filter(Employee.company_id == company_id).all():
+        d = unseal(db, company_id, e.payload_enc)
+        emps.append(d)
+        by_emp_id[e.id] = d["id_number"]
+    f101 = {}
+    for y in db.query(EmployeeYear).filter(EmployeeYear.company_id == company_id, EmployeeYear.year == body.year).all():
+        if y.employee_id in by_emp_id:
+            f101[by_emp_id[y.employee_id]] = unseal(db, company_id, y.payload_enc)
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == body.year)
+             .order_by(PaystubV2.created_at).all()]
+    try:
+        return report126_data.run(profile, body.year, emps, f101, stubs,
+                                  hebrew_visual=body.hebrew_visual, encoding=body.encoding)
+    except Exception as ex:                                  # שגיאת נתונים/מפרט: מציגים, לא קורסים
+        raise HTTPException(422, f"לא ניתן לבנות את הקובץ: {ex}")
+
+
+@app.post("/companies/{company_id}/reports/126/check")
+def report126_check(company_id: str, body: Report126In, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "read")
+    _, issues, records, ok = _report126(db, company_id, body)
+    audit(db, user.id, company_id, "report126_check", "report", None, f"year={body.year} issues={len(issues)}")
+    db.commit()
+    return {"issues": issues, "records": records, "submittable": ok}
+
+
+@app.post("/companies/{company_id}/reports/126/file")
+def report126_file(company_id: str, body: Report126In, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "write")
+    data, issues, records, ok = _report126(db, company_id, body)
+    audit(db, user.id, company_id, "report126_download", "report", None,
+          f"year={body.year} records={records} draft={not ok}")
+    db.commit()
+    name = f"126-{body.year}{'' if ok else '-DRAFT'}.txt"
+    return Response(content=data, media_type="text/plain",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Report-Draft": "false" if ok else "true"})
 
 
 @app.get("/upload-template")

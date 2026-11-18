@@ -789,7 +789,7 @@ const periodOf = (p) => String(p.month).padStart(2, "0") + "/" + p.year;
 const slipOk = (p) => p.net != null && !(p.unresolved && p.unresolved.length) && p.overall_status !== "נדרש טיפול ידני";
 
 function flowBar(step) {
-  const names = ["1. העלאת אקסל וטופס 101", "2. בדיקה ואישור", "3. הפקת תלוש לפי תבנית"];
+  const names = ["1. העלאת אקסל וטופס 101", "2. בדיקה ואישור", "3. הפקת תלוש לפי תבנית", "4. דיווחים לרשויות"];
   return h("div", { class: "flowbar", role: "list" }, names.map((t, i) =>
     h("span", { role: "listitem", class: "flowbar-i" + (i + 1 === step ? " on" : ""), "aria-current": i + 1 === step ? "step" : false }, t)));
 }
@@ -914,7 +914,9 @@ function issueView() {
     approved.length ? h("div", {}, h("p", {}, approved.length + " תלושים מאושרים. מסמנים למי להפיק."), listBox, h("label", {}, "תבנית", tpl), h("label", {}, "כתובת המעסיק (מופיעה בכל התלושים; חובה בתלוש)", addr),
       h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: make }, "הפקת התלושים המאושרים")), out)
       : h("div", { class: "empty" }, "אין תלושים מאושרים. אישור נעשה בשלב 2."),
-    h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 2")));
+    h("div", { class: "actions" },
+      h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 2"),
+      h("button", { class: "btn", type: "button", onclick: () => render("reports") }, "המשך לשלב 4: דיווחים לרשויות"))));
 }
 
 
@@ -961,6 +963,69 @@ function feedbackView() {
 }
 
 /* ---------- מסך הבית: שלושה צעדים ---------- */
+function reportsView() {
+  const f = {};
+  const out = h("div", { "aria-live": "polite" });
+  const field = (name, label, attrs) => { f[name] = h("input", Object.assign({ name, required: true }, attrs || {})); return h("label", {}, label, f[name]); };
+  const pick = (name, label, opts) => { f[name] = h("select", { name }, opts.map(([v, t]) => h("option", { value: v }, t))); return h("label", {}, label, f[name]); };
+  const params = () => ({ year: +f.year.value, hebrew_visual: f.order.value === "visual", encoding: f.enc.value });
+  const profileBody = () => ({ file_no: f.file_no.value.trim(), agid: +f.agid.value || 0, factory_no: f.factory_no.value.trim() || null,
+    legal_status: +f.legal_status.value, tax_file_no: f.tax_file_no.value.trim(), name: f.name.value.trim(),
+    phone: f.phone.value.trim(), employer_tax: +f.employer_tax.value });
+  const load = async () => {
+    try {
+      const p = await api("GET", cp("/profile"));
+      Object.keys(p).forEach(k => { if (f[k] && p[k] != null) f[k].value = p[k]; });
+    } catch (e) { /* אין עדיין פרטים */ }
+  };
+  const saveProfile = async () => { await api("PUT", cp("/profile"), profileBody()); };
+  const showIssues = (r) => {
+    const blocks = r.issues.filter(i => i.level === "block"), warns = r.issues.filter(i => i.level !== "block");
+    const li = (i) => h("li", {}, (i.scope ? i.scope + " | " : "") + (i.field && i.field !== "-" ? "שדה " + i.field + ": " : "") + i.text);
+    return [h("p", {}, "הקובץ כולל " + r.records + " רשומות. " + (r.submittable ? "לא נמצאו חסמים." : "יש " + blocks.length + " חסמים: זו טיוטה ולא קובץ להגשה.")),
+      blocks.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "חסמים (נדרש טיפול ידני או השלמת נתון):"), h("ul", {}, blocks.map(li))) : null,
+      warns.length ? h("div", { class: "flags" }, h("strong", {}, "לבדיקת חשבת השכר:"), h("ul", {}, warns.map(li))) : null];
+  };
+  const check = async () => {
+    out.replaceChildren(h("p", {}, "בודקת…"));
+    try { await saveProfile(); const r = await api("POST", cp("/reports/126/check"), params()); out.replaceChildren(...showIssues(r).filter(Boolean)); }
+    catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
+  const download = async () => {
+    out.replaceChildren(h("p", {}, "מכינה את הקובץ…"));
+    try {
+      await saveProfile();
+      const res = await fetch(state.api + cp("/reports/126/file"), { method: "POST", headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" }, body: JSON.stringify(params()) });
+      if (!res.ok) { let m = "הפעולה נכשלה (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+      const draft = res.headers.get("X-Report-Draft") === "true";
+      const url = URL.createObjectURL(await res.blob());
+      out.replaceChildren(h("div", { class: draft ? "flags" : "info" }, draft ? "הופקה טיוטה בלבד: יש חסמים, ולכן הקובץ לא מיועד להגשה." : "הקובץ מוכן."),
+        h("a", { class: "btn", href: url, download: "126-" + f.year.value + (draft ? "-DRAFT" : "") + ".txt" }, "הורדת הקובץ"));
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
+  const form = h("form", { onsubmit: (e) => { e.preventDefault(); check(); } },
+    h("fieldset", {}, h("legend", {}, "פרטי המעביד (דמו: ערכים בדויים)"),
+      field("name", "שם המעביד (עד 18 תווים)", { maxlength: 18 }),
+      field("file_no", "מספר תיק ניכויים (9 ספרות, מתחיל ב-9)", { pattern: "9[0-9]{8}", inputmode: "numeric" }),
+      field("agid", "מספר אגיד (0 אם אין)", { inputmode: "numeric", value: "0" }),
+      field("tax_file_no", "מספר תיק במס הכנסה של העצמאי/החברה", { inputmode: "numeric" }),
+      pick("legal_status", "מעמד משפטי", [[1, "חברה"], [2, "יחיד"], [3, "שותפות"], [4, "עמותה"], [5, "רשות"]]),
+      pick("employer_tax", "מס מעסיקים", [[1, "פטור"], [2, "חייב"]]),
+      field("phone", "טלפון (ספרות בלבד)", { inputmode: "numeric" }),
+      h("label", {}, "מספר מפעל (אופציונלי)", (f.factory_no = h("input", { name: "factory_no", inputmode: "numeric" })))),
+    h("fieldset", {}, h("legend", {}, "הפקה"),
+      field("year", "שנת מס", { type: "number", value: String(new Date().getFullYear() - 1), min: 2000, max: 2100 }),
+      pick("enc", "קידוד עברית", [["cp1255", "ASCII WINDOWS (cp1255)"], ["cp862", "ASCII NEW CODE (cp862)"]]),
+      pick("order", "סדר אותיות עבריות", [["logical", "רגיל (לוגי)"], ["visual", "הפוך (ויזואלי)"]]),
+      h("p", { class: "muted" }, "המפרט של הרשות מתיר את שני הקידודים ולא מבהיר את סדר האותיות. יש לאמת את הבחירה בבדיקה של הרשות לפני הגשה.")),
+    h("div", { class: "actions" }, h("button", { class: "btn", type: "submit" }, "בדיקה: מה חסר"),
+      h("button", { class: "btn ghost", type: "button", onclick: download }, "הורדת קובץ (טיוטה אם יש חסמים)")));
+  load();
+  return shell("reports", "4. דיווחים לרשויות", h("div", {}, flowBar(4),
+    h("p", {}, "הדוח השנתי למס הכנסה (טופס 126) נבנה מהתלושים ומטופס 101. המערכת לא שולחת דבר לרשות: היא בודקת מה חסר ומכינה קובץ. את הקובץ יש להריץ בבדיקה של הרשות ולהגיש בעצמך."),
+    h("p", {}, "סביבת בדיקה: נתוני דמה בלבד. פרטי תיק הניכויים כאן בדויים, והקובץ לא מיועד להגשה."), form, out));
+}
+
 function homeView() {
   const step = (n, title, text, label, view) => h("section", { class: "flow-step" },
     h("div", { class: "flow-n", "aria-hidden": "true" }, n), h("h3", {}, title), h("p", {}, text),
@@ -972,12 +1037,13 @@ function homeView() {
       h("div", { class: "flow" },
         step("1", "העלאת אקסל וטופס 101", "קובץ אחד: העובדים, טופס 101 של כל עובד ונתוני החודש. המערכת קולטת וקובעת את הכול בשרת.", "להעלאת אקסל", "upload"), arrow(),
         step("2", "בדיקה ואישור", "חשבת השכר בודקת את הסכום ואת החוק והסעיף בכל שורה, ומאשרת.", "לבדיקה ואישור", "review"), arrow(),
-        step("3", "הפקת תלוש לפי תבנית", "מפיקים את התלושים המאושרים בתבנית שנבחרה.", "להפקה", "issue"))));
+        step("3", "הפקת תלוש לפי תבנית", "מפיקים את התלושים המאושרים בתבנית שנבחרה.", "להפקה", "issue"), arrow(),
+        step("4", "דיווחים לרשויות", "מכינים קובץ דיווח שנתי (טופס 126) מהתלושים. המערכת בודקת מה חסר, ואת הקובץ מגישה חשבת השכר בעצמה.", "לדיווחים", "reports"))));
 }
 
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
