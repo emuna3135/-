@@ -21,6 +21,11 @@ ALIASES = {
     "birth_date": ("תאריך לידה", "birth_date"),
     "start_date": ("תאריך תחילת עבודה", "תחילת עבודה", "start_date"),
     "is_resident": ("תושב", "is_resident"),
+    "family_name": ("שם משפחה", "family_name"),
+    "first_name": ("שם פרטי", "first_name"),
+    "street": ("רחוב ומספר בית", "רחוב", "street"),
+    "city": ("עיר", "ישוב", "city"),
+    "zip": ("מיקוד", "zip"),
     "base_salary": ("שכר יסוד", "base_salary"),
     "pension_employee_rate": ("אחוז פנסיה עובד", "pension_employee_rate"),
     "employer_pension_rate": ("אחוז פנסיה מעסיק", "employer_pension_rate"),
@@ -127,6 +132,19 @@ def parse_employee(row):
         v = _get(row, key)
         if v is not None:
             out[key] = _rate(v, label)
+    # פרטי דיווח לרשויות (טופס 126): אופציונליים. ערך מוזן מועתק כמו שהוא, לא מפוצל ולא מנוחש
+    for key in ("family_name", "first_name", "street", "city"):
+        v = _get(row, key)
+        if v is not None:
+            out[key] = str(v).strip()
+    z = _get(row, "zip")
+    if z is not None:
+        z = str(z).strip()
+        if z.endswith(".0"):
+            z = z[:-2]
+        if not z.isdigit() or len(z) > 5:
+            raise RowError("מיקוד: עד 5 ספרות")
+        out["zip"] = z.zfill(5)
     scope = _get(row, "position_scope_percent")
     if scope is not None:
         out["position_scope_percent"] = _num(scope, "היקף משרה %")

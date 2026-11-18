@@ -68,3 +68,30 @@ class FamilyFlags(unittest.TestCase):
     def test_unknown_flag_is_error_not_guess(self):
         with self.assertRaises(ei.RowError):
             ei.parse_form101({"תעודת זהות": "1", "שנת מס": 2026, "מצבי חיים": "משהו"})
+
+
+class ReportingDetails(unittest.TestCase):
+    BASE = {"תעודת זהות": "000000018", "שם מלא": "דן לוי", "מין": "זכר", "שכר יסוד": 10000,
+            "אחוז פנסיה עובד": 0.06}
+
+    def test_optional_details_are_copied_as_given(self):
+        r = ei.parse_employee({**self.BASE, "שם משפחה": "לוי", "שם פרטי": "דן", "רחוב ומספר בית": "הרצל 1",
+                               "עיר": "חיפה", "מיקוד": 33000})
+        self.assertEqual((r["family_name"], r["first_name"], r["street"], r["city"], r["zip"]),
+                         ("לוי", "דן", "הרצל 1", "חיפה", "33000"))
+
+    def test_missing_details_are_not_invented(self):
+        r = ei.parse_employee(self.BASE)
+        for k in ("family_name", "first_name", "street", "city", "zip"):
+            self.assertNotIn(k, r)
+
+    def test_zip_is_padded_and_validated(self):
+        self.assertEqual(ei.parse_employee({**self.BASE, "מיקוד": "1234.0"})["zip"], "01234")
+        with self.assertRaises(ei.RowError):
+            ei.parse_employee({**self.BASE, "מיקוד": "12AB5"})
+        with self.assertRaises(ei.RowError):
+            ei.parse_employee({**self.BASE, "מיקוד": "123456"})
+
+    def test_full_name_is_never_split(self):
+        r = ei.parse_employee(self.BASE)
+        self.assertNotIn("family_name", r)

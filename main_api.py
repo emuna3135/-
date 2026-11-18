@@ -1084,6 +1084,12 @@ class EmployeeIn(BaseModel):
     employer_severance_rate: float = Field(0.06, ge=0, le=0.5)
     employer_study_fund_rate: float = Field(0, ge=0, le=0.5)
     position_scope_percent: float = Field(100, gt=0, le=100)
+    # פרטי דיווח לרשויות (טופס 126) – אופציונליים
+    family_name: Optional[str] = Field(None, max_length=20)
+    first_name: Optional[str] = Field(None, max_length=15)
+    street: Optional[str] = Field(None, max_length=20)
+    city: Optional[str] = Field(None, max_length=15)
+    zip: Optional[str] = Field(None, pattern=r"^\d{5}$")
 
 
 class Form101In(BaseModel):
@@ -1227,6 +1233,11 @@ async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
             emp = db.query(Employee).filter(Employee.company_id == company_id, Employee.id_hash == h).first()
             if emp:
                 existing += 1
+                cur = unseal(db, company_id, emp.payload_enc)
+                add = {k: v for k, v in body.model_dump(mode="json").items()
+                       if k in ("family_name", "first_name", "street", "city", "zip") and v and not cur.get(k)}
+                if add:   # משלים רק פרטי דיווח חסרים; לא דורס ערכים קיימים
+                    emp.payload_enc = seal(db, company_id, {**cur, **add})
             else:
                 emp = Employee(company_id=company_id, id_hash=h, payload_enc=seal(db, company_id, body.model_dump(mode="json")))
                 db.add(emp)
