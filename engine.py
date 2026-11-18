@@ -449,7 +449,7 @@ def pension_floor_check(employee_rate, employer_rate, severance_rate):
 # פנסיה וקרן השתלמות: כפל שיעור שהוגדר בבסיס (נבדק מול מירב 2019 וסיינל 2023)
 # ---------------------------------------------------------------------------
 def deposit(base, rate):
-    return item(r2(D(str(base)) * D(str(rate))), VERIFIED, "בסיס x שיעור שהוגדר")
+    return item(r2(D(str(base)) * D(str(rate))), ACCOUNTANT, "בסיס x שיעור שהוזן (לפי הסכם/תקנון הקופה של העובד); השיעור עצמו אינו כלל חוק")
 
 
 ZERO_PREV = {"cum_taxable": D(0), "cum_tax": 0, "cum_deposits": D(0), "cum_life": D(0)}
