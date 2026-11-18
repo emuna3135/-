@@ -43,6 +43,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .flow-arrow{align-self:center;color:var(--blue);font-size:1.6rem}
 details>summary.nav{cursor:pointer;list-style:none}
 @media (max-width:900px){.flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(-90deg);justify-self:center}}
+.flowbar{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:14px}.flowbar-i{padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}.flowbar-i.on{background:var(--brand,#1f4fd8);color:#fff;border-color:transparent;font-weight:700}
 .basis ul{margin:6px 0;padding-inline-start:18px}.basis li{margin-block-end:8px}
 .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
 .btn:hover{background:var(--blue-d)}
@@ -360,7 +361,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
   const nav = [navBtn(["home", "תהליך עבודה"]),
@@ -608,7 +609,7 @@ function terminationView() {
 }
 
 /* ---------- העלאת אקסל ---------- */
-function uploadView() {
+function uploadAdvancedView() {
   const file = h("input", { type: "file", accept: ".xlsx,.csv", required: true });
   const out = h("div", { "aria-live": "polite" });
   const mode = h("select", {}, h("option", { value: "/upload-excel-card" }, "לפי כרטיס העובד וטופס 101 (בקובץ רק ת.ז, שנה, חודש ונתונים משתנים)"),
@@ -626,7 +627,7 @@ function uploadView() {
       out.replaceChildren(...nodes);
     } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   } }, h("label", {}, "סוג הקובץ", mode), h("label", {}, "קובץ אקסל או CSV", file), h("button", { class: "btn", type: "submit" }, "העלאה וחישוב"));
-  return shell("upload", "העלאת אקסל", h("div", {}, h("p", {}, "הגיליון הראשון בקובץ נקרא. בשיטה המומלצת העובד חייב להיות רשום עם טופס 101 לשנה. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
+  return shell("uploadadv", "העלאת אקסל (מתקדם)", h("div", {}, h("p", {}, "הגיליון הראשון בקובץ נקרא. בשיטה המומלצת העובד חייב להיות רשום עם טופס 101 לשנה. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
 }
 
 /* ---------- עובדים ---------- */
@@ -777,6 +778,115 @@ function paramsView() {
 }
 
 
+
+/* ---------- תרשים זרימה: 1 העלאה, 2 בדיקה ואישור, 3 הפקה לפי תבנית ---------- */
+state.flow = { results: [], approved: {}, errors: [], created: null };
+const flowKey = (p) => p.employee_id + "|" + p.year + "|" + p.month;
+const periodOf = (p) => String(p.month).padStart(2, "0") + "/" + p.year;
+const slipOk = (p) => p.net != null && !(p.unresolved && p.unresolved.length) && p.overall_status !== "נדרש טיפול ידני";
+
+function flowBar(step) {
+  const names = ["1. העלאת אקסל וטופס 101", "2. בדיקה ואישור", "3. הפקת תלוש לפי תבנית"];
+  return h("div", { class: "flowbar", role: "list" }, names.map((t, i) =>
+    h("span", { role: "listitem", class: "flowbar-i" + (i + 1 === step ? " on" : ""), "aria-current": i + 1 === step ? "step" : false }, t)));
+}
+
+function uploadView() {
+  const file = h("input", { type: "file", accept: ".xlsx", required: true });
+  const out = h("div", { "aria-live": "polite" });
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); out.replaceChildren(h("p", {}, "קולטת עובדים וטופסי 101, ואז מחשבת…"));
+    const nodes = [];
+    try {
+      const fd1 = new FormData(); fd1.append("file", file.files[0]);
+      let imp = null;
+      try { imp = await api("POST", cp("/employees/upload-excel"), fd1, true); }
+      catch (err) { if (!/גיליון בשם/.test(err.message)) throw err; }
+      if (imp) {
+        nodes.push(h("p", {}, "עובדים: נוצרו " + imp.created + ", כבר היו " + imp.existing + ". טפסי 101 שנשמרו: " + imp.form101_saved + "."));
+        if (imp.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות עובדים/101 שלא נקלטו:"),
+          h("ul", {}, imp.errors.slice(0, 30).map(x => h("li", {}, x.sheet + ", שורה " + x.row + ": " + x.error)))));
+      }
+      const fd2 = new FormData(); fd2.append("file", file.files[0]);
+      const r = await api("POST", cp("/upload-excel-card"), fd2, true);
+      state.flow.results = r.paystubs; state.flow.errors = r.errors; state.flow.approved = {};
+      nodes.push(h("p", {}, "חושבו " + r.processed + " תלושים, " + r.errors.length + " שורות לא חושבו."));
+      if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו:"),
+        h("ul", {}, r.errors.slice(0, 30).map(x => h("li", {}, "שורה " + x.row + ": " + x.error)))));
+      if (r.processed) nodes.push(h("button", { class: "btn", type: "button", onclick: () => render("review") }, "המשך לשלב 2: בדיקה ואישור"));
+      out.replaceChildren(...nodes);
+    } catch (err) { out.replaceChildren(...nodes, h("div", { class: "err", role: "alert" }, err.message)); }
+  } }, h("label", {}, "קובץ אקסל (גיליון נתוני החודש, גיליון 'עובדים' וגיליון 'טופס 101')", file),
+    h("button", { class: "btn", type: "submit" }, "העלאה וחישוב"));
+  return shell("upload", "1. העלאת אקסל וטופס 101", h("div", {}, flowBar(1),
+    h("p", {}, "מעלים קובץ אחד: העובדים וטופס 101 של כל אחד מהם, ונתוני החודש. המערכת קולטת קודם את העובדים וטפסי 101, ורק אחר כך מחשבת. עובד קיים לא נדרס. סביבת בדיקה: נתונים בדויים בלבד."), form, out));
+}
+
+function reviewView() {
+  const all = state.flow.results;
+  if (!all.length) return shell("review", "2. בדיקה ואישור", h("div", {}, flowBar(2), h("div", { class: "empty" }, "עוד אין תלושים לבדיקה. מתחילים בשלב 1."),
+    h("button", { class: "btn", type: "button", onclick: () => render("upload") }, "לשלב 1")));
+  const periods = [...new Set(all.map(periodOf))].sort((a, b) => (a.slice(3) + a.slice(0, 2)).localeCompare(b.slice(3) + b.slice(0, 2)));
+  const sel = h("select", {}, periods.map(x => h("option", { value: x }, x)));
+  sel.value = periods[periods.length - 1];
+  const box = h("div", {});
+  const draw = () => {
+    const rows = all.filter(p => periodOf(p) === sel.value);
+    const okRows = rows.filter(slipOk);
+    const cnt = rows.filter(p => state.flow.approved[flowKey(p)]).length;
+    box.replaceChildren(
+      h("p", {}, "בחודש " + sel.value + ": " + rows.length + " תלושים, " + okRows.length + " ללא סעיפים פתוחים, " + cnt + " אושרו."),
+      h("div", { class: "actions" },
+        h("button", { class: "btn", type: "button", onclick: () => { okRows.forEach(p => state.flow.approved[flowKey(p)] = true); draw(); } }, "אישור כל התלושים התקינים"),
+        h("button", { class: "btn ghost", type: "button", onclick: () => { rows.forEach(p => delete state.flow.approved[flowKey(p)]); draw(); } }, "ביטול כל האישורים"),
+        cnt ? h("button", { class: "btn", type: "button", onclick: () => render("issue") }, "המשך לשלב 3: הפקה (" + cnt + ")") : null),
+      ...rows.map(p => {
+        const ok = slipOk(p);
+        const cb = h("input", { type: "checkbox", checked: !!state.flow.approved[flowKey(p)], disabled: !ok, onclick: (ev) => ev.stopPropagation(),
+          "aria-label": "אישור התלוש של " + (p.emp_name || ""),
+          onchange: () => { if (cb.checked) state.flow.approved[flowKey(p)] = true; else delete state.flow.approved[flowKey(p)]; draw(); } });
+        return h("details", { class: "card" },
+          h("summary", {}, cb, " ", p.emp_name || "", " | ברוטו: ", fmt(p.gross), " | נטו: ", p.net == null ? "לא חושב" : fmt(p.net),
+            ok ? "" : " | נדרש טיפול ידני: לא ניתן לאשר"), slipView(p));
+      }));
+  };
+  sel.addEventListener("change", draw); draw();
+  return shell("review", "2. בדיקה ואישור", h("div", {}, flowBar(2),
+    h("p", {}, "חשבת השכר בודקת את הסכומים ואת החוק והסעיף שבכל שורה (פתיחת התלוש מציגה לכל שורה את הבסיס המשפטי), ומאשרת. תלוש עם סעיף שמסומן לטיפול ידני אי אפשר לאשר."),
+    h("label", {}, "חודש", sel), box));
+}
+
+function issueView() {
+  const approved = state.flow.results.filter(p => state.flow.approved[flowKey(p)]);
+  const tpl = h("select", {}, h("option", { value: "" }, "עיצוב ברירת המחדל של המערכת"));
+  api("GET", "/templates").then(t => t.forEach(x => tpl.append(h("option", { value: x.id }, x.name)))).catch(() => {});
+  const out = h("div", { "aria-live": "polite" });
+  const make = async () => {
+    out.replaceChildren(h("p", {}, "מפיקה…"));
+    const links = [], fails = [];
+    for (const p of approved) {
+      try {
+        const res = await fetch(state.api + cp("/employees/" + p.employee_id + "/payslip"), { method: "POST",
+          headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" },
+          body: JSON.stringify({ year: p.year, month: p.month, template: tpl.value || null, approve: true }) });
+        if (!res.ok) { let m = "נכשל (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+        const draft = res.headers.get("X-Payslip-Draft") === "true";
+        const url = URL.createObjectURL(await res.blob());
+        links.push(h("li", {}, h("a", { href: url, download: "payslip-" + (p.emp_name || p.employee_id) + "-" + p.year + "-" + String(p.month).padStart(2, "0") + ".pdf" }, p.emp_name + " " + periodOf(p)),
+          draft ? " (טיוטה: חסרים נתונים בתלוש)" : ""));
+      } catch (err) { fails.push(h("li", {}, (p.emp_name || "") + " " + periodOf(p) + ": " + err.message)); }
+      out.replaceChildren(h("p", {}, "הופקו " + links.length + " מתוך " + approved.length + "…"));
+    }
+    out.replaceChildren(h("p", {}, "הופקו " + links.length + " תלושים."), links.length ? h("ul", {}, links) : null,
+      fails.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "לא הופקו:"), h("ul", {}, fails)) : null);
+  };
+  return shell("issue", "3. הפקת תלוש לפי תבנית", h("div", {}, flowBar(3),
+    approved.length ? h("div", {}, h("p", {}, approved.length + " תלושים מאושרים מחכים להפקה."), h("label", {}, "תבנית", tpl),
+      h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: make }, "הפקת התלושים המאושרים")), out)
+      : h("div", { class: "empty" }, "אין תלושים מאושרים. אישור נעשה בשלב 2."),
+    h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 2")));
+}
+
 /* ---------- מסך הבית: שלושה צעדים ---------- */
 function homeView() {
   const step = (n, title, text, label, view) => h("section", { class: "flow-step" },
@@ -787,14 +897,14 @@ function homeView() {
     h("div", {},
       h("p", {}, "כל החישוב נעשה בשרת, לפי החוק. אין צורך לחשב ידנית: בכל תוצאה מופיעים הסטטוס והמקור שלה (איזה חוק, איזה סעיף), ואת מה שאין לו מקור המערכת לא מנחשת ומסמנת לטיפול ידני."),
       h("div", { class: "flow" },
-        step("1", "עובדים וטופס 101", "הקמת עובדים וטפסי 101 (מאקסל או ידנית). פעם אחת, ואחר כך רק כשיש שינוי.", "לעובדים", "emps"), arrow(),
-        step("2", "נתוני החודש", "העלאת קובץ השעות, הבונוסים והנתונים המשתנים. המערכת מחשבת ומראה את כל התלושים.", "להעלאת אקסל", "upload"), arrow(),
-        step("3", "אישור והפקת תלוש", "בדיקת התוצאה לכל עובד, אישור והפקת התלוש. שורות שמסומנות לטיפול ידני נשארות פתוחות עד שתחליטי.", "להפקת תלוש", "slip"))));
+        step("1", "העלאת אקסל וטופס 101", "קובץ אחד: העובדים, טופס 101 של כל עובד ונתוני החודש. המערכת קולטת וקובעת את הכול בשרת.", "להעלאת אקסל", "upload"), arrow(),
+        step("2", "בדיקה ואישור", "חשבת השכר בודקת את הסכום ואת החוק והסעיף בכל שורה, ומאשרת.", "לבדיקה ואישור", "review"), arrow(),
+        step("3", "הפקת תלוש לפי תבנית", "מפיקים את התלושים המאושרים בתבנית שנבחרה.", "להפקה", "issue"))));
 }
 
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
