@@ -176,10 +176,10 @@ class RegularWage335(unittest.TestCase):
         r = nb.regular_monthly_wage_335(10000, [1700], self.D1, 2025, 6)
         self.assertEqual(r["value"], D("10141.67")); self.assertEqual(r["status"], e.BY_LAW)
 
-    def test_equal_to_threshold_is_manual(self):
-        # הנוסח הרשמי: 'נמוך מ' / 'גבוה מ' - שוויון לא מוכרע
+    def test_equal_to_official_threshold_is_spread(self):
+        # תקנה 5(1) (תשלום ופטור, התשנ״ה-1995): "25% ... או יותר" - שוויון נפרס על 12
         r = nb.regular_monthly_wage_335(10000, [1561.92], self.D1, 2025, 6)
-        self.assertIsNone(r["value"]); self.assertEqual(r["status"], e.MANUAL)
+        self.assertEqual(r["value"], D("10130.16")); self.assertEqual(r["status"], e.BY_LAW)
 
     def test_explicit_threshold_overrides(self):
         r = nb.regular_monthly_wage_335(10000, [1700], self.D1, 2025, 6, threshold=1700)

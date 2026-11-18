@@ -230,9 +230,8 @@ def regular_monthly_wage_335(regular_wage, extra_payments, start_date, pay_year,
     if total == 0:
         spread = False
     elif threshold is not None:
-        if official and total == _d(threshold):
-            return _manual("התשלום הנוסף שווה בדיוק לרף 25%: הנוסח הרשמי מבחין 'נמוך מ' ו'גבוה מ' ולא קובע לשוויון; יש להכריע ידנית")
-        spread = total > _d(threshold)
+        # תקנה 5(1): תשלום נוסף ששיעורו 25% משכר המינימום או יותר - נפרס (שוויון נפרס); תקנה 5(2): נמוך מ-25% - לא נפרס
+        spread = total >= _d(threshold) if official else total > _d(threshold)
     elif total <= NOT_SPREAD_MAX_TOTAL and total * NOT_SPREAD_PCT[1] <= NOT_SPREAD_PCT[0] * wage:
         spread = False
     elif total >= SPREAD_MIN_TOTAL and total * SPREAD_PCT[1] >= SPREAD_PCT[0] * wage:
@@ -251,7 +250,7 @@ def regular_monthly_wage_335(regular_wage, extra_payments, start_date, pay_year,
                (f"נפרס על {divisor} חודשים" if spread else
                 ("לא נפרס (לא עולה על הרף), נוסף במלואו" if below_threshold_rule == "add_in_full"
                  else "לא נפרס (לא עולה על הרף), לא נוסף (כלל ישן)")) +
-               ("; לפי תקנה 5 לתקנות הביטוח הלאומי (תשלום ופטור): רף 25% משכר המינימום; מעל הרף - מחולק ב-12 (או במספר חודשי העבודה אם פחות מ-12) ומצורף לחודש התשלום ו-11 הקודמים; מתחת - מצורף במלואו לחודש התשלום (ביטוח לאומי, חוזר קיזוז יום הבראה 2024 ואגרת למעסיק 2026)"
+               ("; לפי תקנה 5(1),(2) לתקנות הביטוח הלאומי (תשלום ופטור מתשלום דמי ביטוח), התשנ״ה-1995 (נוסח btl.gov.il/Laws1/02_0001_194810.pdf; ק״ת 6172 תשס״ב, תיקון ק״ת 7376 תשע״ד): 25% משכר המינימום או יותר נפרס, פחות מכך לא; מעל הרף - מחולק ב-12 (או במספר חודשי העבודה אם פחות מ-12) ומצורף לחודש התשלום ו-11 הקודמים; מתחת - מצורף במלואו לחודש התשלום (ביטוח לאומי, חוזר קיזוז יום הבראה 2024 ואגרת למעסיק 2026)"
                 if ok_official else "; הרף עצמו הוכרע לפי תרגילי הקורס בלבד"))
     res["divisor"] = divisor if spread else None
     return res
