@@ -402,16 +402,16 @@ def recuperation_days(seniority_year):
     if y < 1:
         return item(None, MANUAL, "שנת ותק לא תקינה")
     if y == 1:
-        return item(D(5), BY_LAW, "שנה 1: 5 ימים (לוח 1, מרכז המחקר והמידע של הכנסת)")
+        return item(D(5), BY_LAW, "שנה 1: 5 ימים (לוח 1, מרכז המחקר והמידע של הכנסת) | מעודכן ל-2026, ניתן לעדכן אם השתנה החוק")
     if y in (2, 3):
-        return item(D(6), BY_LAW, f"שנה {y}: 6 ימים (לוח 1, מרכז המחקר והמידע של הכנסת)")
+        return item(D(6), BY_LAW, f"שנה {y}: 6 ימים (לוח 1, מרכז המחקר והמידע של הכנסת) | מעודכן ל-2026, ניתן לעדכן אם השתנה החוק")
     if 4 <= y <= 10:
-        return item(D(7), BY_LAW, "שנים 4-10: 7 ימים")
+        return item(D(7), BY_LAW, "שנים 4-10: 7 ימים | מעודכן ל-2026, ניתן לעדכן אם השתנה החוק")
     if 11 <= y <= 15:
-        return item(D(8), BY_LAW, "שנים 11-15: 8 ימים")
+        return item(D(8), BY_LAW, "שנים 11-15: 8 ימים | מעודכן ל-2026, ניתן לעדכן אם השתנה החוק")
     if 16 <= y <= 19:
-        return item(D(9), BY_LAW, "שנים 16-19: 9 ימים")
-    return item(D(10), BY_LAW, "משנה 20 ואילך: 10 ימים")
+        return item(D(9), BY_LAW, "שנים 16-19: 9 ימים | מעודכן ל-2026, ניתן לעדכן אם השתנה החוק")
+    return item(D(10), BY_LAW, "משנה 20 ואילך: 10 ימים | מעודכן ל-2026, ניתן לעדכן אם השתנה החוק")
 
 
 def recuperation_pay(year, entitled_days, job_fraction="1", period_fraction="1", reduced_partial=None):
