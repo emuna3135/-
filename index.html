@@ -35,6 +35,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 label{display:grid;gap:6px;font-weight:500;font-size:.95rem}
 input,select,textarea{inline-size:100%;min-inline-size:0;padding:11px 12px;border:1px solid #B9CBEA;border-radius:8px;background:#fff;min-block-size:44px}
 input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+.pform{gap:8px;margin-block-start:8px}.pform:not([hidden]){display:grid}
 .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
 .btn:hover{background:var(--blue-d)}
 .btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
@@ -215,6 +216,8 @@ function demoApi(method, path, body) {
       validation: { errors: {}, warnings: ["חסרים נתוני עובד (תושבות/מין): נקודות הזיכוי לא נבדקו"], checks: {}, floor_status: "n/a" } });
     if (path.endsWith("/decision")) return resolve({ status: body.action === "approve" ? "approved" : "rejected" });
     if (path.endsWith("/rules")) return resolve([]);
+    if (/\/params(\?|$)/.test(path)) return resolve({ year: 2026, label: "מעודכן ל-2026", params: [
+      { name: "injury_daily_cap", year: 2026, value: "1314.25", status: "עפ\"י החוק", note: "דוגמה בלבד", overridden: false, law_value: "1314.25" }] });
     if (path.endsWith("/audit-log")) return resolve([
       { at: "2026-10-19T12:01:00", action: "login", entity: null }, { at: "2026-10-19T12:04:00", action: "calculate_paystub", entity: "paystub" }]);
     reject(new Error("לא זמין במצב דוגמה"));
@@ -349,7 +352,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const nav = NAV.map(([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label));
   return h("div", { class: "app" },
@@ -691,9 +694,49 @@ const auditView = () => listView("audit", "יומן פעולות", "/audit-log",
   "היומן ריק. כל כניסה, חישוב ואישור נרשמים כאן, בלי נתונים אישיים.");
 
 /* ---------- ניתוב ---------- */
+
+/* ---------- פרמטרים שנתיים + הכפתור "שנה" ---------- */
+const PARAM_LABELS = { injury_daily_cap: "תקרת דמי פגיעה ליום (ש\"ח)", reserve_monthly_min: "תגמול מילואים חודשי - מינימום (ש\"ח)",
+  reserve_monthly_max: "תגמול מילואים חודשי - מקסימום (ש\"ח)", pregnancy_daily_cap: "קצבת שמירת היריון - מקסימום ליום (ש\"ח)",
+  recreation_day_value: "מחיר יום הבראה, מגזר פרטי (ש\"ח)" };
+function paramsView() {
+  const box = h("div", {}, h("p", {}, "טוענת…"));
+  const load = () => api("GET", cp("/params")).then(data => {
+    const rows = data.params.map(r => {
+      const s = statusInfo(r.status);
+      const msg = h("div", { class: "err", role: "alert", hidden: true });
+      const val = h("input", { inputmode: "decimal", required: true, "aria-label": "ערך חדש", value: r.value == null ? "" : r.value });
+      const why = h("input", { required: true, maxlength: "500", "aria-label": "סיבה לשינוי", placeholder: "סיבה (חובה)" });
+      const form = h("form", { hidden: true, class: "pform", onsubmit: async (e) => {
+        e.preventDefault(); msg.hidden = true;
+        try { await api("PUT", cp("/params/" + encodeURIComponent(r.name) + "/" + r.year), { value: val.value.trim(), reason: why.value.trim() });
+          toast("הערך עודכן ונרשם ביומן"); load(); }
+        catch (err) { msg.textContent = err.message; msg.hidden = false; } } },
+        h("label", {}, "ערך חדש", val), h("label", {}, "סיבה", why), msg,
+        h("div", {}, h("button", { class: "btn", type: "submit" }, "שמירה"), " ",
+          h("button", { class: "btn ghost", type: "button", onclick: () => { form.hidden = true; } }, "ביטול")));
+      const change = h("button", { class: "btn ghost", type: "button", style: "min-block-size:32px;padding:4px 12px;font-size:.85rem",
+        "aria-label": "שנה: " + (PARAM_LABELS[r.name] || r.name), onclick: () => { form.hidden = !form.hidden; } }, "שנה");
+      const reset = r.overridden && h("button", { class: "btn danger", type: "button", style: "min-block-size:32px;padding:4px 12px;font-size:.85rem", onclick: async () => {
+        try { await api("DELETE", cp("/params/" + encodeURIComponent(r.name) + "/" + r.year)); toast("הערך חזר לערך החוק"); load(); }
+        catch (err) { toast(err.message); } } }, "חזרה לערך החוק");
+      return h("tr", {},
+        h("td", {}, PARAM_LABELS[r.name] || r.name),
+        h("td", { class: "num" }, r.value == null ? "אין ערך: נדרש טיפול ידני" : fmt(r.value)),
+        h("td", {}, h("span", { class: "lbl " + s.cls }, h("i", { class: "dot" }), h("span", { class: "chip" }, s.text))),
+        h("td", {}, h("div", { class: "note open" }, r.note || ""), r.overridden && r.law_value != null && h("div", {}, "ערך החוק: ", h("span", { class: "num" }, fmt(r.law_value)))),
+        h("td", {}, change, " ", reset, form)); });
+    box.replaceChildren(
+      h("p", {}, h("strong", {}, data.label), " · \"שנה\" מחליף את ערך החוק בחישוב של המשרד הזה בלבד, מסומן \"עפ\"י רואת חשבון\", ונרשם ביומן הפעולות עם הסיבה. ערך החוק עצמו לא נמחק."),
+      h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["פרמטר", "ערך", "סטטוס", "מקור והערות", "פעולה"].map(c => h("th", {}, c)))), h("tbody", {}, rows)));
+  }).catch(e => box.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)));
+  load();
+  return shell("params", "פרמטרים שנתיים", box);
+}
+
 function render(view) {
   state.view = view;
-  const views = { f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView };
+  const views = { f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }

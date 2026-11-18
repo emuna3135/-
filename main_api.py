@@ -3,7 +3,7 @@ import datetime
 import io
 import os
 import uuid
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import List, Optional
 
 import bcrypt
@@ -14,6 +14,7 @@ import templating
 import termination
 import attendance_pdf
 import engine as pe  # מנוע החישוב המאומת (engine.py)
+import params
 import authpolicy
 import proposals
 import overrides
@@ -226,6 +227,22 @@ class CompanyRule(Base):
     active = Column(Boolean, default=True, nullable=False)
     payload_enc = Column(String, nullable=False)
     approved_by = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class ParamOverride(Base):
+    """שינוי של חשב השכר לפרמטר שנתי (הכפתור "שנה"). שייך למשרד אחד, גרסאות, לא נמחק: ביטול = active False.
+    הערך מחליף את ערך החוק בחישוב ומסומן "עפ"י רואת חשבון"; ערך החוק נשמר בקוד ולא משתנה."""
+    __tablename__ = "param_overrides"
+    id = Column(String, primary_key=True, default=new_id)
+    company_id = Column(String, ForeignKey("companies.id"), index=True, nullable=False)
+    name = Column(String, index=True, nullable=False)
+    year = Column(Integer, nullable=False)
+    value = Column(String, nullable=False)
+    reason = Column(String, nullable=False)
+    set_by = Column(String, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -873,6 +890,84 @@ def get_audit_log(company_id: str, user: User = Depends(current_user), db: Sessi
     db.commit()
     return [{"at": r.at.isoformat(), "user_id": r.user_id, "action": r.action,
              "entity": r.entity, "entity_id": r.entity_id, "detail": r.detail} for r in rows]
+
+
+class ParamOverrideIn(BaseModel):
+    value: str = Field(..., min_length=1, max_length=30)
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+def company_param_overrides(db: Session, company_id: str) -> dict:
+    """הדריסות הפעילות של המשרד, בפורמט ש-params.use_overrides מקבל. חישוב של משרד אחד לא רואה דריסות של משרד אחר."""
+    rows = db.query(ParamOverride).filter(ParamOverride.company_id == company_id,
+                                          ParamOverride.active.is_(True)).all()
+    return {(r.name, r.year): {"value": r.value, "reason": r.reason, "by": r.set_by,
+                               "at": r.created_at.date().isoformat()} for r in rows}
+
+
+def _param_view(name: str, year: int) -> dict:
+    it = params.param(name, year)
+    law = params.PARAMS.get(name, {}).get(year)
+    return {"name": name, "year": year,
+            "value": None if it["value"] is None else str(it["value"]),
+            "status": it["status"], "note": it["note"],
+            "overridden": it["status"] == pe.ACCOUNTANT,
+            "law_value": None if law is None else str(law[0])}
+
+
+@app.get("/companies/{company_id}/params")
+def list_company_params(company_id: str, year: int = params.SYSTEM_YEAR,
+                        user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """הפרמטרים השנתיים כפי שהם מחושבים למשרד: ערך החוק, או ערך חשב השכר אם שונה."""
+    require_company(company_id, user, db)
+    with params.use_overrides(company_param_overrides(db, company_id)):
+        rows = [_param_view(n, year) for n in params.PARAMS]
+    return {"year": year, "label": f"מעודכן ל-{year}", "params": rows}
+
+
+@app.put("/companies/{company_id}/params/{name}/{year}")
+def set_company_param(company_id: str, name: str, year: int, body: ParamOverrideIn,
+                      user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """הכפתור "שנה": חשב השכר מחליף ערך חוק בערך משלו, עם סיבה. נרשם ביומן; ערך החוק נשאר בקוד."""
+    require_company(company_id, user, db, "write")
+    if name not in params.PARAMS:
+        raise HTTPException(404, "פרמטר לא קיים")
+    if not (2000 <= year <= 2100):
+        raise HTTPException(422, "שנה לא תקינה")
+    try:
+        v = Decimal(body.value.strip())
+    except (InvalidOperation, ValueError):
+        raise HTTPException(422, "הערך חייב להיות מספר")
+    if not v.is_finite() or v < 0:
+        raise HTTPException(422, "הערך חייב להיות מספר חיובי")
+    prev = (db.query(ParamOverride).filter(ParamOverride.company_id == company_id, ParamOverride.name == name,
+                                           ParamOverride.year == year).order_by(ParamOverride.version.desc()).first())
+    version = (prev.version + 1) if prev else 1
+    db.query(ParamOverride).filter(ParamOverride.company_id == company_id, ParamOverride.name == name,
+                                   ParamOverride.year == year, ParamOverride.active.is_(True)).update({"active": False})
+    db.add(ParamOverride(company_id=company_id, name=name, year=year, value=str(v), reason=body.reason.strip(),
+                         set_by=user.email, version=version))
+    audit(db, user.id, company_id, "param_override_set", "param", f"{name}/{year}",
+          f"value={v} reason={body.reason.strip()[:80]}")
+    db.commit()
+    with params.use_overrides(company_param_overrides(db, company_id)):
+        return _param_view(name, year)
+
+
+@app.delete("/companies/{company_id}/params/{name}/{year}")
+def clear_company_param(company_id: str, name: str, year: int,
+                        user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """חזרה לערך החוק. הגרסה הקודמת נשמרת (active=False) ולא נמחקת."""
+    require_company(company_id, user, db, "write")
+    if name not in params.PARAMS:
+        raise HTTPException(404, "פרמטר לא קיים")
+    n = (db.query(ParamOverride).filter(ParamOverride.company_id == company_id, ParamOverride.name == name,
+                                        ParamOverride.year == year, ParamOverride.active.is_(True))
+         .update({"active": False}))
+    audit(db, user.id, company_id, "param_override_clear", "param", f"{name}/{year}", f"cleared={n}")
+    db.commit()
+    with params.use_overrides(company_param_overrides(db, company_id)):
+        return _param_view(name, year)
 
 
 @app.post("/companies")
