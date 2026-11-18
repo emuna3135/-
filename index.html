@@ -362,10 +362,10 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["feedback", "משוב"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
-  const nav = [navBtn(["home", "תהליך עבודה"]),
+  const nav = [navBtn(["home", "תהליך עבודה"]), navBtn(["feedback", "משוב על המערכת"]),
     h("details", { open: NAV.some(([k]) => k === view) ? true : false }, h("summary", { class: "nav" }, "עוד"), NAV.map(navBtn))];
   return h("div", { class: "app" },
     h("nav", { class: "rail", "aria-label": "ניווט ראשי" },
