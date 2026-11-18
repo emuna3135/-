@@ -361,7 +361,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
+const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
   const nav = [navBtn(["home", "תהליך עבודה"]),
@@ -888,6 +888,35 @@ function issueView() {
     h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 2")));
 }
 
+
+/* ---------- מקורות: כל כלל, החוק והסעיף ---------- */
+const SRC_ST = { law: ["עפ\"י החוק", "ok"], acc: ["עפ\"י רואת חשבון", "warn"], manual: ["נדרש טיפול ידני", "bad"] };
+function sourcesView() {
+  const box = h("div", {}, h("p", {}, "טוענת…"));
+  const stSel = h("select", {}, h("option", { value: "" }, "כל הסטטוסים"),
+    ...Object.entries(SRC_ST).map(([k, v]) => h("option", { value: k }, v[0])));
+  const q = h("input", { type: "search", placeholder: "חיפוש (נושא, חוק, סעיף)" });
+  let rows = [];
+  const draw = () => {
+    const t = q.value.trim();
+    const sel = rows.filter(r => (!stSel.value || r.status === stSel.value) &&
+      (!t || [r.area, r.rule, r.value, r.law, r.ref].join(" ").includes(t)));
+    const areas = [...new Set(sel.map(r => r.area))];
+    box.replaceChildren(h("p", {}, sel.length + " כללים"), ...areas.map(a => h("section", { class: "card" }, h("h3", {}, a),
+      h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["כלל", "ערך", "חוק / מקור", "אסמכתא", "סטטוס"].map(c => h("th", {}, c)))),
+        h("tbody", {}, sel.filter(r => r.area === a).map(r => h("tr", {},
+          h("td", {}, r.rule), h("td", {}, h("span", { class: "num" }, r.value || "—")),
+          h("td", {}, r.law, r.url ? h("div", {}, h("a", { href: r.url, target: "_blank", rel: "noopener noreferrer" }, "פתיחת המקור")) : null),
+          h("td", {}, r.ref || "—"),
+          h("td", {}, h("span", { class: "s-" + SRC_ST[r.status][1] }, h("span", { class: "chip" }, SRC_ST[r.status][0]))))))))));
+  };
+  stSel.addEventListener("change", draw); q.addEventListener("input", draw);
+  api("GET", "/sources").then(r => { rows = r; draw(); }).catch(e => box.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)));
+  return shell("sources", "מקורות החוק", h("div", {},
+    h("p", {}, "כל כלל שהמערכת מחשבת לפיו, והחוק והסעיף שלו. 'עפ\"י החוק' = נקרא ממקור רשמי. 'עפ\"י רואת חשבון' = ללא נוסח חוק שנמצא. 'נדרש טיפול ידני' = אין מקור, ולכן המערכת לא מחשבת. סעיף שלא נקרא מסומן 'לא תועד', ואינו מנוחש."),
+    h("div", { class: "row2" }, h("label", {}, "סטטוס", stSel), h("label", {}, "חיפוש", q)), box));
+}
+
 /* ---------- מסך הבית: שלושה צעדים ---------- */
 function homeView() {
   const step = (n, title, text, label, view) => h("section", { class: "flow-step" },
@@ -905,7 +934,7 @@ function homeView() {
 
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }

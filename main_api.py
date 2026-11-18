@@ -15,6 +15,7 @@ import termination
 import attendance_pdf
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
+import sources_catalog
 import employee_import
 import authpolicy
 import proposals
@@ -618,6 +619,12 @@ class LoginIn(BaseModel):
 class CompanyIn(BaseModel):
     name: str
     tax_id: Optional[str] = None
+
+
+@app.get("/sources")
+def sources(user: User = Depends(current_user)):
+    """קטלוג מקורות: כל כלל במערכת, החוק והסעיף, והסטטוס. נתוני חוק בלבד (לא נתוני משרד)."""
+    return sources_catalog.catalog()
 
 
 @app.get("/")
