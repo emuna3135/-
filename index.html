@@ -69,6 +69,7 @@ details>summary.nav{cursor:pointer;list-style:none}
 main{padding:32px 40px 64px;min-inline-size:0}
 .topline{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-block-end:24px}
 h2.page{margin:0;font-size:1.7rem}
+.fab{position:fixed;inset-block-end:18px;inset-inline-start:18px;z-index:50;background:#1f4fd8;color:#fff;border:0;border-radius:999px;padding:12px 18px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer}
 .trial{background:var(--warn-bg);color:var(--warn);padding:8px 14px;border-radius:8px;font-size:.9rem;margin-block-end:12px}
 .demo{background:var(--warn-bg);color:var(--warn);padding:8px 14px;border-radius:8px;font-weight:600;font-size:.9rem}
 
@@ -375,7 +376,7 @@ function shell(view, title, content) {
       h("button", { class: "nav", onclick: async () => {
         try { if (state.token && !state.demo) await api("POST", "/auth/logout"); } catch (e) { /* יוצאים בכל מקרה */ }
         state.token = null; state.demo = false; render("login"); } }, "יציאה")),
-    h("main", {}, h("div", { class: "trial", role: "note" }, "גרסת ניסוי חינמית: נתוני דמה בלבד. אין להזין נתונים אמיתיים של עובדים, ואין להסתמך על התוצאה בלי בדיקה. הנתונים עשויים להימחק."), h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
+    h("button", { class: "fab", type: "button", onclick: () => render("feedback") }, "משוב על המערכת"), h("main", {}, h("div", { class: "trial", role: "note" }, "גרסת ניסוי חינמית: נתוני דמה בלבד. אין להזין נתונים אמיתיים של עובדים, ואין להסתמך על התוצאה בלי בדיקה. הנתונים עשויים להימחק."), h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
 }
 const cp = (p) => "/companies/" + state.companyId + p;
 
