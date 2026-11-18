@@ -43,6 +43,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .flow-arrow{align-self:center;color:var(--blue);font-size:1.6rem}
 details>summary.nav{cursor:pointer;list-style:none}
 @media (max-width:900px){.flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(-90deg);justify-self:center}}
+.basis ul{margin:6px 0;padding-inline-start:18px}.basis li{margin-block-end:8px}
 .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
 .btn:hover{background:var(--blue-d)}
 .btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
@@ -406,10 +407,21 @@ function legend() {
   const it = (cls, t) => h("span", { class: cls }, h("i", { class: "dot" }), t);
   return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "מאושר לפי החוק"), it("s-law", "מאושר ע\"י רואה חשבון"), it("s-bad", "מצריך בדיקה ידנית"));
 }
+/* בסיס משפטי מסודר לכל שורה: חוק, סעיף, אסמכתא וקישור. מה שלא תועד מוצג כ"לא תועד", לא מושמט. */
+const BASIS_KIND = { law: "חוק", accountant: "רואת חשבון / לא נוסח חוק", none: "אין כלל חוק" };
+function basisNodes(list) {
+  if (!list || !list.length) return h("div", { class: "basis" }, h("strong", {}, "בסיס משפטי: "), "לא תועד");
+  return h("div", { class: "basis" }, h("strong", {}, "בסיס משפטי:"), h("ul", {}, list.map(b => h("li", {},
+    h("span", { class: "chip" }, BASIS_KIND[b.kind] || b.kind), " ", h("strong", {}, b.law),
+    h("div", {}, "סעיף: ", b.section || "לא תועד"),
+    b.ref ? h("div", {}, "אסמכתא: ", b.ref) : null,
+    b.url ? h("div", {}, h("a", { href: b.url, target: "_blank", rel: "noopener noreferrer" }, "פתיחת המקור")) : null))));
+}
 function slipView(r) {
   const rows = Object.entries(r.items || {}).map(([k, v]) => {
     const s = statusInfo(v.status);
-    const note = h("div", { class: "note", id: "n-" + k }, (v.note || "אין הערה") + " · סטטוס מקור: " + v.status);
+    const note = h("div", { class: "note", id: "n-" + k }, basisNodes(v.basis),
+      h("div", {}, (v.note || "אין הערה") + " · סטטוס מקור: " + v.status));
     const btn = h("button", { type: "button", "aria-expanded": "false", "aria-controls": "n-" + k, onclick: () => {
       const open = note.classList.toggle("open"); btn.setAttribute("aria-expanded", open); } },
       h("span", { class: "lbl " + s.cls }, h("i", { class: "dot" }), h("span", {}, LABELS[k] || k), h("span", { class: "chip" }, s.text)),

@@ -7,6 +7,7 @@
 
 שנים נתמכות: 2025 ו-2026 בלבד. כל שנה אחרת -> MANUAL.
 """
+import basis
 from decimal import Decimal, ROUND_HALF_UP
 
 D = Decimal
@@ -500,6 +501,7 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
         deductions = sum((D(str(v["value"])) for v in items.values()), D(0))
         deductions += D(str(life_insurance)) + D(str(other_deductions)) + D(str(noncash_benefits))
         net = r2(gross - deductions)
+    items = {k: dict(v, basis=basis.for_item(k)) for k, v in items.items()}
     statuses = {v["status"] for v in items.values()}
     if unresolved or MANUAL in statuses:
         overall = MANUAL
