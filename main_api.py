@@ -972,6 +972,7 @@ class Form101In(BaseModel):
     signed_on: Optional[datetime.date] = None     # תאריך חתימה. ריק = אין 101 לשנה
     income_type: str = Field("main", pattern="^(main|additional)$")
     other_income: bool = False
+    other_income_credit: Optional[str] = Field(None, pattern="^(here|elsewhere)$")   # טופס 101 הערות 7-8: here = נקודות זיכוי ומדרגות כנגד הכנסה זו
     other_credits_claimed: bool = False           # סומנו זיכויים מעבר לתושב/ה ואישה
     manual_points: Optional[float] = Field(None, ge=0)
     marital: Optional[str] = Field(None, pattern="^(single|married|divorced|widowed|separated)$")
@@ -1094,7 +1095,7 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
     y = unseal(db, company_id, yr_row.payload_enc) if yr_row else None
     present = bool(y and y.get("signed_on"))
     mode, mode_note = card.tax_mode(present, y["income_type"] if y else "main",
-                                    bool(y and y["other_income"]))
+                                    bool(y and y["other_income"]), (y or {}).get("other_income_credit"))
     pts, pts_note = 0.0, ""
     if mode == "cumulative" and body.coordination_rate is None:
         pts, _status, pts_note = card.points_from_form101(body.year, d["is_resident"], d["gender"], y, body.month)

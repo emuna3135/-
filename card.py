@@ -94,17 +94,21 @@ def credit_points(is_resident, gender, other_credits_claimed=False, manual_point
     return None, MANUAL, "מין לא מוגדר: נקודות הזיכוי לא נגזרות אוטומטית"
 
 
-def tax_mode(present, income_type="main", other_income=False):
+def tax_mode(present, income_type="main", other_income=False, other_income_credit=None):
     """
-    מחזיר (שיטה, הערה). 'cumulative' = משרה עיקרית עם 101 חתום; 'no_coordination' = ניכוי בשיעור המרבי.
-    תקנה 5(א): משרה נוספת או עובד שלא מילא 101/הכנסות אחרות -> שיעור מרבי. הכנסה אחרת מוצהרת: ללא תיאום מס מנכים מרבי.
+    מחזיר (שיטה, הערה). 'cumulative' = ניכוי לפי לוח הניכויים; 'no_coordination' = שיעור מרבי (47%).
+    other_income_credit (סעיף "הכנסות אחרות" בטופס 101, הערות 7-8): 'here' = "אבקש לקבל נקודות זיכוי ומדרגות מס כנגד הכנסתי זו"
+    -> לוח הניכויים הרגיל. 'elsewhere' / לא סומן (None) עם הכנסה אחרת -> שיעור מרבי, אלא אם הוגש תיאום מס (fixed_rate).
+    מקור: טופס 101 הרשמי (רשות המסים) + תקנה 5(א); אישור רואת חשבון (18.11.2026).
     """
     if not present:
         return "no_coordination", "אין טופס 101 חתום לשנה: ניכוי בשיעור המרבי (תקנה 5(א))"
     if income_type == "additional":
-        return "no_coordination", "משרה נוספת: ניכוי בשיעור המרבי (תקנה 5(א))"
+        return "no_coordination", "משרה נוספת: ניכוי בשיעור המרבי (תקנה 5(א)) אלא אם הוגש אישור תיאום מס"
     if other_income:
-        return "no_coordination", "הוצהרה הכנסה אחרת: ללא אישור תיאום מס מנכים בשיעור המרבי (שחזור: לאשר מול רו\"ח)"
+        if other_income_credit == "here":
+            return "cumulative", "הוצהרה הכנסה אחרת ובחרו נקודות זיכוי ומדרגות כנגדה (טופס 101, הערות 7-8): ניכוי לפי לוח הניכויים"
+        return "no_coordination", "הוצהרה הכנסה אחרת בלי בחירה בנקודות זיכוי ומדרגות כנגדה (או שהן מתקבלות בהכנסה האחרת): שיעור מרבי (טופס 101, הערות 7-8; תקנה 5(א))"
     return "cumulative", "משרה עיקרית עם טופס 101 חתום"
 
 

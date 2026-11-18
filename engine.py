@@ -94,6 +94,7 @@ def ni_health(year, gross, month=None):
 # מדרגות חודשיות. 2025: כל-זכות. 2026: לוח עזר של רשות המסים "לחישוב מס הכנסה ממשכורת לינואר 2026 ואילך"
 # (מעודכן לאפריל 2026): שנתי 84,120 / 120,720 / 228,000 / 301,200 / 560,280, חלקי 12.
 # ה-20% וה-31% הורחבו בחוק שפורסם ב-31.3.2026 (בתוקף מ-1.1.2026). מס יסף (50%) מעל 60,130 - הנחה שלא השתנה.
+# מס נוסף 121ב: המדרגה העליונה 50% (47% + 3%) חלה רק מעל הסף השנתי (721,560 ₪ = 60,130 לחודש); לפי רואת חשבון (18.11.2026) מס נוסף רלוונטי רק בהכנסות גבוהות מאוד, ובניכוי בשיעור מרבי 47% (תקנה 5(א)) לא מוסיפים אותו מעבר לכך.
 BRACKETS = {
     2025: [(D("7010"), D("0.10")), (D("10060"), D("0.14")), (D("16150"), D("0.20")),
            (D("22440"), D("0.31")), (D("46690"), D("0.35")), (D("60130"), D("0.47")), (None, D("0.50"))],
@@ -247,6 +248,21 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
         month_tax = r0(tg * D(str(fixed_rate)))
         new["cum_tax"] = prev["cum_tax"] + month_tax
         return item(month_tax, BY_LAW, f"ניכוי בשיעור קבוע {D(str(fixed_rate)) * 100:g}% לפי אישור תיאום מס שהוזן על ידי חשב השכר (האישור והיקף תוקפו לא נבדקו)"), new
+    if mode == "two_rates":
+        # אישור תיאום מס למשרה משנית: שיעור נמוך עד תקרה שנתית מצטברת ושיעור גבוה מעליה. fixed_rate = (שיעור_נמוך, תקרה_שנתית, שיעור_גבוה).
+        # האישור שנתי (ינואר-דצמבר) גם אם הוצא באמצע השנה: המס המצטבר מחושב מתחילת השנה והחודש מנכה את ההפרש.
+        # מקור: אישור רואת חשבון (18.11.2026). נוסח אחיד של הוראה רשמית למעסיק לא נמצא -> ACCOUNTANT.
+        try:
+            low, ceil_, high = (D(str(x)) for x in fixed_rate)
+        except Exception:
+            low = None
+        if low is None or not (D(0) <= low <= high <= D("0.5")) or ceil_ < 0:
+            new["cum_tax"] = prev["cum_tax"]
+            return item(None, MANUAL, "אישור תיאום מס בשני שיעורים: נתוני האישור חסרים או לא תקינים"), new
+        cum_total = low * min(new["cum_taxable"], ceil_) + high * max(new["cum_taxable"] - ceil_, D(0))
+        month_tax = max(r0(cum_total) - prev["cum_tax"], D(0))
+        new["cum_tax"] = prev["cum_tax"] + month_tax
+        return item(month_tax, ACCOUNTANT, f"אישור תיאום מס בשני שיעורים: {low * 100:g}% עד תקרה מצטברת {ceil_:,.0f} ₪ ו-{high * 100:g}% מעליה; החישוב מצטבר מינואר (האישור שנתי); המעסיק עשוי להידרש לכלול גם הפרשות מעסיק לפנסיה/פיצויים/השתלמות בהכנסה החייבת לפי האישור (לא ממומש)"), new
     if mode == "no_coordination":
         month_tax = r0(tg * NO_COORDINATION_RATE)
         new["cum_tax"] = prev["cum_tax"] + month_tax

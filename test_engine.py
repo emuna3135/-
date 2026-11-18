@@ -354,3 +354,21 @@ class DailyWageRegulation(unittest.TestCase):
     def test_reg6_rates(self):
         self.assertEqual(e.REG6_SPECIAL_RATES["shabbaton"], D("0.35"))
         self.assertEqual(e.REG6_SPECIAL_RATES["gemel_leave_sick_holiday"], D("0.25"))
+
+
+class TwoRatesCertificate(unittest.TestCase):
+    def test_cumulative_split_and_catch_up(self):
+        prev = {"cum_taxable": D(0), "cum_tax": D(0), "cum_deposits": D(0), "cum_life": D(0)}
+        # חודש 1: 8,000 בשיעור 10% עד 12,000 מצטבר
+        it, new = e.income_tax(2026, 1, "two_rates", D(8000), 0, prev, 0, 0, fixed_rate=("0.10", "12000", "0.47"))
+        self.assertEqual(it["value"], 800)
+        self.assertEqual(it["status"], e.ACCOUNTANT)
+        # חודש 2: מצטבר 16,000 -> 1,200 + 0.47*4,000 = 3,080 ; החודש = 2,280
+        it2, new2 = e.income_tax(2026, 2, "two_rates", D(8000), 0, new, 0, 0, fixed_rate=("0.10", "12000", "0.47"))
+        self.assertEqual(it2["value"], 2280)
+        self.assertEqual(new2["cum_tax"], 3080)
+
+    def test_invalid_certificate_is_manual(self):
+        prev = {"cum_taxable": D(0), "cum_tax": D(0), "cum_deposits": D(0), "cum_life": D(0)}
+        it, _ = e.income_tax(2026, 1, "two_rates", D(8000), 0, prev, 0, 0, fixed_rate=None)
+        self.assertEqual(it["status"], e.MANUAL)

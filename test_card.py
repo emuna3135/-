@@ -36,6 +36,8 @@ class Mode(unittest.TestCase):
 
     def test_other_income(self):
         self.assertEqual(card.tax_mode(True, "main", True)[0], "no_coordination")
+        self.assertEqual(card.tax_mode(True, "main", True, "elsewhere")[0], "no_coordination")
+        self.assertEqual(card.tax_mode(True, "main", True, "here")[0], "cumulative")
 
 
 if __name__ == "__main__":
