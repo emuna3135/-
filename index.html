@@ -36,6 +36,13 @@ label{display:grid;gap:6px;font-weight:500;font-size:.95rem}
 input,select,textarea{inline-size:100%;min-inline-size:0;padding:11px 12px;border:1px solid #B9CBEA;border-radius:8px;background:#fff;min-block-size:44px}
 input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .pform{gap:8px;margin-block-start:8px}.pform:not([hidden]){display:grid}
+.flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:12px;align-items:stretch;margin-block-start:18px}
+.flow-step{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;display:grid;gap:10px;align-content:start}
+.flow-step h3{margin:0}.flow-step p{margin:0;color:var(--muted)}
+.flow-n{inline-size:34px;block-size:34px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;font-weight:700}
+.flow-arrow{align-self:center;color:var(--blue);font-size:1.6rem}
+details>summary.nav{cursor:pointer;list-style:none}
+@media (max-width:900px){.flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(-90deg);justify-self:center}}
 .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
 .btn:hover{background:var(--blue-d)}
 .btn.ghost{background:#fff;color:var(--blue);border:1px solid var(--blue)}
@@ -240,7 +247,7 @@ function loginView(step) {
       state.token = r.access_token; state.user = email.value;
       if (r.two_factor_setup_required) return render("enroll");
       state.companies = r.companies || []; state.companyId = state.companies[0] && state.companies[0].id;
-      render(state.companyId ? "calc" : "newco");
+      render(state.companyId ? "home" : "newco");
     } catch (err) {
       if (/totp|דו-שלבי/.test(err.message)) { msg.replaceChildren(h("div", { class: "info" }, "נדרש קוד מאפליקציית האימות.")); form.querySelector(".codebox").hidden = false; }
       else msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message));
@@ -299,7 +306,7 @@ function newcoView() {
     e.preventDefault(); msg.replaceChildren();
     try {
       const c = await api("POST", "/companies", { name: name.value, tax_id: taxId.value.trim() || null });
-      state.companies = await api("GET", "/companies"); state.companyId = c.id; render("calc");
+      state.companies = await api("GET", "/companies"); state.companyId = c.id; render("home");
     } catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   } },
     h("h2", {}, "הקמת משרד"), h("label", {}, "שם המשרד", name), h("label", {}, "מספר ח.פ / ת.ז של המעסיק (נדרש בתלוש)", taxId), msg, h("button", { class: "btn", type: "submit" }, "יצירה"));
@@ -346,7 +353,7 @@ function enrollView() {
     h("section", { class: "login-form" }, h("form", { onsubmit: async (e) => {
       e.preventDefault();
       try { const r = await api("POST", "/auth/2fa/enable", { code: code.value }); state.token = r.access_token;
-        const cs = await api("GET", "/companies"); state.companies = cs; state.companyId = cs[0] && cs[0].id; render(state.companyId ? "calc" : "newco"); }
+        const cs = await api("GET", "/companies"); state.companies = cs; state.companyId = cs[0] && cs[0].id; render(state.companyId ? "home" : "newco"); }
       catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
     } }, h("h2", {}, "הקמת אימות דו-שלבי"), out, h("label", {}, "קוד מהאפליקציה", code), msg, h("button", { class: "btn", type: "submit" }, "הפעלה"))));
 }
@@ -354,7 +361,9 @@ function enrollView() {
 /* ---------- מעטפת ---------- */
 const NAV = [["calc", "חישוב תלוש"], ["upload", "העלאת אקסל"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
-  const nav = NAV.map(([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label));
+  const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
+  const nav = [navBtn(["home", "תהליך עבודה"]),
+    h("details", { open: NAV.some(([k]) => k === view) ? true : false }, h("summary", { class: "nav" }, "עוד"), NAV.map(navBtn))];
   return h("div", { class: "app" },
     h("nav", { class: "rail", "aria-label": "ניווט ראשי" },
       h("div", { class: "brand" }, "מערכת שכר", h("small", {}, (state.companies.find(c => c.id === state.companyId) || {}).name || "")),
@@ -755,9 +764,25 @@ function paramsView() {
   return shell("params", "פרמטרים שנתיים", box);
 }
 
+
+/* ---------- מסך הבית: שלושה צעדים ---------- */
+function homeView() {
+  const step = (n, title, text, label, view) => h("section", { class: "flow-step" },
+    h("div", { class: "flow-n", "aria-hidden": "true" }, n), h("h3", {}, title), h("p", {}, text),
+    h("button", { class: "btn", type: "button", onclick: () => render(view) }, label));
+  const arrow = () => h("div", { class: "flow-arrow", "aria-hidden": "true" }, "◀");
+  return shell("home", "תהליך עבודה",
+    h("div", {},
+      h("p", {}, "כל החישוב נעשה בשרת, לפי החוק. אין צורך לחשב ידנית: בכל תוצאה מופיעים הסטטוס והמקור שלה (איזה חוק, איזה סעיף), ואת מה שאין לו מקור המערכת לא מנחשת ומסמנת לטיפול ידני."),
+      h("div", { class: "flow" },
+        step("1", "עובדים וטופס 101", "הקמת עובדים וטפסי 101 (מאקסל או ידנית). פעם אחת, ואחר כך רק כשיש שינוי.", "לעובדים", "emps"), arrow(),
+        step("2", "נתוני החודש", "העלאת קובץ השעות, הבונוסים והנתונים המשתנים. המערכת מחשבת ומראה את כל התלושים.", "להעלאת אקסל", "upload"), arrow(),
+        step("3", "אישור והפקת תלוש", "בדיקת התוצאה לכל עובד, אישור והפקת התלוש. שורות שמסומנות לטיפול ידני נשארות פתוחות עד שתחליטי.", "להפקת תלוש", "slip"))));
+}
+
 function render(view) {
   state.view = view;
-  const views = { f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
