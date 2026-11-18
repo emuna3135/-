@@ -121,6 +121,16 @@ class Section14Approval(unittest.TestCase):
         r = self._s(route="insurance", deposit_rate=11, disability_insurance=True)
         self.assertEqual(r["items"]["severance"]["value"], D("14000.00"))
 
+    def test_mandatory_order_6_percent_replaces_72_without_agreement(self):
+        # צו פנסיית חובה, סעיף 7: 6% פיצויים = 72% מ-8.33%; אין צורך בהסכם בכתב
+        r = self._s(route="mandatory_order", deposit_rate=6, agreement_ok=False)
+        self.assertEqual(r["items"]["severance"]["value"], D("14000.00"))
+        self.assertEqual(r["items"]["severance"]["status"], BY_LAW)
+
+    def test_mandatory_order_completion_to_833_full(self):
+        r = self._s(route="mandatory_order", deposit_rate=6, completion_rate=2.33)
+        self.assertEqual(r["items"]["severance"]["value"], D("0.00"))
+
     def test_no_written_agreement_manual(self):
         self.assertEqual(self._s(agreement_ok=False)["items"]["severance"]["status"], MANUAL)
 
