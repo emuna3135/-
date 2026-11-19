@@ -281,7 +281,7 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
             return item(None, MANUAL, "אישור תיאום מס: שיעור הניכוי חסר או לא תקין"), new
         month_tax = r0(tg * D(str(fixed_rate)))
         new["cum_tax"] = prev["cum_tax"] + month_tax
-        return item(month_tax, BY_LAW, f"ניכוי בשיעור קבוע {D(str(fixed_rate)) * 100:g}% לפי אישור תיאום מס שהוזן על ידי חשב השכר (האישור והיקף תוקפו לא נבדקו)"), new
+        return item(month_tax, ACCOUNTANT, f"ניכוי בשיעור קבוע {D(str(fixed_rate)) * 100:g}% לפי אישור תיאום מס שהוזן על ידי חשב השכר (האישור והיקף תוקפו לא נבדקו); העיגול לשקל שלם של התוצאה אינו כתוב בתקנות לניכוי בשיעור קבוע"), new
     if mode == "two_rates":
         # אישור תיאום מס למשרה משנית: שיעור נמוך עד תקרה שנתית מצטברת ושיעור גבוה מעליה. fixed_rate = (שיעור_נמוך, תקרה_שנתית, שיעור_גבוה).
         # האישור שנתי (ינואר-דצמבר) גם אם הוצא באמצע השנה: המס המצטבר מחושב מתחילת השנה והחודש מנכה את ההפרש.

@@ -23,7 +23,7 @@ class FixedRate(unittest.TestCase):
                             prev=dict(e.ZERO_PREV, cum_taxable=D("20000"), cum_tax=0))
         t = r["items"]["income_tax"]
         self.assertEqual(t["value"], 1500)
-        self.assertEqual(t["status"], e.BY_LAW)
+        self.assertEqual(t["status"], e.ACCOUNTANT)
         self.assertIn("אישור תיאום מס", t["note"])
         self.assertEqual(r["cumulative"]["cum_tax"], 1500)
 
