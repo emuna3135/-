@@ -1102,6 +1102,19 @@ function reportsView() {
       out.replaceChildren(...showIssues(r).filter(Boolean), h("a", { class: "btn", href: url, download: "126-" + f.year.value + (draft ? "-DRAFT" : "") + ".txt" }, draft ? "הורדת טיוטה" : "הורדת הקובץ"));
     } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   };
+  const out106 = h("div", { "aria-live": "polite" });
+  const run106 = async () => {
+    out106.replaceChildren(h("p", { class: "muted" }, "מכינה את טופס 106…"));
+    try {
+      const body = JSON.stringify({ year: +f.year.value });
+      const chk = await api("POST", cp("/reports/106/check"), { year: +f.year.value });
+      const res = await fetch(state.api + cp("/reports/106/file"), { method: "POST", headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" }, body });
+      if (!res.ok) { let m = "הפעולה נכשלה (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+      const draft = res.headers.get("X-Report-Draft") === "true";
+      const url = URL.createObjectURL(await res.blob());
+      out106.replaceChildren(...showIssues(chk).filter(Boolean), h("a", { class: "btn", href: url, download: "106-" + f.year.value + (draft ? "-DRAFT" : "") + ".pdf" }, draft ? "הורדת טיוטה (PDF)" : "הורדת טופס 106 (PDF)"));
+    } catch (err) { out106.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
   const payOut = h("div", { "aria-live": "polite" });
   const payments = async () => {
     payOut.replaceChildren(h("p", { class: "muted" }, "מסכמת…"));
@@ -1139,6 +1152,9 @@ function reportsView() {
     h("p", { class: "muted" }, "המערכת מכינה את קובץ הדוח השנתי (טופס 126) מהתלושים. ההגשה לרשות נעשית בידי חשבת השכר. נתוני דמה בלבד."),
     h("section", { class: "rep-card" }, h("div", { class: "rep-head" }, h("h3", {}, "דוח שנתי למס הכנסה (126)"), h("label", { class: "rep-year" }, "שנת מס", f.year)),
       profileBox, tech, h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: () => run(true) }, "הפקת דוח לרשויות"), h("button", { class: "btn ghost", type: "button", onclick: () => run(false) }, "בדיקה מחדש")), out),
+    h("section", { class: "rep-card" }, h("div", { class: "rep-head" }, h("h3", {}, "אישור שנתי לעובדים (106)")),
+      h("p", { class: "muted" }, "קובץ PDF לכל עובד עם סיכום השנה מהתלושים, לפי סעיפי הטופס של רשות המסים. הסעיפים שהמערכת לא מחשבת מסומנים בטופס. המערכת לא שולחת דבר."),
+      h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: run106 }, "הפקת טופס 106")), out106),
     h("section", { class: "rep-card" }, h("h3", {}, "סיכום תשלומים לפי חודש"), payOut)));
 }
 

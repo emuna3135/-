@@ -14,7 +14,9 @@ def _num(v):
 
 def _employer_ni(stub):
     """ב"ל מעביד מהתלוש; None אם חסר או שהסטטוס 'נדרש טיפול ידני' (לא משלימים בניחוש)."""
-    it = (stub.get("employer") or {}).get("national_insurance") or {}
+    it = (stub.get("employer") or {}).get("national_insurance")
+    if not isinstance(it, dict):                     # בתלוש שמור הערך הוא מספר (או None אם נדרש טיפול ידני)
+        return None if it is None else float(it)
     if it.get("value") is None or it.get("status") == engine.MANUAL:
         return None
     return float(it["value"])

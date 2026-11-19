@@ -1832,6 +1832,48 @@ def report126_file(company_id: str, body: Report126In, user: User = Depends(curr
                     headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Report-Draft": "false" if ok else "true"})
 
 
+class Report106In(BaseModel):
+    year: int = Field(..., ge=2000, le=2100)
+
+
+def _report106(db: Session, company_id: str, body: Report106In):
+    import form106
+    row = db.get(CompanyProfile, company_id)
+    profile = unseal(db, company_id, row.payload_enc) if row else {}
+    emps = [unseal(db, company_id, e.payload_enc)
+            for e in db.query(Employee).filter(Employee.company_id == company_id).all()]
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == body.year)
+             .order_by(PaystubV2.created_at).all()]
+    try:
+        return form106.run(profile, body.year, emps, stubs)
+    except Exception as ex:
+        raise HTTPException(422, f"לא ניתן להפיק את טופס 106: {ex}")
+
+
+@app.post("/companies/{company_id}/reports/106/check")
+def report106_check(company_id: str, body: Report106In, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "read")
+    _, issues, n, ok = _report106(db, company_id, body)
+    audit(db, user.id, company_id, "report106_check", "report", None, f"year={body.year} issues={len(issues)}")
+    db.commit()
+    return {"issues": issues, "records": n, "submittable": ok}
+
+
+@app.post("/companies/{company_id}/reports/106/file")
+def report106_file(company_id: str, body: Report106In, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """יוצר קובץ PDF בלבד. המערכת לא שולחת דבר לרשות המסים ולא לעובד."""
+    require_company(company_id, user, db, "write")
+    data, issues, n, ok = _report106(db, company_id, body)
+    if not data:
+        raise HTTPException(422, "אין תלושים לשנה הזו")
+    audit(db, user.id, company_id, "report106_download", "report", None, f"year={body.year} employees={n} draft={not ok}")
+    db.commit()
+    name = f"106-{body.year}{'' if ok else '-DRAFT'}.pdf"
+    return Response(content=data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Report-Draft": "false" if ok else "true"})
+
+
 @app.get("/companies/{company_id}/payments-summary")
 def payments_summary_view(company_id: str, year: int = Query(..., ge=2000, le=2100),
                           user: User = Depends(current_user), db: Session = Depends(get_db)):
