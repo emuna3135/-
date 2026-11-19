@@ -807,7 +807,7 @@ function uploadView() {
       try { imp = await api("POST", cp("/employees/upload-excel"), fd1, true); }
       catch (err) { if (!/גיליון בשם/.test(err.message)) throw err; }
       if (imp) {
-        nodes.push(h("p", {}, "עובדים: נוצרו " + imp.created + ", כבר היו " + imp.existing + ". טפסי 101 שנשמרו: " + imp.form101_saved + "."));
+        nodes.push(h("p", {}, "עובדים: נוצרו " + imp.created + ", כבר היו " + imp.existing + ". טפסי 101 שנשמרו: " + imp.form101_saved + "." + (imp.employer_saved ? " פרטי המעביד נשמרו." : "")));
         if (imp.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות עובדים/101 שלא נקלטו:"),
           h("ul", {}, imp.errors.slice(0, 30).map(x => h("li", {}, x.sheet + ", שורה " + x.row + ": " + x.error)))));
       }
@@ -995,7 +995,7 @@ function reportsView() {
       list(blocks, "blocks"), list(warns, "warns")];
   };
   const run = async (doDownload) => {
-    if (!profileOk()) { profileBox.open = true; out.replaceChildren(status("warn", "חסרים פרטי המעביד", "ממלאים פעם אחת (שם, תיק ניכויים, מספר תיק במס הכנסה, טלפון) והם נשמרים.")); return; }
+    if (!profileOk()) { profileBox.open = true; out.replaceChildren(status("warn", "חסרים פרטי המעביד", "הכי נוח: למלא פעם אחת בגיליון 'מעביד' בתבנית האקסל (שלב 1). אפשר גם כאן: שם, תיק ניכויים, מספר תיק במס הכנסה וטלפון.")); return; }
     out.replaceChildren(h("p", { class: "muted" }, doDownload ? "מכינה את הקובץ…" : "בודקת…"));
     try {
       await saveProfile();

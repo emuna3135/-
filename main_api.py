@@ -1255,10 +1255,23 @@ async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
                 forms += 1
         except ValueError as e:
             errors.append({"sheet": employee_import.SHEET_EMPLOYEES, "row": i, "error": _err_text(e)})
+    employer_saved = False
+    er = sheets.get(employee_import.SHEET_EMPLOYER) or []
+    if er:
+        try:
+            prof = ProfileIn(**employee_import.parse_employer(er[0])).model_dump(mode="json")
+            prow = db.get(CompanyProfile, company_id)
+            if prow:
+                prow.payload_enc = seal(db, company_id, prof)
+            else:
+                db.add(CompanyProfile(company_id=company_id, payload_enc=seal(db, company_id, prof)))
+            employer_saved = True
+        except ValueError as e:
+            errors.append({"sheet": employee_import.SHEET_EMPLOYER, "row": 2, "error": _err_text(e)})
     audit(db, user.id, company_id, "upload_employees_excel", "file", None,
-          f"rows={len(emp_rows)} created={created} existing={existing} form101={forms} errors={len(errors)}")
+          f"rows={len(emp_rows)} created={created} existing={existing} form101={forms} employer={employer_saved} errors={len(errors)}")
     db.commit()
-    return {"created": created, "existing": existing, "form101_saved": forms, "errors": errors}
+    return {"created": created, "existing": existing, "form101_saved": forms, "employer_saved": employer_saved, "errors": errors}
 
 
 class CalcFromCardIn(BaseModel):

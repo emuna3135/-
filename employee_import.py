@@ -225,3 +225,57 @@ def read_sheets(content: bytes):
         head = [str(h).strip() if h is not None else "" for h in rows[0]]
         out[ws.title] = [dict(zip(head, r)) for r in rows[1:] if any(c not in (None, "") for c in r)]
     return out
+
+
+# --- פרטי מעביד (גיליון 'מעביד'): שורה אחת. משמש לדוח השנתי (126). ללא ניחוש: ערך חסר/לא מזוהה = שגיאה. ---
+SHEET_EMPLOYER = "מעביד"
+_LEGAL = {"חברה": 1, "יחיד": 2, "עוסק": 2, "שותפות": 3, "עמותה": 4, "רשות": 5}
+_EMP_TAX = {"פטור": 1, "חייב": 2}
+EMPLOYER_ALIASES = {
+    "name": ("שם המעביד", "שם מעביד", "name"),
+    "file_no": ("תיק ניכויים", "מספר תיק ניכויים", "file_no"),
+    "tax_file_no": ("מספר תיק במס הכנסה", "תיק במס הכנסה", "tax_file_no"),
+    "phone": ("טלפון", "phone"),
+    "legal_status": ("מעמד משפטי", "legal_status"),
+    "employer_tax": ("מס מעסיקים", "employer_tax"),
+    "agid": ("מספר אגיד", "אגיד", "agid"),
+    "factory_no": ("מספר מפעל", "factory_no"),
+}
+
+
+def _eget(row, key):
+    for a in EMPLOYER_ALIASES[key]:
+        if a in row and row[a] not in (None, ""):
+            return row[a]
+    return None
+
+
+def _digits(v):
+    s = str(v).strip()
+    if s.endswith(".0"):
+        s = s[:-2]
+    return s
+
+
+def parse_employer(row):
+    """שורת 'מעביד' -> dict תואם ProfileIn. חובה: שם, תיק ניכויים, תיק במס הכנסה, טלפון, מעמד משפטי, מס מעסיקים."""
+    out = {}
+    for key, label in (("name", "שם המעביד"), ("file_no", "תיק ניכויים"), ("tax_file_no", "מספר תיק במס הכנסה"), ("phone", "טלפון")):
+        v = _eget(row, key)
+        if v is None:
+            raise RowError(f"חסר ערך בעמודה '{label}'")
+        out[key] = str(v).strip() if key == "name" else _digits(v).replace("-", "")
+    for key, label, table in (("legal_status", "מעמד משפטי", _LEGAL), ("employer_tax", "מס מעסיקים", _EMP_TAX)):
+        v = _eget(row, key)
+        if v is None:
+            raise RowError(f"חסר ערך בעמודה '{label}'")
+        s = str(v).strip()
+        code = table.get(s) or (int(s) if s.isdigit() and int(s) in table.values() else None)
+        if code is None:
+            raise RowError(f"ערך לא מוכר בעמודה '{label}': {s}. ערכים אפשריים: {', '.join(table)}")
+        out[key] = code
+    a = _eget(row, "agid")
+    out["agid"] = int(_digits(a)) if a is not None and _digits(a).isdigit() else 0
+    fa = _eget(row, "factory_no")
+    out["factory_no"] = _digits(fa) if fa is not None else None
+    return out
