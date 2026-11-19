@@ -35,6 +35,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 label{display:grid;gap:6px;font-weight:500;font-size:.95rem}
 input,select,textarea{inline-size:100%;min-inline-size:0;padding:11px 12px;border:1px solid #B9CBEA;border-radius:8px;background:#fff;min-block-size:44px}
 input:focus,select:focus,textarea:focus{border-color:var(--blue)}
+input[type=checkbox],input[type=radio]{inline-size:1.2rem;block-size:1.2rem;min-inline-size:0;min-block-size:0;padding:0;margin:0;flex:0 0 1.2rem;accent-color:var(--blue);vertical-align:middle;cursor:pointer}
+summary>input[type=checkbox]{margin-inline-end:10px}
+label>input[type=checkbox],label>input[type=radio]{order:-1}
+label:has(>input[type=checkbox]),label:has(>input[type=radio]){display:flex;flex-direction:row;align-items:center;gap:10px}
+ul.pick{list-style:none;padding:0;margin:8px 0;display:grid;gap:8px}
+ul.pick li label{padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);background:#fff;cursor:pointer}
+summary{display:list-item;line-height:1.6}
 .pform{gap:8px;margin-block-start:8px}.pform:not([hidden]){display:grid}
 .rep-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-block-start:16px;display:grid;gap:12px}.rep-card h3{margin:0}.rep-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.rep-year{display:flex;align-items:center;gap:8px}.rep-details{border:1px solid var(--line);border-radius:10px;padding:8px 12px}.rep-details>summary,.rep-list>summary{cursor:pointer;font-weight:600}.rep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-block-start:10px}.rep-status{display:grid;gap:2px;padding:12px 14px;border-radius:10px}.rep-status.ok{background:#e8f6ee;color:#0f5132}.rep-status.warn{background:#fff6e0;color:#7a5200}.rep-list ul{margin:6px 0}
 .flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:stretch;margin-block-start:22px;position:relative}
@@ -131,7 +138,7 @@ table.t tr.click{cursor:pointer} table.t tr.click:hover{background:#F7FAFF}
 .fields dt{color:var(--muted)} .fields dd{margin:0;font-weight:500}
 .actions{display:flex;gap:12px;flex-wrap:wrap;margin-block-start:16px;align-items:center}
 .check{display:flex;gap:10px;align-items:flex-start;font-weight:400}
-.check input{inline-size:auto;min-block-size:auto;margin-block-start:5px}
+.check input{margin:0}
 .toast{position:fixed;inset-block-end:24px;inset-inline-start:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;box-shadow:0 6px 24px rgba(14,38,80,.25)}
 .secret{font-family:ui-monospace,monospace;background:var(--sky);padding:8px 12px;border-radius:8px;direction:ltr;text-align:left;user-select:all;word-break:break-all}
 
@@ -939,8 +946,8 @@ function reviewView() {
           "aria-label": "אישור התלוש של " + (p.emp_name || ""),
           onchange: () => { if (cb.checked) state.flow.approved[flowKey(p)] = true; else delete state.flow.approved[flowKey(p)]; draw(); } });
         return h("details", { class: "card" },
-          h("summary", {}, cb, " ", p.emp_name || "", " | ברוטו: ", fmt(p.gross), " | נטו: ", p.net == null ? "לא חושב" : fmt(p.net),
-            ok ? "" : " | נדרש טיפול ידני: לא ניתן לאשר"), slipView(p));
+          h("summary", {}, cb, h("span", {}, (p.emp_name || "") + " | ברוטו: " + fmt(p.gross) + " | נטו: " + (p.net == null ? "לא חושב" : fmt(p.net)) +
+            (ok ? "" : " | נדרש טיפול ידני: לא ניתן לאשר"))), slipView(p));
       }));
   };
   sel.addEventListener("change", draw); draw(); drawFail();
@@ -962,7 +969,7 @@ function issueView() {
         h("span", {}, n + " נבחרו מתוך " + approved.length)),
       h("ul", { class: "pick" }, approved.map(p => h("li", {}, h("label", {},
         h("input", { type: "checkbox", checked: !!picked[flowKey(p)], onchange: (e) => { if (e.target.checked) picked[flowKey(p)] = true; else delete picked[flowKey(p)]; drawList(); } }),
-        " " + (p.emp_name || "") + " | " + periodOf(p) + " | נטו " + (p.net == null ? "לא חושב" : fmt(p.net)))))));
+        h("span", {}, (p.emp_name || "") + " | " + periodOf(p) + " | נטו " + (p.net == null ? "לא חושב" : fmt(p.net))))))));
   };
   drawList();
   const tpl = h("select", {}, h("option", { value: "" }, "עיצוב ברירת המחדל של המערכת"));
