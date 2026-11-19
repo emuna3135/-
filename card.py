@@ -198,6 +198,20 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
     return float(pts), status, note
 
 
+def missing_inputs(gender, is_resident, y):
+    """מה לא נקרא (או חסר) מטופס 101 ומונע חישוב נקודות: [(מפתח, שם בעברית)]. רק נתון שהחשבת יכולה להשלים במילים."""
+    y = y or {}
+    out = []
+    if gender not in ("F", "M"):
+        out.append(("gender", "מין העובד"))
+    if not is_resident:
+        out.append(("residency", "תושבות (לא תושב ישראל: אין כלל מאומת)"))
+    has_family = bool(y.get("custody_birth_years") or y.get("noncustody_birth_years") or y.get("family_flags"))
+    if has_family and y.get("marital") not in MARITAL:
+        out.append(("marital", "מצב משפחתי"))
+    return out
+
+
 MARITAL = ("single", "married", "divorced", "widowed", "separated")
 
 

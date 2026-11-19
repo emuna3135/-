@@ -1959,6 +1959,12 @@ def _card_error_ctx(db, company_id, row) -> dict:
                 yd = unseal(db, company_id, yr.payload_enc)
                 who["family"] = {k: yd.get(k) for k in ("marital", "custody_birth_years", "noncustody_birth_years", "family_flags")}
                 who["family"]["year"] = calc["year"]
+            try:
+                _e, _d = get_employee(db, company_id, emp.id)
+                who["missing"] = [{"key": k, "label": l} for k, l in card.missing_inputs(
+                    _d.get("gender"), _d.get("is_resident", True), (yd if yr else None))]
+            except Exception:
+                pass
     except Exception:
         pass
     return who

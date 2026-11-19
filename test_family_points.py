@@ -47,3 +47,10 @@ class FamilyPoints(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissingInputs(unittest.TestCase):
+    def test_reports_what_is_missing(self):
+        self.assertEqual(card.missing_inputs("F", True, {"custody_birth_years": [2015]}), [("marital", "מצב משפחתי")])
+        self.assertEqual([k for k, _ in card.missing_inputs(None, False, {})], ["gender", "residency"])
+        self.assertEqual(card.missing_inputs("M", True, {"marital": "married", "custody_birth_years": [2015]}), [])

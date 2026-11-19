@@ -44,7 +44,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .flow-arrow{display:none}
 details>summary.nav{cursor:pointer;list-style:none}
 @media (max-width:1100px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:600px){.flow{grid-template-columns:1fr}}
-.flowbar{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:14px}.flowbar-i{padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}button.flowbar-i.back{background:transparent;font:inherit;cursor:pointer;color:var(--brand,#1f4fd8);border-color:var(--brand,#1f4fd8)}button.flowbar-i.back:hover,button.flowbar-i.back:focus-visible{background:var(--brand,#1f4fd8);color:#fff}.flowbar-i.on{background:var(--brand,#1f4fd8);color:#fff;border-color:transparent;font-weight:700}
+.flowbar{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:14px}.flowbar-i{padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}label.missing{outline:2px solid #b45309;border-radius:6px;padding:4px}
+button.flowbar-i.back{background:transparent;font:inherit;cursor:pointer;color:var(--brand,#1f4fd8);border-color:var(--brand,#1f4fd8)}button.flowbar-i.back:hover,button.flowbar-i.back:focus-visible{background:var(--brand,#1f4fd8);color:#fff}.flowbar-i.on{background:var(--brand,#1f4fd8);color:#fff;border-color:transparent;font-weight:700}
 .pick{list-style:none;padding:0;margin:10px 0;display:grid;gap:6px;max-block-size:320px;overflow:auto}.pick input{inline-size:auto;min-block-size:0}
 .basis ul{margin:6px 0;padding-inline-start:18px}.basis li{margin-block-end:8px}
 .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
@@ -551,7 +552,9 @@ function form101View() {
   } },
     h("label", {}, "עובד", emp), h("label", {}, "שנת מס", year), h("label", {}, "תאריך חתימת העובד על הטופס", signed),
     h("label", {}, "סוג משרה", itype), h("label", {}, h("span", {}, "יש לעובד הכנסות אחרות (סומן בטופס)"), other),
-    h("label", {}, "מצב משפחתי", marital), h("label", {}, "שנות לידה של ילדים בחזקת העובד/ת", kids),
+    (x.missing && x.missing.length) ? h("div", { class: "err", role: "status" },
+      "לא נקרא מטופס 101: " + x.missing.map(m => m.label).join(", ") + ". אפשר להשלים כאן במילים והקשה על Enter תחשב מחדש.") : null,
+    h("label", { class: (x.missing || []).some(m => m.key === "marital") ? "missing" : "" }, "מצב משפחתי", marital), h("label", {}, "שנות לידה של ילדים בחזקת העובד/ת", kids),
     h("details", {}, h("summary", {}, "זיכויים נוספים"),
       h("label", {}, "תאריך עלייה", aliyah), h("label", {}, "תאריך שחרור משירות צבאי", discharge), h("label", {}, "סוג השירות", fullSvc),
       h("label", {}, "תואר או לימודי מקצוע", degKind), h("label", {}, "שנות לימוד", degYears), h("label", {}, "שנת סיום", degDone),
