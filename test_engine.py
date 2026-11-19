@@ -171,11 +171,13 @@ class Benefits(unittest.TestCase):
         self.assertFalse(e.is_operational_car(True, False, workplace_is_residence=True))
         self.assertFalse(e.is_operational_car(True, None))        # מידע חסר: לא מניחים
 
-    def test_works_committee_is_manual_without_primary_source(self):
-        # נוסח חוזר 34/93 לא נמצא: אין חישוב ואין ניחוש
-        for spec in (True, False, None):
-            r = e.works_committee_benefit("340", spec)
-            self.assertIsNone(r["value"]); self.assertEqual(r["status"], e.MANUAL)
+    def test_works_committee_statute(self):
+        r = e.works_committee_benefit("340", True)
+        self.assertEqual((r["value"], r["status"]), (D("340"), e.BY_LAW))   # סעיף 2(2)(א)
+        r = e.works_committee_benefit("48000", False)
+        self.assertEqual((r["value"], r["status"]), (D(0), e.BY_LAW))       # סעיף 32(11), משפט אחרון
+        r = e.works_committee_benefit("340", None)
+        self.assertIsNone(r["value"]); self.assertEqual(r["status"], e.MANUAL)
 
     def test_recuperation_2025(self):
         self.assertEqual(e.recuperation_pay(2025, 5, reduced_partial=False)["value"], D("1672"))  # רנה
