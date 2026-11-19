@@ -50,6 +50,32 @@ add("F", True, None, [0, 4], [], 7.75)
 add("F", True, None, [2, 2], [], 11.75)
 add("M", True, None, [6, 6], [], 4.25)
 
+
+# --- הרצות נוספות 19.11.2026 (אותו סימולטור, שנת מס 2026): צירופי מצבים. הדגל כאן יכול להיות tuple של כמה מצבים.
+# הכלל שעלה מההרצות: +1 על חי בנפרד בלי משק בית/הורה יחיד (פעם אחת, גם אם שניהם), +1 על מזונות, מצטברים; חי בנפרד עם משק בית משותף: 0.
+for g, base in (("F", 2.75), ("M", 2.25)):
+    add(g, True, "mezonut", [], [], base + 1)
+    add(g, True, "mezonut", [6], [], base + 1 + (2 if g == "F" else 1))
+    add(g, True, ("teen", "mezonut"), [], [], base + 2)
+    add(g, False, ("nomesh", "niptar"), [], [], base + 1)
+    add(g, False, ("nomesh", "niptar"), [6], [], base + 1 + 2 + 1)
+    add(g, False, ("nomesh", "mezonut"), [], [], base + 2)
+    add(g, False, ("nomesh", "mezonut"), [6], [], base + 2 + 2)
+    add(g, False, ("nomesh", "mezonut"), [], [6], base + 3)
+    add(g, False, ("nomesh", "mezonut"), [6], [0], base + 2 + 2 + 2.5)
+    add(g, False, ("niptar", "mezonut"), [], [], base + 2)
+    add(g, False, ("niptar", "mezonut"), [6], [], base + 2 + 2 + 1)
+    add(g, False, ("niptar", "mezonut"), [], [6], base + 3)
+    add(g, False, ("niptar", "mezonut"), [6], [6], base + 2 + 2 + 1 + 1)
+    add(g, False, ("yesmesh", "niptar"), [], [], base + 1)
+    add(g, False, ("yesmesh", "niptar"), [6], [], base + 1 + 2 + 1)
+    add(g, False, ("yesmesh", "mezonut"), [], [], base + 1)
+    add(g, False, ("yesmesh", "mezonut"), [6], [], base + 1 + 2)
+    add(g, False, ("yesmesh", "mezonut"), [], [6], base + 2)
+    add(g, False, ("nomesh", "niptar", "mezonut"), [], [], base + 2)
+    add(g, False, ("nomesh", "niptar", "mezonut"), [6], [], base + 2 + 2 + 1)
+    add(g, False, ("yesmesh", "niptar", "mezonut"), [6], [], base + 2 + 2 + 1)
+
 # מצבים שהסימולטור נתן להם תוצאה שאינה מוסברת/אינה בהתאם לתווית, ולכן אינם נתמכים בחישוב (נשארים ידני):
 UNEXPLAINED = [
     ("esha: נשואים בשנית ומשלמים מזונות (התווית: נקודה אחת; התוצאה: 0 תוספת)", "F", True, "esha", [], [], 2.75),

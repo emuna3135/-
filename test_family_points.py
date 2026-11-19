@@ -14,7 +14,7 @@ class FamilyPoints(unittest.TestCase):
     def test_every_simulator_result_is_reproduced(self):
         bad = []
         for g, m, flag, cust, nonc, total in sim.R:
-            pts, st, _ = card.family_credit_points(2026, g, m, [birth(a) for a in cust], [birth(a) for a in nonc], FLAG[flag])
+            pts, st, _ = card.family_credit_points(2026, g, m, [birth(a) for a in cust], [birth(a) for a in nonc], (flag if isinstance(flag, tuple) else FLAG[flag]))
             if pts != total or st != card.VERIFIED:
                 bad.append((g, m, flag, cust, nonc, total, pts, st))
         self.assertEqual(bad, [], f"{len(bad)} mismatches")
@@ -32,7 +32,8 @@ class FamilyPoints(unittest.TestCase):
         self.assertEqual(card.family_credit_points(2026, "F", False, [2024], [], ())[1], card.MANUAL)
 
     def test_unverified_combinations_are_manual(self):
-        self.assertEqual(card.family_credit_points(2026, "F", False, [], [], ("nomesh", "niptar"))[1], card.MANUAL)
+        self.assertEqual(card.family_credit_points(2026, "F", False, [], [], ("nomesh", "yesmesh"))[1], card.MANUAL)
+        self.assertEqual(card.family_credit_points(2026, "F", True, [], [2024], ("mezonut",))[1], card.MANUAL)
         self.assertEqual(card.family_credit_points(2026, "F", True, [], [], ("niptar",))[1], card.MANUAL)
         self.assertEqual(card.family_credit_points(2026, "F", False, [], [], ("benef",))[1], card.MANUAL)
         self.assertEqual(card.family_credit_points(2026, "M", True, [], [], ("widower",))[1], card.MANUAL)

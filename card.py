@@ -139,20 +139,21 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
     if unknown:
         return manual("דגל לא נתמך: " + ", ".join(sorted(unknown)))
     special = flags & _SPECIAL
-    if len(special) > 1:
-        return manual("צירוף כמה מצבי חיים בנפרד/הורה יחיד/מזונות")
-    if married and special:
-        return manual("נשוי/ה יחד עם מצב של חיים בנפרד/הורה יחיד/מזונות")
+    # צירופים שנבדקו בסימולטור (19.11.2026) ומתנהגים לפי כלל אחד: +1 על חי בנפרד/הורה יחיד (פעם אחת), +1 על מזונות, יחד.
+    if {"nomesh", "yesmesh"} <= special:
+        return manual("חי בנפרד עם וגם בלי משק בית משותף: הסימולטור לא מאפשר לסמן את שניהם")
+    if married and (special & {"nomesh", "yesmesh", "niptar"}):
+        return manual("נשוי/ה יחד עם חי בנפרד/הורה יחיד: הסימולטור לא מאפשר את הצירוף")
     if not married and ({"benef", "widower"} & flags):
         return manual("יחיד מוטב או נשואה לאלמן ללא נישואים")
     if "widower" in flags and gender != "F":
         return manual("נשואה לאלמן רלוונטי רק לאישה")
     if custody_birth_years and not (married or ({"nomesh", "yesmesh", "niptar"} & flags)):
         return manual("ילדים בחזקה ללא נישואים וללא מצב חיים מוגדר (הסימולטור לא סופר אותם)")
-    if custody_birth_years and "mezonut" in flags:
-        return manual("ילדים בחזקה יחד עם תשלום מזונות")
     if noncust_birth_years and "mezonut" not in flags:
         return manual("ילדים שלא בחזקה ללא דגל תשלום מזונות")
+    if noncust_birth_years and married:
+        return manual("ילדים שלא בחזקה אצל נשוי/ה: תוצאות הסימולטור לא עקביות בין גבר לאישה")
     kids_custody = len(custody_birth_years)
     # הרכב הנקודות: (תיאור, נקודות, סעיף בחוק). סעיף שלא תועד מסומן "לא תועד" ולא מנוחש; הערך עצמו אומת בסימולטור.
     parts = [("תושב ישראל", D("2.25"), "§34 לפקודה")]
@@ -164,9 +165,13 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
         parts.append(("יחיד מוטב", D("0.5") if kids_custody else D(1), "§37 לפקודה"))
     if "widower" in flags:
         parts.append(("נשואה לאלמן", D(0), "סעיף לא תועד; אומת בסימולטור"))
-    if special & {"nomesh", "niptar", "mezonut"}:
-        lbl = {"nomesh": "חי/ה בנפרד בלי משק בית משותף", "niptar": "הורה יחיד", "mezonut": "משלם מזונות על ילדים שלא בחזקתו"}
-        parts.append((lbl[(special & {"nomesh", "niptar", "mezonut"}).pop()], D(1), "סעיף לא תועד; אומת בסימולטור"))
+    if special & {"nomesh", "niptar"}:
+        both = {"nomesh", "niptar"} <= special
+        lbl = ("חי/ה בנפרד והורה יחיד (נספר פעם אחת)" if both else
+               "חי/ה בנפרד בלי משק בית משותף" if "nomesh" in special else "הורה יחיד")
+        parts.append((lbl, D(1), "סעיף לא תועד; אומת בסימולטור"))
+    if "mezonut" in special:
+        parts.append(("משלם מזונות על ילדים שלא בחזקתו", D(1), "סעיף לא תועד; אומת בסימולטור"))
     table = _T_FATHER_MARRIED if (married and gender == "M") else _T_MOTHER
     law_c = "§66(ג)(5) לפקודה" if (married and gender == "M") else ("§66(ג)(4) לפקודה" if married else "§40(ב) לפקודה")
     for b in custody_birth_years:
