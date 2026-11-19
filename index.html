@@ -109,8 +109,9 @@ legend{font-weight:700;padding:0 0 0 8px;color:var(--ink)}
 .fixbox>label{display:grid;grid-template-columns:13rem minmax(0,1fr);align-items:center;gap:10px}
 .fixbox input:not([type=checkbox]),.fixbox select{inline-size:100%;min-width:0;box-sizing:border-box}
 .fixbox fieldset{gap:8px}
-.fixbox label.check{display:grid;grid-template-columns:1.2rem minmax(0,1fr);align-items:center;gap:10px}
-.fixbox label.check input{margin:0;inline-size:1.1rem;block-size:1.1rem;min-inline-size:0;min-width:0;min-block-size:0;justify-self:start}
+.fixbox label.check{display:flex;flex-direction:row;align-items:center;gap:10px}
+.fixbox label.check span{flex:1 1 auto}
+.fixbox label.check input{margin:0;inline-size:1.1rem;block-size:1.1rem;min-inline-size:0;min-width:0;min-block-size:0;flex:0 0 1.1rem}
 .fixbox button{justify-self:start}
 
 .unres{margin:16px 0 0;padding:14px 18px;background:var(--bad-bg);color:var(--bad);border-radius:var(--r)}
@@ -828,7 +829,7 @@ function manualFixBox(x, onDone) {
   wtype.value = fam.worker_type || "";
   const months = h("input", { type: "number", min: "1", max: "12", value: fam.months_in_israel || "", placeholder: "1-12" });
   const missingKeys = (x.missing || []).map(m => m.key);
-  const showWorker = missingKeys.includes("worker_type") || missingKeys.includes("months_in_israel") || (fam.worker_type && fam.worker_type !== "resident");
+  const showWorker = missingKeys.includes("worker_type") || missingKeys.includes("months_in_israel") || /לא תושב|סוג העובד|חודשי השהייה/.test(x.error || "") || (fam.worker_type && fam.worker_type !== "resident");
   const custody = h("input", { type: "text", value: (fam.custody_birth_years || []).join(","), placeholder: "למשל 2015,2018" });
   const noncust = h("input", { type: "text", value: (fam.noncustody_birth_years || []).join(","), placeholder: "למשל 2010" });
   const flagBoxes = LIFE_OPTS.map(([v, t]) => ({ v, el: h("input", { type: "checkbox", checked: (fam.family_flags || []).includes(v) }), t }));
@@ -849,7 +850,7 @@ function manualFixBox(x, onDone) {
   } },
     h("label", {}, "מצב משפחתי", marital),
     h("fieldset", {}, h("legend", {}, "מצב חיים (אפשר לסמן כמה שמתאימים)"),
-      flagBoxes.map(b => h("label", { class: "check" }, b.el, " " + b.t))),
+      flagBoxes.map(b => h("label", { class: "check" }, b.el, h("span", {}, b.t)))),
     h("label", {}, "שנות לידה של ילדים בחזקתו", custody),
     h("label", {}, "שנות לידה של ילדים שלא בחזקתו", noncust),
     h("button", { class: "btn", type: "submit" }, "עדכון וחישוב מחדש"), msg);
