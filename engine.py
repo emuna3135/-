@@ -340,7 +340,7 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
 # ---------------------------------------------------------------------------
 CAR_RATE = D("0.0248")          # המודל הליניארי: 2.48% ממחיר הרכב המתואם (רכב שנרשם מ-1.1.2010)
 CAR_PRICE_CAP = D("583100")
-CAR_MAX_WEIGHT_KG = D("3500")   # רכב כבד מזה אינו "רכב" לעניין שווי שימוש     # תקרת המחיר המתואם
+CAR_MAX_WEIGHT_KG = D("3500")   # "רכב" = משקל כולל מותר פחות מ-3,500 ק"ג (תקנות ניכוי הוצאות רכב 1995, הגדרת "רכב"; תקנות שווי השימוש מפנות אליה)     # תקרת המחיר המתואם
 CAR_REDUCTION = {"regular": D(0), "hybrid": D(560), "plugin": D(1130), "electric": D(1350)}
 PHONE_DEFAULT_VALUE = D("115")  # הסכום הנקוב בתקנות רט"ן בעדכון שנתי: 115 ₪ לחודש (לוח עזר 2025 ו-2026, gov.il)
 
@@ -373,8 +373,8 @@ def car_benefit(price, kind="regular", operational=False, gross_weight_kg=None, 
         return item(None, MANUAL, f"שנה {year}: תקרת מחיר והפחתות לא הוגדרו, נדרשת הזנה ידנית")
     if kind not in reductions:
         return item(None, MANUAL, "סוג רכב לא מוכר")
-    if gross_weight_kg is not None and D(str(gross_weight_kg)) > CAR_MAX_WEIGHT_KG:
-        return item(D(0), BY_LAW, "משקל כולל מותר מעל 3,500 ק\"ג: אינו 'רכב' לעניין שווי השימוש, אין שווי (חוזר מס הכנסה 1/2010, סעיף 1.1: משקל שאינו עולה על 3,500 ק\"ג)")
+    if gross_weight_kg is not None and D(str(gross_weight_kg)) >= CAR_MAX_WEIGHT_KG:
+        return item(D(0), BY_LAW, "משקל כולל מותר 3,500 ק\"ג ומעלה: אינו 'רכב' לעניין שווי השימוש, אין שווי (הגדרת 'רכב' בתקנות מס הכנסה (ניכוי הוצאות רכב), התשנ\"ה-1995, שאליה מפנה תקנה 1 לתקנות שווי השימוש: משקל פחות מ-3,500 ק\"ג)")
     if operational:
         return item(D(0), BY_LAW, "רכב תפעולי: אין שווי שימוש (תקנות מס הכנסה, ניכוי הוצאות רכב)")
     raw = min(D(str(price)), cap) * CAR_RATE

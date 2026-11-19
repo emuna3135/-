@@ -161,7 +161,8 @@ class Benefits(unittest.TestCase):
         ph = e.phone_benefit("70", "0.5")["value"]
         van = e.car_benefit(250000, "regular", gross_weight_kg=4200)["value"]
         self.assertEqual((ph, van), (0, 0))
-        self.assertGreater(e.car_benefit(250000, "regular", gross_weight_kg=3500)["value"], 0)  # בדיוק 3,500 עדיין רכב
+        self.assertEqual(e.car_benefit(250000, "regular", gross_weight_kg=3500)["value"], 0)  # "פחות מ-3,500": בדיוק 3,500 אינו רכב
+        self.assertGreater(e.car_benefit(250000, "regular", gross_weight_kg=3499)["value"], 0)
 
     def test_operational_car_conditions(self):
         # תקנה 1 לתקנות ניכוי הוצאות רכב: כל התנאים מצטברים

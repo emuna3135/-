@@ -321,7 +321,7 @@ class PaystubIn(BaseModel):
     car_business_use_only: Optional[bool] = None
     car_leaves_workplace_after_hours: Optional[bool] = None
     car_workplace_is_residence: bool = False
-    car_gross_weight_kg: Optional[float] = Field(None, gt=0)   # מעל 3,500 ק"ג: אין שווי
+    car_gross_weight_kg: Optional[float] = Field(None, gt=0)   # 3,500 ק"ג ומעלה: אין שווי
     credit_points: float = Field(2.25, ge=0)
     locality: Optional[str] = Field(None, max_length=80)      # יישוב מוטב §11 (שם כמו בלוח העזר 2026)
     tax_mode: str = Field("cumulative", pattern="^(cumulative|no_coordination|fixed_rate)$")
