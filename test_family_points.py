@@ -29,7 +29,9 @@ class FamilyPoints(unittest.TestCase):
     def test_unexplained_cases_are_manual(self):
         for flags in (("esha",), ("niyud",), ("nidcha",)):
             self.assertEqual(card.family_credit_points(2026, "F", True, [], [], flags)[1], card.MANUAL)
-        self.assertEqual(card.family_credit_points(2026, "F", False, [2024], [], ())[1], card.MANUAL)
+        pts, st, note = card.family_credit_points(2026, "F", False, [2024], [], ())
+        self.assertEqual(pts, 2.75)          # כמו הסימולטור: הילד לא נספר בלי סימון בטופס 101
+        self.assertIn("לא סומן", note)
 
     def test_unverified_combinations_are_manual(self):
         self.assertEqual(card.family_credit_points(2026, "F", False, [], [], ("nomesh", "yesmesh"))[1], card.MANUAL)

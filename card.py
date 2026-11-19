@@ -148,8 +148,10 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
         return manual("יחיד מוטב או נשואה לאלמן ללא נישואים")
     if "widower" in flags and gender != "F":
         return manual("נשואה לאלמן רלוונטי רק לאישה")
-    if custody_birth_years and not (married or ({"nomesh", "yesmesh", "niptar"} & flags)):
-        return manual("ילדים בחזקה ללא נישואים וללא מצב חיים מוגדר (הסימולטור לא סופר אותם)")
+    uncounted_custody = bool(custody_birth_years) and not (married or ({"nomesh", "yesmesh", "niptar"} & flags))
+    if uncounted_custody:
+        # כך הסימולטור הרשמי מתנהג (2.75 לאישה עם ילד בן 2): בלי סימון בטופס 101 הילדים לא נספרים. מחשבים לפי הטופס ומזהירים.
+        custody_birth_years = []
     if noncust_birth_years and "mezonut" not in flags:
         return manual("ילדים שלא בחזקה ללא דגל תשלום מזונות")
     if noncust_birth_years and married:
@@ -188,7 +190,9 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
     year_ok = int(tax_year) in SIMULATOR_YEARS
     status = VERIFIED if year_ok else BY_LAW
     comp = "; ".join(f"{l}: {float(p):g} ({s})" for l, p, s in parts)
-    note = (f"סה\"כ {float(pts):g} נקודות. הרכב: {comp}. " +
+    warn = ("שימו לב: בטופס 101 יש ילדים בחזקה אך לא סומן 'חי בנפרד' או 'הורה יחיד' (ובלי נישואים), ולכן הילדים לא נספרו, כפי שהסימולטור של רשות המסים מחשב. "
+            "אם העובד זכאי, יש לעדכן את הטופס. ") if uncounted_custody else ""
+    note = (warn + f"סה\"כ {float(pts):g} נקודות. הרכב: {comp}. " +
             ("מאומת מול סימולטור רשות המסים (12.11.2026)" if year_ok else "שנה שלא נבדקה בסימולטור: לפי חוק") +
             ". לא כולל נקודות קיצבה (ב\"ל)")
     return float(pts), status, note
