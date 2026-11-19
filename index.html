@@ -169,7 +169,7 @@ const fmt = (v) => v == null ? null : Number(v).toLocaleString("he-IL", { minimu
 
 /* ---------- סטטוסים: ארבעה, בלי לנחש ---------- */
 function statusInfo(s) {
-  // שלוש תוויות בלבד: מאושר לפי החוק / מאושר ע"י רואה חשבון / מצריך בדיקה ידנית. כל שאר המצבים (כולל "לפי הקורס") = בדיקה ידנית
+  // שלוש תוויות בלבד: עפ"י החוק / עפ"י רואת חשבון / מצריך בדיקה ידנית. כל שאר המצבים (כולל "לפי הקורס") = בדיקה ידנית
   s = String(s || "");
   if (s.startsWith("מאומת") || s.startsWith("לפי חוק") || s.startsWith("עפ\"י החוק")) return { cls: "s-ok", text: "עפ\"י החוק" };
   if (s.startsWith("לפי רואת חשבון") || s.startsWith("עפ\"י רואת חשבון")) return { cls: "s-law", text: "עפ\"י רואת חשבון" };
@@ -188,7 +188,7 @@ async function api(method, path, body, isForm) {
   let res;
   try {
     res = await fetch(state.api + path, { method, headers, body: body ? (isForm ? body : JSON.stringify(body)) : undefined });
-  } catch (e) { throw new Error("אין חיבור לשרת. בדקי את כתובת השרת ואת החיבור לאינטרנט."); }
+  } catch (e) { throw new Error("אין חיבור. בדקי את החיבור לאינטרנט ונסי שוב."); }
   const refreshed = res.headers.get("X-Refreshed-Token");   // חלון אי-פעילות: השרת מחדש את הטוקן בפעילות
   if (refreshed && state.token) state.token = refreshed;
   let data = null;
@@ -269,7 +269,7 @@ function loginView(step) {
     h("button", { class: "linkish", type: "button", onclick: () => render("register") }, "משתמש חדש? הרשמה"),
     h("details", {}, h("summary", {}, "הגדרות חיבור"), h("label", {}, "כתובת השרת (ריק = אותו אתר)", apiBase)),
     h("button", { class: "linkish", type: "button", onclick: () => { state.demo = true; state.user = "דוגמה"; state.companies = [{ id: "demo", name: "משרד לדוגמה" }]; state.companyId = "demo"; render("calc"); } },
-      "הצגת המערכת עם נתוני דוגמה, בלי חיבור לשרת"));
+      "הצגת המערכת עם נתוני דוגמה"));
   return h("div", { class: "login" },
     h("section", { class: "login-side" },
       h("div", {}, h("h1", {}, "חשבות בקליק"), h("p", {}, "חשבות שאפשר לסמוך עליה. חישוב שכר שמראה מאיפה כל מספר מגיע, ולא מנחש כשהוא לא יודע.")),
@@ -377,7 +377,7 @@ function shell(view, title, content) {
       h("button", { class: "nav", onclick: async () => {
         try { if (state.token && !state.demo) await api("POST", "/auth/logout"); } catch (e) { /* יוצאים בכל מקרה */ }
         state.token = null; state.demo = false; render("login"); } }, "יציאה")),
-    h("button", { class: "fab", type: "button", onclick: () => render("feedback") }, "משוב על המערכת"), h("main", {}, h("div", { class: "trial", role: "note" }, "גרסת ניסוי חינמית: נתוני דמה בלבד. אין להזין נתונים אמיתיים של עובדים, ואין להסתמך על התוצאה בלי בדיקה. הנתונים עשויים להימחק."), h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
+    h("button", { class: "fab", type: "button", onclick: () => render("feedback") }, "משוב על המערכת"), h("main", {}, h("div", { class: "trial", role: "note" }, "גרסת ניסוי: נתוני דמה בלבד. אין להזין נתונים אמיתיים של עובדים, ואין להסתמך על התוצאה בלי בדיקה. הנתונים עשויים להימחק."), h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
 }
 const cp = (p) => "/companies/" + state.companyId + p;
 
@@ -410,7 +410,7 @@ function calcView() {
 }
 function legend() {
   const it = (cls, t) => h("span", { class: cls }, h("i", { class: "dot" }), t);
-  return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "מאושר לפי החוק"), it("s-law", "מאושר ע\"י רואה חשבון"), it("s-bad", "מצריך בדיקה ידנית"));
+  return h("div", { class: "legend", "aria-label": "מקרא סטטוסים" }, it("s-ok", "עפ\"י החוק"), it("s-law", "עפ\"י רואת חשבון"), it("s-bad", "מצריך בדיקה ידנית"));
 }
 /* בסיס משפטי מסודר לכל שורה: חוק, סעיף, אסמכתא וקישור. מה שלא תועד מוצג כ"לא תועד", לא מושמט. */
 const BASIS_KIND = { law: "חוק", accountant: "רואת חשבון / לא נוסח חוק", none: "אין כלל חוק" };
@@ -1054,7 +1054,7 @@ function homeView() {
     h("button", { class: "btn", type: "button", onclick: () => render(view) }, label));
   return shell("home", "תהליך עבודה",
     h("div", {},
-      h("p", {}, "כל החישוב נעשה בשרת, לפי החוק. אין צורך לחשב ידנית: בכל תוצאה מופיעים הסטטוס והמקור שלה (איזה חוק, איזה סעיף), ואת מה שאין לו מקור המערכת לא מנחשת ומסמנת לטיפול ידני."),
+      h("p", {}, "כל החישוב נעשה לפי החוק. אין צורך לחשב ידנית: בכל תוצאה מופיעים הסטטוס והמקור שלה (איזה חוק, איזה סעיף), ואת מה שאין לו מקור המערכת לא מנחשת ומסמנת לטיפול ידני."),
       h("div", { class: "flow" },
         step("1", "העלאת אקסל וטופס 101", "קובץ אחד: העובדים, טופס 101 של כל עובד ונתוני החודש. המערכת קולטת וקובעת את הכול בשרת.", "להעלאת אקסל", "upload"),
         step("2", "בדיקה ואישור", "חשבת השכר בודקת את הסכום ואת החוק והסעיף בכל שורה, ומאשרת.", "לבדיקה ואישור", "review"),
