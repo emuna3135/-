@@ -463,7 +463,7 @@ def recuperation_pay(year, entitled_days, job_fraction="1", period_fraction="1",
     frac = D(str(job_fraction)) * D(str(period_fraction))
     gross = D(str(entitled_days)) * RECUPERATION_DAY_2025 * frac
     cut = RECUPERATION_DAY_2025 * (D("0.5") if reduced_partial else D(1)) * frac
-    return item(r2(max(gross - cut, D(0))), MANUAL, "ימים x 418 x חלקיות, פחות הפחתת 2025 (חוק הקפאה והפחתה, ספר החוקים 27.3.2025); יישום חלקיות המשרה על סף 6,150 לא אומת מול נוסח החוק, ולכן נדרשת בדיקה ידנית")
+    return item(r2(max(gross - cut, D(0))), MANUAL, "ימים x 418 x חלקיות, פחות הפחתת 2025 (חוק הקפאה והפחתה, ספר החוקים 27.3.2025); סף 6,150 מוכפל בחלקיות המשרה (חוק הקפאה והפחתה של דמי הבראה בשנת 2025, הגדרת "עובד בהפחתה חלקית"; nevo.co.il/law_html/law00/234284.htm)")
 
 
 # ---------------------------------------------------------------------------
