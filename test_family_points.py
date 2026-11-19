@@ -52,5 +52,33 @@ if __name__ == "__main__":
 class MissingInputs(unittest.TestCase):
     def test_reports_what_is_missing(self):
         self.assertEqual(card.missing_inputs("F", True, {"custody_birth_years": [2015]}), [("marital", "מצב משפחתי")])
-        self.assertEqual([k for k, _ in card.missing_inputs(None, False, {})], ["gender", "residency"])
+        self.assertEqual([k for k, _ in card.missing_inputs(None, False, {})], ["gender", "worker_type"])
         self.assertEqual(card.missing_inputs("M", True, {"marital": "married", "custody_birth_years": [2015]}), [])
+
+
+class ForeignWorkers(unittest.TestCase):
+    """תקנות מס הכנסה (זיכויים לעובד זר), תשע"ה-2014, תקנה 3 (נבו, נוסח 2.7.2025); צו תושבי האזור תשנ"ה-1995."""
+    def fp(self, *a):
+        return card.foreign_points(*a)
+
+    def test_nursing(self):
+        self.assertEqual(self.fp("foreign_nursing", "M", 12, 2026)[0], 2.25)
+        self.assertEqual(self.fp("foreign_nursing", "F", 12, 2026)[0], 2.75)
+        self.assertAlmostEqual(self.fp("foreign_nursing", "M", 8, 2026)[0], 1.5)    # 2.25 x 8/12
+
+    def test_legal_not_nursing(self):
+        self.assertEqual(self.fp("foreign_legal", "M", 12, 2026)[0], 1.0)           # תקנה 3(א1)
+        self.assertEqual(self.fp("foreign_legal", "F", 12, 2026)[0], 1.5)           # + חצי נקודה, תקנה 3(ב)
+
+    def test_area_resident(self):
+        self.assertEqual(self.fp("area_resident", "M", None, 2026)[0], 2.25)
+        self.assertEqual(self.fp("area_resident", "F", None, 2026)[1], card.MANUAL)
+
+    def test_everything_else_is_manual(self):
+        self.assertEqual(self.fp("foreign_other", "M", 12, 2026)[1], card.MANUAL)
+        self.assertEqual(self.fp("foreign_nursing", "M", None, 2026)[1], card.MANUAL)   # חסרים חודשי שהייה
+        self.assertEqual(self.fp("foreign_nursing", "M", 12, 2018)[1], card.MANUAL)
+
+    def test_flows_through_form101(self):
+        pts, st, _ = card.points_from_form101(2026, False, "M", {"worker_type": "foreign_legal", "months_in_israel": 12})
+        self.assertEqual((pts, st), (1.0, card.BY_LAW))

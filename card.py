@@ -8,7 +8,7 @@ from decimal import Decimal as D  # noqa: F401  (עקביות עם שאר המו
 from engine import BY_LAW, MANUAL, VERIFIED
 
 POINTS_RESIDENT = 2.25   # סעיף 34 לפקודה: תושב ישראל
-POINTS_WOMAN_EXTRA = 0.5  # סעיף 36 לפקודה: אישה (2.75 סה"כ, מאומת מול תלושים והסימולטור)
+POINTS_WOMAN_EXTRA = 0.5  # סעיף 36א לפקודה: אישה (2.75 סה"כ, מאומת מול תלושים והסימולטור)
 
 
 # נקודות זיכוי בגין ילדים. מקור: פקודת מס הכנסה §66(ג)(4)-(5) ו-§40(ב)(1), כנוסחם בחוק סיוע להורים לילדים
@@ -158,9 +158,9 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
         return manual("ילדים שלא בחזקה אצל נשוי/ה: תוצאות הסימולטור לא עקביות בין גבר לאישה")
     kids_custody = len(custody_birth_years)
     # הרכב הנקודות: (תיאור, נקודות, סעיף בחוק). סעיף שלא תועד מסומן "לא תועד" ולא מנוחש; הערך עצמו אומת בסימולטור.
-    parts = [("תושב ישראל", D("2.25"), "§34 לפקודה")]
+    parts = [("תושב ישראל", D(2), "§34 לפקודה"), ("זיכוי נסיעה לעבודה", D("0.25"), "§36 לפקודה")]
     if gender == "F":
-        parts.append(("אישה", D("0.5"), "§36 לפקודה"))
+        parts.append(("אישה", D("0.5"), "§36א לפקודה"))
     if "teen" in flags:
         parts.append(("נער/ה בן 16-18", D(1), "§40ב לפקודה"))
     if "benef" in flags:
@@ -204,12 +204,57 @@ def missing_inputs(gender, is_resident, y):
     out = []
     if gender not in ("F", "M"):
         out.append(("gender", "מין העובד"))
-    if not is_resident:
-        out.append(("residency", "תושבות (לא תושב ישראל: אין כלל מאומת)"))
+    wt = y.get("worker_type")
+    if not is_resident and not wt:
+        out.append(("worker_type", "סוג העובד (לא תושב ישראל)"))
+    if wt in FOREIGN_NEEDS_MONTHS and not y.get("months_in_israel"):
+        out.append(("months_in_israel", "חודשי שהייה בישראל בשנת המס"))
     has_family = bool(y.get("custody_birth_years") or y.get("noncustody_birth_years") or y.get("family_flags"))
     if has_family and y.get("marital") not in MARITAL:
         out.append(("marital", "מצב משפחתי"))
     return out
+
+
+# ---- עובד זר, עובד סיעוד ותושב האזור. מקורות: תקנות מס הכנסה (זיכויים לעובד זר), תשע"ה-2014 תקנה 3 (נבו, נוסח עדכני 2.7.2025):
+# (א) סיעוד: נקודות לפי §§34,36,36א (2 + 1/4 + 1/2 לאישה); (א1) עובד זר חוקי שאינו בסיעוד: נקודה לפי §34; (ב) עובדת זרה חוקית שאינה בסיעוד:
+# חצי נקודה לפי §36א; (ג) שהייה בחלק משנה: 1/12 מהסכום x חודשי השהייה (תיקון תשע"ח-2018, מ-1.1.2019, כולל (א1)); (ד) שאר הפרק השלישי (ילדים וכו') לא חל.
+# תושב האזור שאינו אזרח ישראלי: צו מס הכנסה (זיכויים לתושבי האזור), התשנ"ה-1995: §§34,36,37 כאילו היה תושב ישראל.
+WORKER_TYPES = ("resident", "foreign_nursing", "foreign_legal", "area_resident", "foreign_other")
+FOREIGN_NEEDS_MONTHS = ("foreign_nursing", "foreign_legal")
+
+
+def foreign_points(worker_type, gender, months, tax_year):
+    """מחזיר (נקודות|None, סטטוס, הערה) לעובד שאינו תושב ישראל. כל מה שאין לו נוסח חוק -> MANUAL."""
+    if gender not in ("F", "M"):
+        return None, MANUAL, "מין לא מוגדר"
+    woman = gender == "F"
+    if worker_type == "area_resident":
+        if woman:
+            return None, MANUAL, ("תושבת האזור: הצו (התשנ\"ה-1995) מחיל את §§34,36,37 בלבד; הנוסח הרשמי של התוספת לאישה (§36א) לא נמצא. "
+                                  "נדרש טיפול ידני")
+        return 2.25, BY_LAW, "תושב האזור שאינו אזרח ישראלי: 2.25 נקודות (§34: 2; §36: 1/4), לפי צו מס הכנסה (זיכויים לתושבי האזור), התשנ\"ה-1995"
+    if worker_type == "foreign_other":
+        return None, MANUAL, "עובד זר שאינו חוקי או שאינו בסיעוד חוקי: אין בתקנות הזיכויים (2014) נקודות מאומתות לצירוף הזה. נדרש טיפול ידני"
+    if worker_type not in FOREIGN_NEEDS_MONTHS:
+        return None, MANUAL, "סוג העובד לא מוגדר"
+    if int(tax_year) < 2019:
+        return None, MANUAL, "חישוב חלקי לעובד זר מוגדר בנוסח התקנות מ-2019; שנה קודמת: נדרש טיפול ידני"
+    if not (isinstance(months, int) and not isinstance(months, bool) and 1 <= months <= 12):
+        return None, MANUAL, "חסר מספר חודשי השהייה בישראל בשנת המס (1-12)"
+    if worker_type == "foreign_nursing":
+        parts = [("עובד זר חוקי בסיעוד: תושב", D(2), "תקנה 3(א) + §34"), ("נסיעה לעבודה", D("0.25"), "תקנה 3(א) + §36")]
+        if woman:
+            parts.append(("אישה", D("0.5"), "תקנה 3(א) + §36א"))
+    else:
+        parts = [("עובד זר חוקי שאינו בסיעוד", D(1), "תקנה 3(א1) + §34")]
+        if woman:
+            parts.append(("אישה", D("0.5"), "תקנה 3(ב) + §36א"))
+    annual = sum((p for _l, p, _s in parts), D(0))
+    pts = annual * D(months) / D(12)
+    comp = "; ".join(f"{l}: {float(p):g} ({s})" for l, p, s in parts)
+    note = (f"סה\"כ {float(pts):g} נקודות = {float(annual):g} x {months}/12 (תקנה 3(ג): חלק שנה לפי חודשי השהייה). הרכב שנתי: {comp}. "
+            "אין נקודות ילדים ואחרות (תקנה 3(ד)). לפי החוק; לא נבדק בסימולטור (הוא אינו מכסה עובד זר)")
+    return float(pts), BY_LAW, note
 
 
 MARITAL = ("single", "married", "divorced", "widowed", "separated")
@@ -222,6 +267,9 @@ def _points_base(tax_year, is_resident, gender, y):
     manual_points = y.get("manual_points")
     if manual_points is not None:
         return float(manual_points), MANUAL, "סך נקודות הוזן ידנית (לא נגזר אוטומטית)"
+    wt = y.get("worker_type")
+    if wt and wt != "resident":
+        return foreign_points(wt, gender, y.get("months_in_israel"), tax_year)
     if y.get("other_credits_claimed"):
         return None, MANUAL, "סומנו זיכויים נוספים (עולה, חייל משוחרר, תואר, נכות וכד'): נדרשת הזנה ידנית של הסך"
     if not is_resident:

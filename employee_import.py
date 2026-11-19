@@ -40,6 +40,8 @@ ALIASES = {
     "custody": ("שנות לידה ילדים בחזקתו", "custody_birth_years"),
     "noncustody": ("שנות לידה ילדים שלא בחזקתו", "noncustody_birth_years"),
     "flags": ("מצבי חיים", "family_flags"),
+    "worker_type": ("סוג עובד", "worker_type"),
+    "months_in_israel": ("חודשי שהייה בישראל", "months_in_israel"),
 }
 
 
@@ -177,6 +179,13 @@ def _flags(v):
     return out
 
 
+_WORKER_TYPES = {"תושב ישראל": "resident", "resident": "resident",
+                 "עובד זר בסיעוד": "foreign_nursing", "foreign_nursing": "foreign_nursing",
+                 "עובד זר חוקי": "foreign_legal", "foreign_legal": "foreign_legal",
+                 "תושב האזור": "area_resident", "area_resident": "area_resident",
+                 "עובד זר אחר": "foreign_other", "foreign_other": "foreign_other"}
+
+
 def parse_form101(row):
     """שורת טופס 101 -> (id_number, שנת מס, dict בפורמט Form101In)."""
     idn = str(_need(row, "id_number")).strip()
@@ -199,7 +208,17 @@ def parse_form101(row):
         m = _MARITAL.get(str(marital).strip().lower())
         if m is None:
             raise RowError("מצב משפחתי לא מזוהה")
+    wt = _get(row, "worker_type")
+    wtv = None
+    if wt is not None:
+        wtv = _WORKER_TYPES.get(str(wt).strip())
+        if wtv is None:
+            raise RowError("סוג עובד לא מזוהה (תושב ישראל / עובד זר בסיעוד / עובד זר חוקי / תושב האזור / עובד זר אחר)")
+    mi = _get(row, "months_in_israel")
+    miv = None if mi is None else int(_num(mi, "חודשי שהייה בישראל"))
     return idn, year, {
+        "worker_type": wtv,
+        "months_in_israel": miv,
         "signed_on": _date(_get(row, "signed_on"), "תאריך חתימה"),
         "income_type": income,
         "other_income": False if other is None else _yes_no(other, "הכנסה אחרת"),

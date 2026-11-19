@@ -1118,6 +1118,8 @@ class Form101In(BaseModel):
     alimony_ex_spouse: Optional[bool] = None
     locality: Optional[str] = Field(None, max_length=80)
     reserve_days_prev_year: Optional[int] = Field(None, ge=0, le=366)
+    worker_type: Optional[str] = Field(None, pattern="^(resident|foreign_nursing|foreign_legal|area_resident|foreign_other)$")
+    months_in_israel: Optional[int] = Field(None, ge=1, le=12)
 
 
 def get_employee(db: Session, company_id: str, employee_id: str):
@@ -1191,6 +1193,8 @@ class FamilyFixIn(BaseModel):
     custody_birth_years: List[int] = Field(default_factory=list, max_length=20)
     noncustody_birth_years: List[int] = Field(default_factory=list, max_length=20)
     family_flags: List[str] = Field(default_factory=list, max_length=7)
+    worker_type: Optional[str] = Field(None, pattern="^(resident|foreign_nursing|foreign_legal|area_resident|foreign_other)$")
+    months_in_israel: Optional[int] = Field(None, ge=1, le=12)
 
 
 @app.post("/companies/{company_id}/employees/{employee_id}/form101/{year}/family")
@@ -1208,6 +1212,10 @@ def fix_family(company_id: str, employee_id: str, year: int, body: FamilyFixIn,
     data = unseal(db, company_id, row.payload_enc)
     data.update(marital=body.marital, custody_birth_years=body.custody_birth_years,
                 noncustody_birth_years=body.noncustody_birth_years, family_flags=body.family_flags)
+    if body.worker_type:
+        data["worker_type"] = body.worker_type
+    if body.months_in_israel:
+        data["months_in_israel"] = body.months_in_israel
     row.payload_enc = seal(db, company_id, Form101In(**data).model_dump(mode="json"))
     audit(db, user.id, company_id, "fix_family", "employee", emp.id, f"year={year}")
     db.commit()
@@ -1957,7 +1965,8 @@ def _card_error_ctx(db, company_id, row) -> dict:
             yr = db.query(EmployeeYear).filter(EmployeeYear.employee_id == emp.id, EmployeeYear.year == calc["year"]).first()
             if yr:
                 yd = unseal(db, company_id, yr.payload_enc)
-                who["family"] = {k: yd.get(k) for k in ("marital", "custody_birth_years", "noncustody_birth_years", "family_flags")}
+                who["family"] = {k: yd.get(k) for k in ("marital", "custody_birth_years", "noncustody_birth_years", "family_flags",
+                                                         "worker_type", "months_in_israel")}
                 who["family"]["year"] = calc["year"]
             try:
                 _e, _d = get_employee(db, company_id, emp.id)

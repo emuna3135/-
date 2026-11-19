@@ -554,6 +554,8 @@ function form101View() {
     h("label", {}, "סוג משרה", itype), h("label", {}, h("span", {}, "יש לעובד הכנסות אחרות (סומן בטופס)"), other),
     (x.missing && x.missing.length) ? h("div", { class: "err", role: "status" },
       "לא נקרא מטופס 101: " + x.missing.map(m => m.label).join(", ") + ". אפשר להשלים כאן במילים והקשה על Enter תחשב מחדש.") : null,
+    showWorker ? h("label", { class: missingKeys.includes("worker_type") ? "missing" : "" }, "סוג העובד", wtype) : null,
+    showWorker ? h("label", { class: missingKeys.includes("months_in_israel") ? "missing" : "" }, "חודשי שהייה בישראל בשנת המס (לעובד זר)", months) : null,
     h("label", { class: (x.missing || []).some(m => m.key === "marital") ? "missing" : "" }, "מצב משפחתי", marital), h("label", {}, "שנות לידה של ילדים בחזקת העובד/ת", kids),
     h("details", {}, h("summary", {}, "זיכויים נוספים"),
       h("label", {}, "תאריך עלייה", aliyah), h("label", {}, "תאריך שחרור משירות צבאי", discharge), h("label", {}, "סוג השירות", fullSvc),
@@ -808,10 +810,17 @@ function flowBar(step) {
 const MARITAL_OPTS = [["", "לא נבחר"], ["single", "רווק/ה"], ["married", "נשוי/אה"], ["divorced", "גרוש/ה"], ["widowed", "אלמן/ה"], ["separated", "פרוד/ה"]];
 const LIFE_OPTS = [["niptar", "הורה יחיד"], ["nomesh", "חי בנפרד ללא משק בית משותף"], ["yesmesh", "חי בנפרד עם משק בית משותף"],
   ["mezonut", "משלם מזונות"], ["teen", "נער/ה 16-18"], ["benef", "יחיד מוטב"], ["widower", "נשואה לאלמן"]];
+const WORKER_OPTS = [["", "לא נבחר"], ["resident", "תושב ישראל"], ["foreign_nursing", "עובד זר חוקי בסיעוד"], ["foreign_legal", "עובד זר חוקי (לא סיעוד)"],
+  ["area_resident", "תושב האזור (אינו אזרח ישראלי)"], ["foreign_other", "עובד זר אחר"]];
 function manualFixBox(x, onDone) {
   const fam = x.family || {};
   const marital = h("select", {}, MARITAL_OPTS.map(([v, t]) => h("option", { value: v }, t)));
   marital.value = fam.marital || "";
+  const wtype = h("select", {}, WORKER_OPTS.map(([v, t]) => h("option", { value: v }, t)));
+  wtype.value = fam.worker_type || "";
+  const months = h("input", { type: "number", min: "1", max: "12", value: fam.months_in_israel || "", placeholder: "1-12" });
+  const missingKeys = (x.missing || []).map(m => m.key);
+  const showWorker = missingKeys.includes("worker_type") || missingKeys.includes("months_in_israel") || (fam.worker_type && fam.worker_type !== "resident");
   const custody = h("input", { type: "text", value: (fam.custody_birth_years || []).join(","), placeholder: "למשל 2015,2018" });
   const noncust = h("input", { type: "text", value: (fam.noncustody_birth_years || []).join(","), placeholder: "למשל 2010" });
   const flagBoxes = LIFE_OPTS.map(([v, t]) => ({ v, el: h("input", { type: "checkbox", checked: (fam.family_flags || []).includes(v) }), t }));
@@ -823,7 +832,8 @@ function manualFixBox(x, onDone) {
       const yr = (fam.year || x.calc.year);
       const f = await api("POST", cp("/employees/" + x.employee_id + "/form101/" + yr + "/family"), {
         marital: marital.value || null, custody_birth_years: years(custody), noncustody_birth_years: years(noncust),
-        family_flags: flagBoxes.filter(b => b.el.checked).map(b => b.v) });
+        family_flags: flagBoxes.filter(b => b.el.checked).map(b => b.v),
+        worker_type: wtype.value || null, months_in_israel: months.value ? Number(months.value) : null });
       if (f.credit_points == null) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, "עדיין אי אפשר לגזור נקודות: " + f.points_note)); return; }
       const r = await api("POST", cp("/employees/" + x.employee_id + "/calculate"), x.calc);
       onDone(r);
