@@ -1229,7 +1229,7 @@ async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
             idn, year, f = employee_import.parse_form101(row)
             f101_by_id.setdefault(idn, []).append((year, Form101In(**f).model_dump(mode="json")))
         except ValueError as e:
-            errors.append({"sheet": employee_import.SHEET_FORM101, "row": i, "error": _err_text(e)})
+            errors.append({"sheet": employee_import.SHEET_FORM101, "row": i, "error": _err_text(e), **_row_who(row)})
     created = existing = forms = 0
     for i, row in enumerate(emp_rows, start=2):
         try:
@@ -1254,7 +1254,7 @@ async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
                 _save_form101(db, company_id, emp.id, year, data)
                 forms += 1
         except ValueError as e:
-            errors.append({"sheet": employee_import.SHEET_EMPLOYEES, "row": i, "error": _err_text(e)})
+            errors.append({"sheet": employee_import.SHEET_EMPLOYEES, "row": i, "error": _err_text(e), **_row_who(row)})
     employer_saved = False
     er = sheets.get(employee_import.SHEET_EMPLOYER) or []
     if er:
@@ -1860,7 +1860,7 @@ async def upload_excel(
             save_stub(db, company_id, res)
             results.append(public_res(res))
         except Exception as e:
-            errors.append({"row": i, "error": str(e)})
+            errors.append({"row": i, "error": str(e), **_row_who(row)})
     audit(db, user.id, company_id, "upload_excel", "file", None,
           f"rows={len(rows)} ok={len(results)} errors={len(errors)}")
     db.commit()
@@ -1873,6 +1873,35 @@ COLUMN_MAP["vacation"] = ["vacation", "חופשה (ניצול/יתרה)", "חו�
 COLUMN_MAP["sick"] = ["sick", "מחלה (ניצול/יתרה)", "מחלה"]
 COLUMN_MAP["payment"] = ["payment", "אופן תשלום"]
 COLUMN_MAP["regular_hour_value"] = ["regular_hour_value", "ערך שעת עבודה רגילה", "ערך שעה"]
+
+
+def _row_who(row) -> dict:
+    """שם ות.ז של העובד מתוך שורת אקסל, כדי שהודעת שגיאה תציג את העובד ולא רק מספר שורה."""
+    out = {}
+    for key, aliases in (("name", ("שם עובד", "שם מלא", "emp_name", "full_name")),
+                         ("id", ("תעודת זהות", "ת.ז", "id_number", "emp_id_number"))):
+        for a in aliases:
+            v = row.get(a) if hasattr(row, "get") else None
+            if v not in (None, ""):
+                out[key] = str(v).strip()
+                break
+    return out
+
+
+def _card_row_who(db, company_id, row) -> dict:
+    """כמו _row_who, ואם בשורה אין שם: השם מכרטיס העובד (לפי ת.ז)."""
+    who = _row_who(row)
+    if "name" not in who and who.get("id"):
+        try:
+            emp = db.query(Employee).filter(Employee.company_id == company_id,
+                                            Employee.id_hash == emp_key(company_id, who["id"])).first()
+            if emp:
+                name = unseal(db, company_id, emp.payload_enc).get("full_name")
+                if name:
+                    who["name"] = name
+        except Exception:
+            pass
+    return who
 
 
 def _txt(v):
@@ -1925,10 +1954,10 @@ async def upload_excel_card(
             results.append(out)
         except HTTPException as e:
             db.rollback()
-            errors.append({"row": i, "error": str(e.detail)})
+            errors.append({"row": i, "error": str(e.detail), **_card_row_who(db, company_id, row)})
         except Exception as e:
             db.rollback()
-            errors.append({"row": i, "error": str(e)})
+            errors.append({"row": i, "error": str(e), **_card_row_who(db, company_id, row)})
     audit(db, user.id, company_id, "upload_excel_card", "file", None,
           f"rows={len(rows)} ok={len(results)} errors={len(errors)}")
     db.commit()

@@ -165,6 +165,7 @@ function toast(msg) {
   const t = h("div", { class: "toast", role: "status" }, msg);
   document.body.append(t); setTimeout(() => t.remove(), 3200);
 }
+const errWho = (x) => x.name ? x.name + (x.id ? " (ת.ז " + x.id + ")" : "") : (x.id ? "ת.ז " + x.id : "שורה " + x.row);
 const fmt = (v) => v == null ? null : Number(v).toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ---------- סטטוסים: ארבעה, בלי לנחש ---------- */
@@ -625,7 +626,7 @@ function uploadAdvancedView() {
       const r = await api("POST", cp(mode.value), fd, true);
       const nodes = [h("p", {}, "חושבו " + r.processed + " שורות, " + r.errors.length + " שגיאות.")];
       if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו:"),
-        h("ul", {}, r.errors.map(x => h("li", {}, "שורה " + x.row + ": " + x.error)))));
+        h("ul", {}, r.errors.map(x => h("li", {}, errWho(x) + ": " + x.error)))));
       r.paystubs.forEach(p => nodes.push(h("details", {}, h("summary", {}, (p.emp_name || "") + " | נטו: " + (p.net == null ? "לא חושב" : fmt(p.net)) +
         (p.flags && p.flags.length ? " | יש דגלים" : "") + (p.unresolved && p.unresolved.length ? " | דורש טיפול ידני" : "")), slipView(p))));
       out.replaceChildren(...nodes);
@@ -678,7 +679,7 @@ function empImportForm() {
       const r = await api("POST", cp("/employees/upload-excel"), fd, true);
       const nodes = [h("p", {}, "נוצרו " + r.created + " עובדים חדשים, " + r.existing + " כבר היו קיימים, נשמרו " + r.form101_saved + " טפסי 101, " + r.errors.length + " שגיאות.")];
       if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא נקלטו:"),
-        h("ul", {}, r.errors.slice(0, 50).map(x => h("li", {}, x.sheet + ", שורה " + x.row + ": " + x.error))),
+        h("ul", {}, r.errors.slice(0, 50).map(x => h("li", {}, (x.sheet || "") + " | " + errWho(x) + ": " + x.error))),
         r.errors.length > 50 ? h("p", {}, "ועוד " + (r.errors.length - 50) + " שגיאות") : null));
       nodes.push(h("button", { class: "btn ghost", type: "button", onclick: () => render("emps") }, "הצגת רשימת העובדים"));
       out.replaceChildren(...nodes);
@@ -813,14 +814,14 @@ function uploadView() {
       if (imp) {
         nodes.push(h("p", {}, "עובדים: נוצרו " + imp.created + ", כבר היו " + imp.existing + ". טפסי 101 שנשמרו: " + imp.form101_saved + "." + (imp.employer_saved ? " פרטי המעביד נשמרו." : "")));
         if (imp.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות עובדים/101 שלא נקלטו:"),
-          h("ul", {}, imp.errors.slice(0, 30).map(x => h("li", {}, x.sheet + ", שורה " + x.row + ": " + x.error)))));
+          h("ul", {}, imp.errors.slice(0, 30).map(x => h("li", {}, (x.sheet || "") + " | " + errWho(x) + ": " + x.error)))));
       }
       const fd2 = new FormData(); fd2.append("file", file.files[0]);
       const r = await api("POST", cp("/upload-excel-card"), fd2, true);
       state.flow.results = r.paystubs; state.flow.errors = r.errors; state.flow.approved = {};
       nodes.push(h("p", {}, "חושבו " + r.processed + " תלושים, " + r.errors.length + " שורות לא חושבו."));
       if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו:"),
-        h("ul", {}, r.errors.slice(0, 30).map(x => h("li", {}, "שורה " + x.row + ": " + x.error)))));
+        h("ul", {}, r.errors.slice(0, 30).map(x => h("li", {}, errWho(x) + ": " + x.error)))));
       if (r.processed) nodes.push(h("button", { class: "btn", type: "button", onclick: () => render("review") }, "המשך לשלב 2: בדיקה ואישור"));
       out.replaceChildren(...nodes);
     } catch (err) { out.replaceChildren(...nodes, h("div", { class: "err", role: "alert" }, err.message)); }
