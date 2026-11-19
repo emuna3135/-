@@ -36,6 +36,7 @@ label{display:grid;gap:6px;font-weight:500;font-size:.95rem}
 input,select,textarea{inline-size:100%;min-inline-size:0;padding:11px 12px;border:1px solid #B9CBEA;border-radius:8px;background:#fff;min-block-size:44px}
 input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .pform{gap:8px;margin-block-start:8px}.pform:not([hidden]){display:grid}
+.rep-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-block-start:16px;display:grid;gap:12px}.rep-card h3{margin:0}.rep-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.rep-year{display:flex;align-items:center;gap:8px}.rep-details{border:1px solid var(--line);border-radius:10px;padding:8px 12px}.rep-details>summary,.rep-list>summary{cursor:pointer;font-weight:600}.rep-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-block-start:10px}.rep-status{display:grid;gap:2px;padding:12px 14px;border-radius:10px}.rep-status.ok{background:#e8f6ee;color:#0f5132}.rep-status.warn{background:#fff6e0;color:#7a5200}.rep-list ul{margin:6px 0}
 .flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:stretch;margin-block-start:22px;position:relative}
 .flow-step{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 20px;display:flex;flex-direction:column;gap:10px;position:relative;box-shadow:0 1px 2px rgba(16,24,40,.05);transition:box-shadow .15s,transform .15s}.flow-step:hover{box-shadow:0 6px 18px rgba(16,24,40,.10);transform:translateY(-2px)}.flow-step .btn{margin-block-start:auto}.flow-step p{flex:1}
 .flow-step h3{margin:0}.flow-step p{margin:0;color:var(--muted)}
@@ -979,65 +980,72 @@ function reportsView() {
     } catch (e) { /* אין עדיין פרטים */ }
   };
   const saveProfile = async () => { await api("PUT", cp("/profile"), profileBody()); };
+  const profileOk = () => ["name", "file_no", "tax_file_no", "phone"].every(k => f[k].value.trim());
+  const status = (kind, title, sub) => h("div", { class: "rep-status " + kind, role: kind === "ok" ? "status" : "alert" }, h("strong", {}, title), sub ? h("span", {}, sub) : null);
   const showIssues = (r) => {
     const blocks = r.issues.filter(i => i.level === "block"), warns = r.issues.filter(i => i.level !== "block");
-    const li = (i) => h("li", {}, (i.scope ? i.scope + " | " : "") + (i.field && i.field !== "-" ? "שדה " + i.field + ": " : "") + i.text);
-    return [h("p", {}, "הקובץ כולל " + r.records + " רשומות. " + (r.submittable ? "לא נמצאו חסמים." : "יש " + blocks.length + " חסמים: זו טיוטה ולא קובץ להגשה.")),
-      blocks.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "חסמים (נדרש טיפול ידני או השלמת נתון):"), h("ul", {}, blocks.map(li))) : null,
-      warns.length ? h("div", { class: "flags" }, h("strong", {}, "לבדיקת חשבת השכר:"), h("ul", {}, warns.map(li))) : null];
+    const li = (i) => h("li", {}, (i.scope ? i.scope + ": " : "") + i.text);
+    const list = (arr, title) => {
+      if (!arr.length) return null;
+      const shown = arr.slice(0, 5), rest = arr.slice(5);
+      return h("details", { class: "rep-list", open: title === "blocks" }, h("summary", {}, (title === "blocks" ? "מה צריך להשלים (" : "לבדיקה שלך (") + arr.length + ")"),
+        h("ul", {}, shown.map(li)), rest.length ? h("details", {}, h("summary", {}, "עוד " + rest.length), h("ul", {}, rest.map(li))) : null);
+    };
+    return [r.submittable ? status("ok", "הדוח מוכן להורדה", r.records + " רשומות") : status("warn", "הדוח כמעט מוכן", "יש " + blocks.length + " דברים להשלים לפני שמגישים; אפשר להוריד טיוטה"),
+      list(blocks, "blocks"), list(warns, "warns")];
   };
-  const check = async () => {
-    out.replaceChildren(h("p", {}, "בודקת…"));
-    try { await saveProfile(); const r = await api("POST", cp("/reports/126/check"), params()); out.replaceChildren(...showIssues(r).filter(Boolean)); }
-    catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
-  };
-  const download = async () => {
-    out.replaceChildren(h("p", {}, "מכינה את הקובץ…"));
+  const run = async (doDownload) => {
+    if (!profileOk()) { profileBox.open = true; out.replaceChildren(status("warn", "חסרים פרטי המעביד", "ממלאים פעם אחת (שם, תיק ניכויים, מספר תיק במס הכנסה, טלפון) והם נשמרים.")); return; }
+    out.replaceChildren(h("p", { class: "muted" }, doDownload ? "מכינה את הקובץ…" : "בודקת…"));
     try {
       await saveProfile();
+      if (!doDownload) { out.replaceChildren(...showIssues(await api("POST", cp("/reports/126/check"), params())).filter(Boolean)); return; }
       const res = await fetch(state.api + cp("/reports/126/file"), { method: "POST", headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" }, body: JSON.stringify(params()) });
       if (!res.ok) { let m = "הפעולה נכשלה (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
       const draft = res.headers.get("X-Report-Draft") === "true";
       const url = URL.createObjectURL(await res.blob());
-      out.replaceChildren(h("div", { class: draft ? "flags" : "info" }, draft ? "הופקה טיוטה בלבד: יש חסמים, ולכן הקובץ לא מיועד להגשה." : "הקובץ מוכן."),
-        h("a", { class: "btn", href: url, download: "126-" + f.year.value + (draft ? "-DRAFT" : "") + ".txt" }, "הורדת הקובץ"));
+      const r = await api("POST", cp("/reports/126/check"), params());
+      out.replaceChildren(...showIssues(r).filter(Boolean), h("a", { class: "btn", href: url, download: "126-" + f.year.value + (draft ? "-DRAFT" : "") + ".txt" }, draft ? "הורדת טיוטה" : "הורדת הקובץ"));
     } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   };
   const payOut = h("div", { "aria-live": "polite" });
   const payments = async () => {
-    payOut.replaceChildren(h("p", {}, "מסכמת…"));
+    payOut.replaceChildren(h("p", { class: "muted" }, "מסכמת…"));
     try {
       const r = await api("GET", cp("/payments-summary?year=" + encodeURIComponent(f.year.value)));
-      if (!r.months.length) { payOut.replaceChildren(h("p", {}, "אין תלושים שמורים לשנה הזו.")); return; }
+      if (!r.months.length) { payOut.replaceChildren(h("p", { class: "muted" }, "אין עדיין תלושים לשנה הזו.")); return; }
       const n = (v) => Number(v).toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const rows = r.months.map(m => h("tr", {}, h("td", {}, String(m.month)), h("td", {}, String(m.employees)), h("td", {}, n(m.income_tax)),
         h("td", {}, n(m.btl_total)), h("td", {}, m.btl_deadline), h("td", {}, n(m.pension_employer + m.severance_employer + m.study_fund_employer))));
-      payOut.replaceChildren(h("table", {}, h("thead", {}, h("tr", {}, ["חודש", "עובדים", "מס הכנסה", "ביטוח לאומי ובריאות (עובד+מעביד)", "מועד ב\"ל (15 בחודש הבא)", "פנסיה/פיצויים/השתלמות מעביד"].map(t => h("th", {}, t)))), h("tbody", {}, rows)),
-        h("p", { class: "muted" }, "מועד תשלום מס הכנסה והפקדות לפנסיה/השתלמות: נדרש טיפול ידני (אין מקור במערכת). יום לא עסקי, ריבית והצמדה: לבדוק ידנית. המערכת לא מעבירה כסף: ההעברה בבנק נעשית בידי חשבת השכר."));
+      payOut.replaceChildren(h("table", {}, h("thead", {}, h("tr", {}, ["חודש", "עובדים", "מס הכנסה", "ביטוח לאומי ובריאות", "מועד ב\"ל", "פנסיה/פיצויים/השתלמות"].map(t => h("th", {}, t)))), h("tbody", {}, rows)),
+        h("p", { class: "muted" }, "מועד מס הכנסה ופנסיה: נדרש טיפול ידני (אין מקור). ההעברה בבנק נעשית בידי חשבת השכר."));
     } catch (err) { payOut.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   };
-  const form = h("form", { onsubmit: (e) => { e.preventDefault(); check(); } },
-    h("fieldset", {}, h("legend", {}, "פרטי המעביד (דמו: ערכים בדויים)"),
-      field("name", "שם המעביד (עד 18 תווים)", { maxlength: 18 }),
-      field("file_no", "מספר תיק ניכויים (9 ספרות, מתחיל ב-9)", { pattern: "9[0-9]{8}", inputmode: "numeric" }),
-      field("agid", "מספר אגיד (0 אם אין)", { inputmode: "numeric", value: "0" }),
-      field("tax_file_no", "מספר תיק במס הכנסה של העצמאי/החברה", { inputmode: "numeric" }),
+  const profileBox = h("details", { class: "rep-details" }, h("summary", {}, "פרטי המעביד (ממלאים פעם אחת)"),
+    h("div", { class: "rep-grid" },
+      field("name", "שם המעביד", { maxlength: 18 }),
+      field("file_no", "תיק ניכויים", { pattern: "9[0-9]{8}", inputmode: "numeric" }),
+      field("tax_file_no", "מספר תיק במס הכנסה", { inputmode: "numeric" }),
+      field("phone", "טלפון", { inputmode: "numeric" }),
       pick("legal_status", "מעמד משפטי", [[1, "חברה"], [2, "יחיד"], [3, "שותפות"], [4, "עמותה"], [5, "רשות"]]),
       pick("employer_tax", "מס מעסיקים", [[1, "פטור"], [2, "חייב"]]),
-      field("phone", "טלפון (ספרות בלבד)", { inputmode: "numeric" }),
-      h("label", {}, "מספר מפעל (אופציונלי)", (f.factory_no = h("input", { name: "factory_no", inputmode: "numeric" })))),
-    h("fieldset", {}, h("legend", {}, "הפקה"),
-      field("year", "שנת מס", { type: "number", value: String(new Date().getFullYear() - 1), min: 2000, max: 2100 }),
-      pick("enc", "קידוד עברית", [["cp1255", "ASCII WINDOWS (cp1255)"], ["cp862", "ASCII NEW CODE (cp862)"]]),
-      pick("order", "סדר אותיות עבריות", [["logical", "רגיל (לוגי)"], ["visual", "הפוך (ויזואלי)"]]),
-      h("p", { class: "muted" }, "המפרט של הרשות מתיר את שני הקידודים ולא מבהיר את סדר האותיות. יש לאמת את הבחירה בבדיקה של הרשות לפני הגשה.")),
-    h("div", { class: "actions" }, h("button", { class: "btn", type: "submit" }, "בדיקה: מה חסר"),
-      h("button", { class: "btn ghost", type: "button", onclick: download }, "הורדת קובץ (טיוטה אם יש חסמים)"),
-      h("button", { class: "btn ghost", type: "button", onclick: payments }, "סיכום העברות לתשלום")));
-  load();
+      field("agid", "מספר אגיד (0 אם אין)", { inputmode: "numeric", value: "0" }),
+      h("label", {}, "מספר מפעל (לא חובה)", (f.factory_no = h("input", { name: "factory_no", inputmode: "numeric" })))));
+  const tech = h("details", { class: "rep-details" }, h("summary", {}, "הגדרות טכניות (ברירת המחדל מתאימה)"),
+    h("div", { class: "rep-grid" },
+      pick("enc", "קידוד עברית", [["cp1255", "ASCII WINDOWS"], ["cp862", "ASCII NEW CODE"]]),
+      pick("order", "סדר אותיות", [["logical", "רגיל"], ["visual", "הפוך"]])),
+    h("p", { class: "muted" }, "המפרט של הרשות לא מכריע בסדר האותיות; לאמת בבדיקת הקובץ של הרשות."));
+  f.year = h("select", { name: "year", "aria-label": "שנת מס" }, [0, 1, 2].map(i => { const y = new Date().getFullYear() - i; return h("option", { value: String(y) }, String(y)); }));
+  f.year.value = String(new Date().getFullYear() - 1);
+  f.year.addEventListener("change", () => { out.replaceChildren(); payments(); });
+  load().then(() => { if (!profileOk()) profileBox.open = true; else run(false); });
+  payments();
   return shell("reports", "4. דיווחים לרשויות", h("div", {}, flowBar(4),
-    h("p", {}, "הדוח השנתי למס הכנסה (טופס 126) נבנה מהתלושים ומטופס 101. המערכת לא שולחת דבר לרשות: היא בודקת מה חסר ומכינה קובץ. את הקובץ יש להריץ בבדיקה של הרשות ולהגיש בעצמך."),
-    h("p", {}, "סביבת בדיקה: נתוני דמה בלבד. פרטי תיק הניכויים כאן בדויים, והקובץ לא מיועד להגשה."), form, out, payOut));
+    h("p", { class: "muted" }, "המערכת מכינה את קובץ הדוח השנתי (טופס 126) מהתלושים. ההגשה לרשות נעשית בידי חשבת השכר. נתוני דמה בלבד."),
+    h("section", { class: "rep-card" }, h("div", { class: "rep-head" }, h("h3", {}, "דוח שנתי למס הכנסה (126)"), h("label", { class: "rep-year" }, "שנת מס", f.year)),
+      profileBox, tech, h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: () => run(true) }, "הפקת דוח לרשויות"), h("button", { class: "btn ghost", type: "button", onclick: () => run(false) }, "בדיקה מחדש")), out),
+    h("section", { class: "rep-card" }, h("h3", {}, "סיכום תשלומים לפי חודש"), payOut)));
 }
 
 function homeView() {
