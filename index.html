@@ -801,21 +801,37 @@ function flowBar(step) {
   }));
 }
 
-/* ---------- טיפול ידני בשורה שלא חושבה: נקודות זיכוי שחשבת השכר מזינה + סיבה, ואז התלוש עובר לאישור ---------- */
+/* ---------- טיפול ידני בשורה שלא חושבה: חשבת השכר ממלאת פרטי משפחה במילים פשוטות, והמערכת מתרגמת אותם לנקודות לפי הכללים ---------- */
+const MARITAL_OPTS = [["", "לא נבחר"], ["single", "רווק/ה"], ["married", "נשוי/אה"], ["divorced", "גרוש/ה"], ["widowed", "אלמן/ה"], ["separated", "פרוד/ה"]];
+const LIFE_OPTS = [["niptar", "הורה יחיד"], ["nomesh", "חי בנפרד ללא משק בית משותף"], ["yesmesh", "חי בנפרד עם משק בית משותף"],
+  ["mezonut", "משלם מזונות"], ["teen", "נער/ה 16-18"], ["benef", "יחיד מוטב"], ["widower", "נשואה לאלמן"]];
 function manualFixBox(x, onDone) {
-  const pts = h("input", { type: "number", step: "0.25", min: "0", max: "30", required: true });
-  const why = h("input", { type: "text", required: true, maxlength: 300, placeholder: "למשל: לפי טופס 101 מקורי" });
+  const fam = x.family || {};
+  const marital = h("select", {}, MARITAL_OPTS.map(([v, t]) => h("option", { value: v }, t)));
+  marital.value = fam.marital || "";
+  const custody = h("input", { type: "text", value: (fam.custody_birth_years || []).join(","), placeholder: "למשל 2015,2018" });
+  const noncust = h("input", { type: "text", value: (fam.noncustody_birth_years || []).join(","), placeholder: "למשל 2010" });
+  const flagBoxes = LIFE_OPTS.map(([v, t]) => ({ v, el: h("input", { type: "checkbox", checked: (fam.family_flags || []).includes(v) }), t }));
   const msg = h("div", { "aria-live": "polite" });
+  const years = (el) => el.value.split(/[,;\s]+/).filter(Boolean).map(Number);
   return h("form", { class: "fixbox", onsubmit: async (e) => {
-    e.preventDefault(); msg.replaceChildren(h("span", {}, "מחשבת…"));
+    e.preventDefault(); msg.replaceChildren(h("span", {}, "מתרגמת לנקודות זיכוי…"));
     try {
-      const r = await api("POST", cp("/employees/" + x.employee_id + "/calculate"),
-        { ...x.calc, manual_points: Number(pts.value), manual_reason: why.value });
+      const yr = (fam.year || x.calc.year);
+      const f = await api("POST", cp("/employees/" + x.employee_id + "/form101/" + yr + "/family"), {
+        marital: marital.value || null, custody_birth_years: years(custody), noncustody_birth_years: years(noncust),
+        family_flags: flagBoxes.filter(b => b.el.checked).map(b => b.v) });
+      if (f.credit_points == null) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, "עדיין אי אפשר לגזור נקודות: " + f.points_note)); return; }
+      const r = await api("POST", cp("/employees/" + x.employee_id + "/calculate"), x.calc);
       onDone(r);
     } catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   } },
-    h("label", {}, "סך נקודות זיכוי (הזנה ידנית)", pts), h("label", {}, "סיבה", why),
-    h("button", { class: "btn", type: "submit" }, "חישוב עם נקודות ידניות"), msg);
+    h("label", {}, "מצב משפחתי", marital),
+    h("fieldset", {}, h("legend", {}, "מצב חיים (אפשר לסמן כמה שמתאימים)"),
+      flagBoxes.map(b => h("label", { class: "check" }, b.el, " " + b.t))),
+    h("label", {}, "שנות לידה של ילדים בחזקתו", custody),
+    h("label", {}, "שנות לידה של ילדים שלא בחזקתו", noncust),
+    h("button", { class: "btn", type: "submit" }, "עדכון וחישוב מחדש"), msg);
 }
 
 function failedRowsBox(onChange) {
@@ -832,7 +848,7 @@ function failedRowsBox(onChange) {
     }
     return li;
   });
-  return h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו (אפשר לטפל בהן כאן ולהעביר לאישור):"), h("ul", {}, items));
+  return h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו (ממלאים את פרטי המשפחה במילים, והמערכת מתרגמת לנקודות לפי החוק):"), h("ul", {}, items));
 }
 
 function uploadView() {

@@ -1185,6 +1185,36 @@ def set_form101(company_id: str, employee_id: str, year: int, body: Form101In,
     return {"year": year, "credit_points": pts, "points_status": status, "points_note": note}
 
 
+class FamilyFixIn(BaseModel):
+    """השלמת פרטי משפחה במילים פשוטות; המערכת מתרגמת אותם לנקודות זיכוי לפי הכללים שאומתו מול סימולטור רשות המסים."""
+    marital: Optional[str] = Field(None, pattern="^(single|married|divorced|widowed|separated)$")
+    custody_birth_years: List[int] = Field(default_factory=list, max_length=20)
+    noncustody_birth_years: List[int] = Field(default_factory=list, max_length=20)
+    family_flags: List[str] = Field(default_factory=list, max_length=7)
+
+
+@app.post("/companies/{company_id}/employees/{employee_id}/form101/{year}/family")
+def fix_family(company_id: str, employee_id: str, year: int, body: FamilyFixIn,
+               user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """מעדכן רק את פרטי המשפחה בטופס 101 של השנה (שאר הטופס נשמר) ומחזיר את הנקודות שהמערכת גוזרת מהם."""
+    require_company(company_id, user, db, "write")
+    emp, d = get_employee(db, company_id, employee_id)
+    unknown = set(body.family_flags) - card._KNOWN_FLAGS
+    if unknown:
+        raise HTTPException(422, "מצב חיים לא מוכר: " + ", ".join(sorted(unknown)))
+    row = db.query(EmployeeYear).filter(EmployeeYear.employee_id == emp.id, EmployeeYear.year == year).first()
+    if not row:
+        raise HTTPException(404, "אין טופס 101 לעובד לשנה הזו. יש להעלות אותו קודם")
+    data = unseal(db, company_id, row.payload_enc)
+    data.update(marital=body.marital, custody_birth_years=body.custody_birth_years,
+                noncustody_birth_years=body.noncustody_birth_years, family_flags=body.family_flags)
+    row.payload_enc = seal(db, company_id, Form101In(**data).model_dump(mode="json"))
+    audit(db, user.id, company_id, "fix_family", "employee", emp.id, f"year={year}")
+    db.commit()
+    pts, status, note = card.points_from_form101(year, d["is_resident"], d["gender"], data)
+    return {"year": year, "credit_points": pts, "points_status": status, "points_note": note}
+
+
 def _err_text(e) -> str:
     """הודעת שגיאה קצרה בעברית-חברותית: לשגיאת pydantic מציגים את השדה והסיבה הראשונה."""
     try:
@@ -1296,8 +1326,6 @@ class CalcFromCardIn(BaseModel):
     car_gross_weight_kg: Optional[float] = Field(None, gt=0)
     base_salary: Optional[float] = Field(None, gt=0)   # חריגה חד-פעמית לחודש
     manual_income_tax: Optional[float] = None
-    manual_points: Optional[float] = Field(None, ge=0, le=30)      # טיפול ידני: סך נקודות זיכוי שחשב השכר מזין כשהמערכת לא יכולה לגזור אותן
-    manual_reason: Optional[str] = Field(None, max_length=300)     # סיבה (חובה כשמזינים נקודות ידנית)
     coordination_rate: Optional[float] = Field(None, ge=0, le=0.5)   # אישור תיאום מס: שיעור ניכוי קבוע מהאישור
     prev_cum_taxable: Optional[float] = None
     prev_cum_tax: Optional[float] = None
@@ -1326,17 +1354,8 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
                                     bool(y and y["other_income"]), (y or {}).get("other_income_credit"))
     pts, pts_note = 0.0, ""
     if mode == "cumulative" and body.coordination_rate is None:
-        # הנקודות נגזרות תמיד קודם, לפי הכללים שאומתו מול סימולטור רשות המסים. הזנה ידנית אפשרית רק כשהמערכת
-        # לא הצליחה לגזור נקודות (מצב שהסימולטור לא כיסה או לא הסביר); נקודות שנגזרו אינן ניתנות לשינוי כאן.
         pts, _status, pts_note = card.points_from_form101(body.year, d["is_resident"], d["gender"], y, body.month)
-        if pts is not None and body.manual_points is not None:
-            raise HTTPException(422, "נקודות הזיכוי של העובד נגזרו אוטומטית לפי הכללים שאומתו מול סימולטור רשות המסים, ואי אפשר לשנות אותן כאן")
-        if pts is None and body.manual_points is not None:
-            if not (body.manual_reason or "").strip():
-                raise HTTPException(422, "בהזנת נקודות זיכוי ידנית חובה לציין סיבה")
-            pts = float(body.manual_points)
-            pts_note = f"הוזנו ידנית על ידי {user.email} (המערכת לא יכלה לגזור: {pts_note}): {pts:g} נקודות. סיבה: {body.manual_reason.strip()}"
-        elif pts is None and body.manual_income_tax is None:
+        if pts is None and body.manual_income_tax is None:
             raise HTTPException(422, pts_note)
         pts = pts or 0.0
     p = PaystubIn(
@@ -1935,6 +1954,11 @@ def _card_error_ctx(db, company_id, row) -> dict:
                 calc["base_salary"] = base
             who["employee_id"] = emp.id
             who["calc"] = calc
+            yr = db.query(EmployeeYear).filter(EmployeeYear.employee_id == emp.id, EmployeeYear.year == calc["year"]).first()
+            if yr:
+                yd = unseal(db, company_id, yr.payload_enc)
+                who["family"] = {k: yd.get(k) for k in ("marital", "custody_birth_years", "noncustody_birth_years", "family_flags")}
+                who["family"]["year"] = calc["year"]
     except Exception:
         pass
     return who
