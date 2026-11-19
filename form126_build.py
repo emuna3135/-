@@ -76,6 +76,7 @@ def build(company: dict, tax_year: int, employees: list[dict], *,
     rec20: list[str] = []
     tot = dict(f26=0, f39=0, f116=0, f124=0, f125=0, f126=0, f127=0, n=0)
     monthly = {m: dict(n=0, gross=0, tax=0, ni=0) for m in range(1, 13)}
+    employer_ni_missing = 0
 
     for e in emps:
         who = f"ת\"ז {e['id_number']}"
@@ -146,14 +147,19 @@ def build(company: dict, tax_year: int, employees: list[dict], *,
             monthly[m]["n"] += 1
             monthly[m]["gross"] += _shekels(v.get("gross"))
             monthly[m]["tax"] += _shekels(v.get("tax"))
-            monthly[m]["ni"] += _shekels(v.get("ni")) + _shekels(v.get("health"))
+            ne = v.get("ni_employer")
+            if ne is None:
+                employer_ni_missing += 1
+            # רשומה 50 שדה 14 / רשומה 40 שדה 12: ב"ל ובריאות כולל הניכוי מהעובדים, וכולל חלק המעביד
+            monthly[m]["ni"] += _shekels(v.get("ni")) + _shekels(v.get("health")) + _shekels(ne)
 
     issues.append(_issue("warn", "כל העובדים", "27-38, 40-51, 84-99",
                          "שדות רכיבי שכר מיוחדים, ניכויים והפרשות נכתבו כ-0 – יש לוודא שאין רכיבים כאלה"))
     issues.append(_issue("warn", "קובץ", "-",
                          "סכומים נכתבו בשקלים שלמים; המפרט לא מבהיר לגבי אגורות – לאמת בבדיקת הרשות"))
-    issues.append(_issue("block", "קובץ", "-",
-                         "ביטוח לאומי של המעביד מחושב בתלוש, אך מיפוי שדותיו לרשומות 40 ו-50 טרם הוגדר במפרט – נדרש טיפול ידני"))
+    if employer_ni_missing:
+        issues.append(_issue("block", "קובץ", "40/50",
+                             f"ביטוח לאומי של המעביד חסר ב-{employer_ni_missing} תלושים (נדרש טיפול ידני): הסכום ברשומות 40 ו-50 חלקי"))
 
     if c.get("employer_tax") not in (1, 2):
         issues.append(_issue("block", "חברה", "10/13", "חסר: מעביד פטור (1) או חייב (2) במס מעסיקים"))

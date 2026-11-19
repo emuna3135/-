@@ -3,6 +3,7 @@
 הקלט הוא מילונים רגילים (אחרי פענוח): עובדים, טפסי 101 לשנה, ותלושים שמורים.
 הפלט מתאים ל-form126_build.build. שדה בלי מקור נשאר חסר (None) ולכן הבנייה מסמנת אותו כחוסם; לא ממציאים ערך.
 """
+import engine
 import form126
 import form126_build
 
@@ -11,15 +12,36 @@ def _num(v):
     return float(v) if v is not None else 0.0
 
 
+def _employer_ni(stub):
+    """ב"ל מעביד מהתלוש; None אם חסר או שהסטטוס 'נדרש טיפול ידני' (לא משלימים בניחוש)."""
+    it = (stub.get("employer") or {}).get("national_insurance") or {}
+    if it.get("value") is None or it.get("status") == engine.MANUAL:
+        return None
+    return float(it["value"])
+
+
+def _ni_split(year, gross):
+    """שדות 126/127 ברשומה 20 (מפרט): תשלומים חייבים בב"ל עד המקסימום שפורסם, ופטורים מעל התקרה.
+    התקרה החודשית היא NI_MAX_INSURED של המנוע; שנה בלי תקרה -> None (חוסם)."""
+    cap = engine.NI_MAX_INSURED.get(year)
+    if cap is None:
+        return None, None
+    g = float(gross)
+    c = float(cap)
+    return min(g, c), max(g - c, 0.0)
+
+
 def collect_employees(year: int, employees: list[dict], form101_by_id: dict, stubs: list[dict]) -> list[dict]:
     """employees: מטענים של Employee; form101_by_id: {id_number: מטען 101 לשנה}; stubs: תלושים שמורים (בסדר יצירה)."""
     months: dict[str, dict[int, dict]] = {}
     for s in stubs:                                  # תלוש מאוחר באותו חודש דורס קודם (חישוב חוזר)
         if s.get("year") != year or not s.get("month"):
             continue
+        base, over = _ni_split(year, _num(s.get("gross")))
         months.setdefault(str(s["emp_id_number"]), {})[int(s["month"])] = {
             "gross": _num(s.get("gross")), "tax": _num(s.get("income_tax")),
-            "ni": _num(s.get("national_insurance")), "health": _num(s.get("health"))}
+            "ni": _num(s.get("national_insurance")), "health": _num(s.get("health")),
+            "ni_employer": _employer_ni(s), "ni_base": base, "ni_exempt_over": over}
     out = []
     for e in employees:
         idn = str(e["id_number"])
