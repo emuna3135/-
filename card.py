@@ -154,27 +154,36 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
     if noncust_birth_years and "mezonut" not in flags:
         return manual("ילדים שלא בחזקה ללא דגל תשלום מזונות")
     kids_custody = len(custody_birth_years)
-    pts = D("2.25") + (D("0.5") if gender == "F" else D(0))
+    # הרכב הנקודות: (תיאור, נקודות, סעיף בחוק). סעיף שלא תועד מסומן "לא תועד" ולא מנוחש; הערך עצמו אומת בסימולטור.
+    parts = [("תושב ישראל", D("2.25"), "§34 לפקודה")]
+    if gender == "F":
+        parts.append(("אישה", D("0.5"), "§36 לפקודה"))
     if "teen" in flags:
-        pts += 1
+        parts.append(("נער/ה בן 16-18", D(1), "§40ב לפקודה"))
     if "benef" in flags:
-        pts += D("0.5") if kids_custody else D(1)
+        parts.append(("יחיד מוטב", D("0.5") if kids_custody else D(1), "§37 לפקודה"))
+    if "widower" in flags:
+        parts.append(("נשואה לאלמן", D(0), "סעיף לא תועד; אומת בסימולטור"))
     if special & {"nomesh", "niptar", "mezonut"}:
-        pts += 1
+        lbl = {"nomesh": "חי/ה בנפרד בלי משק בית משותף", "niptar": "הורה יחיד", "mezonut": "משלם מזונות על ילדים שלא בחזקתו"}
+        parts.append((lbl[(special & {"nomesh", "niptar", "mezonut"}).pop()], D(1), "סעיף לא תועד; אומת בסימולטור"))
     table = _T_FATHER_MARRIED if (married and gender == "M") else _T_MOTHER
+    law_c = "§66(ג)(5) לפקודה" if (married and gender == "M") else ("§66(ג)(4) לפקודה" if married else "§40(ב) לפקודה")
     for b in custody_birth_years:
         k = _age_bucket(tax_year, b)
         if k is not None:
-            pts += table[k]
+            parts.append((f"ילד/ה שנולד/ה {b} בחזקתו", table[k], law_c))
             if "niptar" in flags:
-                pts += _T_NONCUST[k]
+                parts.append((f"ילד/ה {b} (הורה יחיד, תוספת)", _T_NONCUST[k], "סעיף לא תועד; אומת בסימולטור"))
     for b in noncust_birth_years:
         k = _age_bucket(tax_year, b)
         if k is not None:
-            pts += _T_NONCUST[k]
+            parts.append((f"ילד/ה שנולד/ה {b} שלא בחזקתו", _T_NONCUST[k], "סעיף לא תועד; אומת בסימולטור"))
+    pts = sum((p for _l, p, _s in parts), D(0))
     year_ok = int(tax_year) in SIMULATOR_YEARS
     status = VERIFIED if year_ok else BY_LAW
-    note = ("נקודות לפי מצב משפחתי (פקודה §§34-40ב, 66(ג)); " +
+    comp = "; ".join(f"{l}: {float(p):g} ({s})" for l, p, s in parts)
+    note = (f"סה\"כ {float(pts):g} נקודות. הרכב: {comp}. " +
             ("מאומת מול סימולטור רשות המסים (12.11.2026)" if year_ok else "שנה שלא נבדקה בסימולטור: לפי חוק") +
             ". לא כולל נקודות קיצבה (ב\"ל)")
     return float(pts), status, note
