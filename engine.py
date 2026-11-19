@@ -402,21 +402,28 @@ def works_committee_benefit(employer_amount_per_employee, specific_per_employee)
         return item(D(0), BY_LAW, "השתתפות כוללת שלא ניתן לייחס לעובד: לא נחשבת הכנסת עבודה (" + ref + ")")
     return item(None, MANUAL, "נדרש טיפול ידני: לא ידוע אם ניתן לייחס את ההשתתפות לעובד מסוים")
 
+TEAM_BUILDING_COST_CAP = D("400")          # ליום ללא לינה, לפי ההנחיה (נכון ל-2018)
+TEAM_BUILDING_COST_CAP_OVERNIGHT = D("700")  # ליום עם לינה
+
+
 def team_building_benefit(employer_initiated, workday, full_pay, spouses_allowed, in_israel,
-                          schedule_by_employer, professional_purpose, per_employee_amount=False):
+                          schedule_by_employer, professional_purpose, per_employee_amount=False,
+                          weekdays_only=None, cost_per_day=None, overnight=False, documents_kept=None):
     """
-    פעילות גיבוש: אין זקיפה כשכל התנאים המצטברים מתקיימים (יוזמת מעסיק, יום עבודה בשכר מלא, בלי בני זוג/קרובים,
-    בישראל, לו"ז של המעסיק, תוכן מקצועי). מקור: הנחיית רשות המסים בעניין זקיפת שווי הטבה בגין ימי גיבוש
-    (סימוכין MA50D1-6-62-18, 9.4.2018). לא נבדקים כאן: סבירות העלות (ההנחיה: עד 400 ₪ ליום ללא לינה, 700 ₪ עם לינה, נכון ל-2018),
-    שמירת מסמכים, והגבלה לשבוע עבודה. אם תנאי חסר או לא ידוע: לא מחשבים, הכרעה ידנית.
+    פעילות גיבוש: אין זקיפה כשכל התנאים המצטברים בהנחיית רשות המסים מתקיימים
+    (סימוכין MA50D1-6-62-18, 9.4.2018): יוזמת מעסיק, יום עבודה בשכר מלא, בלי בני זוג/קרובים, בישראל,
+    לו"ז של המעסיק, תוכן מקצועי/העשרה, פעילות רק בשבוע העבודה, עלות סבירה (עד 400 ₪ ליום, 700 ₪ ליום עם לינה, נכון למועד ההנחיה),
+    ושמירת מסמכים. אם תנאי חסר, לא ידוע או לא מתקיים: אין חישוב והכרעה ידנית (אין "זקיפה אוטומטית" כי ההנחיה אינה קובעת שווי).
     """
+    cap = TEAM_BUILDING_COST_CAP_OVERNIGHT if overnight else TEAM_BUILDING_COST_CAP
+    cost_ok = None if cost_per_day is None else D(str(cost_per_day)) <= cap
     conds = [employer_initiated, workday, full_pay, not spouses_allowed if spouses_allowed is not None else None,
              in_israel, schedule_by_employer, professional_purpose,
-             not per_employee_amount if per_employee_amount is not None else None]
+             not per_employee_amount if per_employee_amount is not None else None,
+             weekdays_only, cost_ok, documents_kept]
     if all(c is True for c in conds):
-        return item(D(0), BY_LAW, "כל תנאי הגיבוש שנבדקו מתקיימים (הנחיית רשות המסים 9.4.2018): אין זקיפה | לא נבדקו: סבירות העלות (עד 400/700 ₪ ליום), שמירת מסמכים, ופעילות רק בימות השבוע")
-    return item(None, MANUAL, "תנאי גיבוש חסר או לא ידוע: יש להכריע ידנית")
-
+        return item(D(0), BY_LAW, "כל תנאי ההנחיה מתקיימים (רשות המסים 9.4.2018, כולל עלות סבירה ושמירת מסמכים): אין זקיפה")
+    return item(None, MANUAL, "תנאי גיבוש חסר, לא ידוע או לא מתקיים (כולל עלות עד 400/700 ₪ ליום, שמירת מסמכים, פעילות בימות השבוע): יש להכריע ידנית")
 
 def phone_benefit(monthly_expense, employee_share_rate="0", employee_share_amount="0"):
     """

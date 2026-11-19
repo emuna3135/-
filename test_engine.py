@@ -232,14 +232,19 @@ class Benefits(unittest.TestCase):
         self.assertEqual(e.recuperation_pay(2025, 5, day_price="500")["value"] if False else e.recuperation_pay(2025, 5, reduced_partial=False, day_price="500")["value"], D("1885.60"))  # מחיר נחתך ל-471.4: 4*471.4
 
     def test_team_building(self):
-        ok = e.team_building_benefit(True, True, True, False, True, True, True, False)
-        self.assertEqual(ok["value"], D(0))
-        bad = e.team_building_benefit(True, True, True, True, True, True, True, False)  # בני זוג
+        base = dict(weekdays_only=True, cost_per_day="350", overnight=False, documents_kept=True)
+        ok = e.team_building_benefit(True, True, True, False, True, True, True, False, **base)
+        self.assertEqual((ok["value"], ok["status"]), (D(0), e.BY_LAW))
+        bad = e.team_building_benefit(True, True, True, True, True, True, True, False, **base)  # בני זוג
         self.assertIsNone(bad["value"])
-        # יום שישי בלי שכר + בני זוג: התנאים לא מתקיימים, לא פטור
-        fri = e.team_building_benefit(True, False, False, True, True, True, True, False)
-        self.assertIsNone(fri["value"])
+        fri = e.team_building_benefit(True, False, False, True, True, True, True, False, **base)
         self.assertEqual(fri["status"], e.MANUAL)
+        # עלות מעל התקרה, סוף שבוע, מסמכים, ומידע חסר: ידני
+        for kw in (dict(base, cost_per_day="401"), dict(base, weekdays_only=False), dict(base, documents_kept=False),
+                   dict(base, cost_per_day=None)):
+            self.assertEqual(e.team_building_benefit(True, True, True, False, True, True, True, False, **kw)["status"], e.MANUAL)
+        self.assertEqual(e.team_building_benefit(True, True, True, False, True, True, True, False,
+                         weekdays_only=True, cost_per_day="700", overnight=True, documents_kept=True)["status"], e.BY_LAW)
 
     def test_operational_car_no_value(self):
         self.assertEqual(e.car_benefit(300000, "regular", operational=True)["value"], 0)
