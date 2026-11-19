@@ -44,7 +44,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 .flow-arrow{display:none}
 details>summary.nav{cursor:pointer;list-style:none}
 @media (max-width:1100px){.flow{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:600px){.flow{grid-template-columns:1fr}}
-.flowbar{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:14px}.flowbar-i{padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}.flowbar-i.on{background:var(--brand,#1f4fd8);color:#fff;border-color:transparent;font-weight:700}
+.flowbar{display:flex;gap:8px;flex-wrap:wrap;margin-block-end:14px}.flowbar-i{padding:6px 12px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}button.flowbar-i.back{background:transparent;font:inherit;cursor:pointer;color:var(--brand,#1f4fd8);border-color:var(--brand,#1f4fd8)}button.flowbar-i.back:hover,button.flowbar-i.back:focus-visible{background:var(--brand,#1f4fd8);color:#fff}.flowbar-i.on{background:var(--brand,#1f4fd8);color:#fff;border-color:transparent;font-weight:700}
 .pick{list-style:none;padding:0;margin:10px 0;display:grid;gap:6px;max-block-size:320px;overflow:auto}.pick input{inline-size:auto;min-block-size:0}
 .basis ul{margin:6px 0;padding-inline-start:18px}.basis li{margin-block-end:8px}
 .btn{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:11px 20px;font-weight:600;cursor:pointer;min-block-size:44px}
@@ -791,8 +791,12 @@ const slipOk = (p) => p.net != null && !(p.unresolved && p.unresolved.length) &&
 
 function flowBar(step) {
   const names = ["1. העלאת אקסל וטופס 101", "2. בדיקה ואישור", "3. הפקת תלוש לפי תבנית", "4. דיווחים לרשויות"];
-  return h("div", { class: "flowbar", role: "list" }, names.map((t, i) =>
-    h("span", { role: "listitem", class: "flowbar-i" + (i + 1 === step ? " on" : ""), "aria-current": i + 1 === step ? "step" : false }, t)));
+  const views = ["upload", "review", "issue", "reports"];
+  return h("div", { class: "flowbar", role: "list" }, names.map((t, i) => {
+    if (i + 1 < step)   // שלב קודם: כותרת לחיצה שמחזירה אליו
+      return h("button", { type: "button", role: "listitem", class: "flowbar-i back", title: "חזרה לשלב " + (i + 1), onclick: () => render(views[i]) }, t);
+    return h("span", { role: "listitem", class: "flowbar-i" + (i + 1 === step ? " on" : ""), "aria-current": i + 1 === step ? "step" : false }, t);
+  }));
 }
 
 function uploadView() {
@@ -1056,7 +1060,7 @@ function homeView() {
     h("div", {},
       h("p", {}, "כל החישוב נעשה לפי החוק. אין צורך לחשב ידנית: בכל תוצאה מופיעים הסטטוס והמקור שלה (איזה חוק, איזה סעיף), ואת מה שאין לו מקור המערכת לא מנחשת ומסמנת לטיפול ידני."),
       h("div", { class: "flow" },
-        step("1", "העלאת אקסל וטופס 101", "קובץ אחד: העובדים, טופס 101 של כל עובד ונתוני החודש. המערכת קולטת וקובעת את הכול בשרת.", "להעלאת אקסל", "upload"),
+        step("1", "העלאת אקסל וטופס 101", "קובץ אחד: העובדים, טופס 101 של כל עובד ונתוני החודש. המערכת קולטת וקובעת את הכול.", "להעלאת אקסל", "upload"),
         step("2", "בדיקה ואישור", "חשבת השכר בודקת את הסכום ואת החוק והסעיף בכל שורה, ומאשרת.", "לבדיקה ואישור", "review"),
         step("3", "הפקת תלוש לפי תבנית", "מפיקים את התלושים המאושרים בתבנית שנבחרה.", "להפקה", "issue"),
         step("4", "דיווחים לרשויות", "מכינים קובץ דיווח שנתי (טופס 126) מהתלושים. המערכת בודקת מה חסר, ואת הקובץ מגישה חשבת השכר בעצמה.", "לדיווחים", "reports"))));
