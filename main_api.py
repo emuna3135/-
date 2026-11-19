@@ -1299,6 +1299,10 @@ async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
         try:
             prof = ProfileIn(**employee_import.parse_employer(er[0])).model_dump(mode="json")
             prow = db.get(CompanyProfile, company_id)
+            pen_emp = employee_import.parse_employer_pension(er[0])
+            prev_pen = ((unseal(db, company_id, prow.payload_enc) or {}).get("pension") or {}) if prow else {}
+            if pen_emp or prev_pen:
+                prof["pension"] = {**prev_pen, **pen_emp}
             if prow:
                 prow.payload_enc = seal(db, company_id, prof)
             else:
@@ -1306,10 +1310,26 @@ async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
             employer_saved = True
         except ValueError as e:
             errors.append({"sheet": employee_import.SHEET_EMPLOYER, "row": 2, "error": _err_text(e)})
+    pension_rows = 0
+    by_idn = {}
+    for i, row in enumerate(sheets.get(employee_import.SHEET_PENSION) or [], start=2):
+        try:
+            pr = employee_import.parse_pension_row(row)
+            by_idn.setdefault(pr["id_number"], []).append(pr)
+        except ValueError as e:
+            errors.append({"sheet": employee_import.SHEET_PENSION, "row": i, "error": _err_text(e), **_row_who(row)})
+    for idn, rows in by_idn.items():
+        e = db.query(Employee).filter(Employee.company_id == company_id, Employee.id_hash == emp_key(company_id, idn)).first()
+        if not e:
+            errors.append({"sheet": employee_import.SHEET_PENSION, "row": 0, "error": "העובד אינו קיים בגיליון 'עובדים'; שורות הפנסיה שלו לא נשמרו", **_row_who({"תעודת זהות": idn})})
+            continue
+        cur = unseal(db, company_id, e.payload_enc)
+        e.payload_enc = seal(db, company_id, {**cur, "pension_funds": rows})
+        pension_rows += len(rows)
     audit(db, user.id, company_id, "upload_employees_excel", "file", None,
-          f"rows={len(emp_rows)} created={created} existing={existing} form101={forms} employer={employer_saved} errors={len(errors)}")
+          f"rows={len(emp_rows)} pension={pension_rows} created={created} existing={existing} form101={forms} employer={employer_saved} errors={len(errors)}")
     db.commit()
-    return {"created": created, "existing": existing, "form101_saved": forms, "employer_saved": employer_saved, "errors": errors}
+    return {"created": created, "existing": existing, "form101_saved": forms, "employer_saved": employer_saved, "pension_rows": pension_rows, "errors": errors}
 
 
 class CalcFromCardIn(BaseModel):
@@ -1772,6 +1792,9 @@ def put_profile(company_id: str, body: ProfileIn, user: User = Depends(current_u
     data = body.model_dump(mode="json")
     row = db.get(CompanyProfile, company_id)
     if row:
+        old_pen = (unseal(db, company_id, row.payload_enc) or {}).get("pension")
+        if old_pen:
+            data["pension"] = old_pen                       # פרטי הפנסיה נשמרים בעדכון פרטי המעביד
         row.payload_enc = seal(db, company_id, data)
     else:
         db.add(CompanyProfile(company_id=company_id, payload_enc=seal(db, company_id, data)))
@@ -1872,6 +1895,69 @@ def report106_file(company_id: str, body: Report106In, user: User = Depends(curr
     name = f"106-{body.year}{'' if ok else '-DRAFT'}.pdf"
     return Response(content=data, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Report-Draft": "false" if ok else "true"})
+
+
+class ReportPensionIn(BaseModel):
+    year: int = Field(..., ge=2000, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    env: str = Field("test", pattern="^(test|production)$")        # TEST כברירת מחדל: בדיקה מול המסלקה לפני ייצור
+    value_date: Optional[datetime.date] = None                     # תאריך ערך ההפקדה: נקבע בידי חשבת השכר
+    asmachta: Optional[str] = Field(None, max_length=50)           # אסמכתא של ההעברה בבנק
+
+
+def _report_pension(db: Session, company_id: str, body: ReportPensionIn):
+    import pension_data
+    row = db.get(CompanyProfile, company_id)
+    if not row:
+        raise HTTPException(422, "יש להגדיר קודם את פרטי החברה (גיליון 'מעביד')")
+    profile = unseal(db, company_id, row.payload_enc)
+    emps, rows = [], []
+    for e in db.query(Employee).filter(Employee.company_id == company_id).all():
+        d = unseal(db, company_id, e.payload_enc)
+        emps.append(d)
+        for pr in d.get("pension_funds") or []:
+            rows.append(pr)
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == body.year,
+                                        PaystubV2.month == body.month).order_by(PaystubV2.created_at).all()]
+    try:
+        return pension_data.run(profile, body.year, body.month, emps, rows, stubs, env=body.env,
+                                value_date=body.value_date, asmachta=body.asmachta)
+    except Exception as ex:
+        raise HTTPException(422, f"לא ניתן להפיק את קובץ הפנסיה: {ex}")
+
+
+@app.post("/companies/{company_id}/reports/pension/check")
+def report_pension_check(company_id: str, body: ReportPensionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "read")
+    files, issues, ok = _report_pension(db, company_id, body)
+    audit(db, user.id, company_id, "report_pension_check", "report", None, f"{body.year}-{body.month:02d} issues={len(issues)}")
+    db.commit()
+    return {"issues": issues, "records": sum(f["employees"] for f in files), "submittable": ok and bool(files),
+            "files": [{"name": f["name"], "employees": f["employees"], "total": f["total"]} for f in files]}
+
+
+@app.post("/companies/{company_id}/reports/pension/file")
+def report_pension_file(company_id: str, body: ReportPensionIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """יוצר קובץ XML (או ZIP כשיש כמה גופים נמענים). לא שולח דבר לגוף המוסדי ולא למסלקה."""
+    require_company(company_id, user, db, "write")
+    files, issues, ok = _report_pension(db, company_id, body)
+    if not files:
+        raise HTTPException(422, "אין נתונים להפקה: בדקי את גיליון 'פנסיה' ואת התלושים של החודש")
+    audit(db, user.id, company_id, "report_pension_download", "report", None,
+          f"{body.year}-{body.month:02d} files={len(files)} draft={not ok}")
+    db.commit()
+    hdr = {"X-Report-Draft": "false" if ok else "true"}
+    if len(files) == 1:
+        hdr["Content-Disposition"] = f'attachment; filename="{files[0]["name"]}"'
+        return Response(content=files[0]["xml"].encode("utf-8"), media_type="application/xml", headers=hdr)
+    import io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in files:
+            z.writestr(f["name"], f["xml"].encode("utf-8"))
+    hdr["Content-Disposition"] = f'attachment; filename="pension-{body.year}{body.month:02d}.zip"'
+    return Response(content=buf.getvalue(), media_type="application/zip", headers=hdr)
 
 
 @app.get("/companies/{company_id}/payments-summary")

@@ -298,3 +298,126 @@ def parse_employer(row):
     fa = _eget(row, "factory_no")
     out["factory_no"] = _digits(fa) if fa is not None else None
     return out
+
+
+# --- פנסיה (גיליון 'פנסיה'): שורה לכל עובד בכל קופה. מקור שמות השדות והקודים: אקסל האפיון הרשמי (ממשק מעסיקים 006) ---
+SHEET_PENSION = "פנסיה"
+_P_KUPA = {"קרן פנסיה": 2, "קופת גמל": 3, "קופת ביטוח": 1, "ביטוח מנהלים": 1}
+_P_KEREN = {"מקיפה": 1, "יסוד": 2}
+_P_NIMAAN = {"יצרן": 1, "מסלקה": 2, "מפיץ": 3, "מתפעל": 6}
+_P_MEZAHE = {"ח.פ": 1, "ח.צ": 2, "ת.ז": 3, "דרכון": 4, "עוסק מורשה": 5, "עמותה": 7, "אגודה שיתופית": 8}
+_P_PAY = {"העברה בנקאית": 1, "כרטיס אשראי": 3, "שובר תשלום": 4, "סליקה באמצעות מסלקה פנסיונית": 5,
+          "הוראת קבע": 6, "מס\"ב": 7}
+_P_MAAMAD = {"שכיר": 1, "עצמאי": 2, "בעל שליטה": 3}
+_P_SEIF14 = {"כן, מתחילת העסקה": 1, "כן, מתאריך אחר": 2, "העובד לא חתום": 3, "לא חל יותר": 4, "קושי משפטי": 5}
+_P_ACC = {"ישראלי": 1, "זר": 2}
+# מפתח: (כותרת, סוג, טבלת קודים/אורך). סוג: tbl|digits|text|int|dec|guid|email
+PENSION_FIELDS = {
+    "id_number": ("תעודת זהות", "text", None),
+    "fund_code": ("קוד מזהה קופה (30 ספרות)", "digits", 30),
+    "fund_type": ("סוג קופה", "tbl", _P_KUPA),
+    "pension_kind": ("סוג קרן פנסיה", "tbl", _P_KEREN),
+    "fund_name": ("שם הקופה אצל המעסיק", "text", 100),
+    "fund_no": ("מספר קופה אצל המעסיק", "text", 12),
+    "nimaan_kind": ("סוג הגוף הנמען", "tbl", _P_NIMAAN),
+    "nimaan_id_type": ("סוג מזהה הגוף הנמען", "tbl", _P_MEZAHE),
+    "nimaan_id": ("מזהה הגוף הנמען", "text", 16),
+    "nimaan_at_producer": ("מזהה הנמען אצל היצרן", "text", 16),
+    "employer_at_producer": ("מזהה המעסיק אצל הגוף המוסדי", "text", 16),
+    "masav": ("קוד מס\"ב", "text", 16),
+    "pay_method": ("אמצעי תשלום", "tbl", _P_PAY),
+    "bank": ("בנק המעסיק", "int", None),
+    "branch": ("סניף המעסיק", "digits", 3),
+    "account": ("חשבון המעסיק (20 ספרות)", "digits", 20),
+    "account_type": ("סוג חשבון (3 ספרות)", "digits", 3),
+    "employer_acc_kind": ("חשבון המעסיק ישראלי/זר", "tbl", _P_ACC),
+    "collector_acc_kind": ("חשבון הקולט ישראלי/זר", "tbl", _P_ACC),
+    "collector_bank": ("בנק הקולט", "int", None),
+    "collector_branch": ("סניף הקולט", "digits", 3),
+    "collector_account": ("חשבון הקולט (20 ספרות)", "digits", 20),
+    "prev_id": ("מזהה דיווח קודם", "guid", None),
+    "mislaka": ("מזהה מסלקה", "guid", None),
+    "mislaka_prev": ("מזהה מסלקה קודם", "guid", None),
+    "prev_record_id": ("מזהה רשומת הפרשה קודמת", "guid", None),
+    "policy": ("מספר פוליסה או חשבון", "text", 20),
+    "emp_no": ("מספר עובד אצל המעסיק", "text", 20),
+    "seif14": ("סעיף 14", "tbl", _P_SEIF14),
+    "maamad": ("מעמד הפקדה", "tbl", _P_MAAMAD),
+    "email": ("אימייל העובד", "text", 50),
+    "mobile": ("נייד העובד", "text", 15),
+    "house_no": ("מספר בית", "text", 8),
+    "apartment": ("מספר דירה", "int", None),
+    "mikud": ("מיקוד (7 ספרות)", "int", None),
+    "po_box": ("תא דואר", "int", None),
+    "work_days": ("ימי עבודה בחודש", "int", None),
+}
+_GUID_RE = r"[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}"
+
+
+def parse_pension_row(row):
+    """שורת 'פנסיה' -> dict. ת"ז חובה; כל השאר אופציונלי, ומה שחסר יסומן 'נדרש טיפול ידני' בהפקה (לא מנחשים). ערך לא מזוהה = שגיאה."""
+    import re
+    out = {}
+    for key, (head, kind, arg) in PENSION_FIELDS.items():
+        v = row.get(head)
+        if v in (None, ""):
+            continue
+        s = str(v).strip()
+        if kind == "tbl":
+            code = arg.get(s) or (int(s) if s.isdigit() and int(s) in arg.values() else None)
+            if code is None:
+                raise RowError(f"ערך לא מוכר בעמודה '{head}': {s}. ערכים אפשריים: {', '.join(arg)}")
+            out[key] = code
+        elif kind in ("digits", "int"):
+            s = _digits(v).replace("-", "").replace(" ", "")
+            if not s.isdigit():
+                raise RowError(f"העמודה '{head}' חייבת להכיל ספרות בלבד")
+            if kind == "digits" and len(s) > arg:
+                raise RowError(f"העמודה '{head}': עד {arg} ספרות")
+            if kind == "digits" and key in ("fund_code", "account", "collector_account"):
+                s = s.zfill(arg)
+            if kind == "digits" and key in ("branch", "collector_branch", "account_type"):
+                s = s.zfill(arg)
+            out[key] = int(s) if kind == "int" else s
+        elif kind == "guid":
+            if not re.fullmatch(_GUID_RE, s):
+                raise RowError(f"העמודה '{head}': נדרש מזהה בפורמט GUID")
+            out[key] = s.upper()
+        else:
+            if arg and len(s) > arg:
+                raise RowError(f"העמודה '{head}': עד {arg} תווים")
+            out[key] = s
+    if "id_number" not in out:
+        raise RowError("חסר ערך בעמודה 'תעודת זהות'")
+    if out.get("fund_type") is None and row.get("סוג קופה") not in (None, ""):
+        raise RowError("סוג קופה לא מוכר")
+    return out
+
+
+PENSION_EMPLOYER_FIELDS = {
+    "employer_id": ("מספר זיהוי מעביד (ח.פ/ת.ז)", "text"),
+    "employer_id_type": ("סוג מזהה מעביד", "tbl"),
+    "operator_id": ("מזהה מתפעל", "text"),
+    "contact_first": ("איש קשר: שם פרטי", "text"),
+    "contact_last": ("איש קשר: שם משפחה", "text"),
+    "contact_email": ("איש קשר: אימייל", "text"),
+    "contact_mobile": ("איש קשר: נייד", "text"),
+}
+
+
+def parse_employer_pension(row):
+    """עמודות הפנסיה בגיליון 'מעביד' (אופציונליות). מחזיר dict ריק אם אין."""
+    out = {}
+    for key, (head, kind) in PENSION_EMPLOYER_FIELDS.items():
+        v = row.get(head)
+        if v in (None, ""):
+            continue
+        s = _digits(v) if key in ("employer_id", "operator_id", "contact_mobile") else str(v).strip()
+        if kind == "tbl":
+            code = _P_MEZAHE.get(s) or (int(s) if s.isdigit() and int(s) in _P_MEZAHE.values() else None)
+            if code is None:
+                raise RowError(f"ערך לא מוכר בעמודה '{head}': {s}. ערכים אפשריים: {', '.join(_P_MEZAHE)}")
+            out[key] = code
+        else:
+            out[key] = s
+    return out

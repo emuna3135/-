@@ -1115,6 +1115,26 @@ function reportsView() {
       out106.replaceChildren(...showIssues(chk).filter(Boolean), h("a", { class: "btn", href: url, download: "106-" + f.year.value + (draft ? "-DRAFT" : "") + ".pdf" }, draft ? "הורדת טיוטה (PDF)" : "הורדת טופס 106 (PDF)"));
     } catch (err) { out106.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
   };
+  const outPen = h("div", { "aria-live": "polite" });
+  const penMonth = h("select", { "aria-label": "חודש" }, Array.from({ length: 12 }, (_, i) => h("option", { value: String(i + 1) }, String(i + 1))));
+  penMonth.value = String(new Date().getMonth() || 12);
+  const penDate = h("input", { type: "date", "aria-label": "תאריך ערך ההפקדה" });
+  const penRef = h("input", { type: "text", maxlength: "50", "aria-label": "אסמכתא" });
+  const penEnv = h("select", { "aria-label": "סביבה" }, h("option", { value: "test" }, "בדיקה (TEST)"), h("option", { value: "production" }, "ייצור"));
+  const penBody = () => ({ year: +f.year.value, month: +penMonth.value, env: penEnv.value, value_date: penDate.value || null, asmachta: penRef.value.trim() || null });
+  const runPen = async () => {
+    outPen.replaceChildren(h("p", { class: "muted" }, "מכינה את קובץ הפנסיה…"));
+    try {
+      const chk = await api("POST", cp("/reports/pension/check"), penBody());
+      const res = await fetch(state.api + cp("/reports/pension/file"), { method: "POST", headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" }, body: JSON.stringify(penBody()) });
+      if (!res.ok) { let m = "הפעולה נכשלה (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+      const draft = res.headers.get("X-Report-Draft") === "true";
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const ext = blob.type.includes("zip") ? "zip" : "xml";
+      outPen.replaceChildren(...showIssues(chk).filter(Boolean), h("a", { class: "btn", href: url, download: "pension-" + f.year.value + "-" + penMonth.value + (draft ? "-DRAFT" : "") + "." + ext }, draft ? "הורדת טיוטה" : "הורדת קובץ הפנסיה"));
+    } catch (err) { outPen.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
   const payOut = h("div", { "aria-live": "polite" });
   const payments = async () => {
     payOut.replaceChildren(h("p", { class: "muted" }, "מסכמת…"));
@@ -1155,6 +1175,10 @@ function reportsView() {
     h("section", { class: "rep-card" }, h("div", { class: "rep-head" }, h("h3", {}, "אישור שנתי לעובדים (106)")),
       h("p", { class: "muted" }, "קובץ PDF לכל עובד עם סיכום השנה מהתלושים, לפי סעיפי הטופס של רשות המסים. הסעיפים שהמערכת לא מחשבת מסומנים בטופס. המערכת לא שולחת דבר."),
       h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: run106 }, "הפקת טופס 106")), out106),
+    h("section", { class: "rep-card" }, h("div", { class: "rep-head" }, h("h3", {}, "קובץ פנסיה (דיווח חודשי)")),
+      h("p", { class: "muted" }, "קובץ XML לפי הממשק של רשות שוק ההון, מהתלושים ומגיליון 'פנסיה' בתבנית. מה שחסר מסומן 'נדרש טיפול ידני', והקובץ יוצא כטיוטה עד שהכול מלא. המערכת לא שולחת דבר."),
+      h("div", { class: "rep-grid" }, h("label", {}, "חודש", penMonth), h("label", {}, "תאריך ערך ההפקדה", penDate), h("label", {}, "אסמכתא להעברה", penRef), h("label", {}, "סביבה", penEnv)),
+      h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: runPen }, "הפקת קובץ פנסיה")), outPen),
     h("section", { class: "rep-card" }, h("h3", {}, "סיכום תשלומים לפי חודש"), payOut)));
 }
 
