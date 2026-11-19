@@ -388,3 +388,13 @@ class TwoRatesCertificate(unittest.TestCase):
         prev = {"cum_taxable": D(0), "cum_tax": D(0), "cum_deposits": D(0), "cum_life": D(0)}
         it, _ = e.income_tax(2026, 1, "two_rates", D(8000), 0, prev, 0, 0, fixed_rate=None)
         self.assertEqual(it["status"], e.MANUAL)
+
+
+class OfficialSimulatorTests(unittest.TestCase):
+    """תוצאות סימולטור מס הכנסה של רשות המסים (secapp.taxes.gov.il/srsimulatorNZ, 19.11.2026): חודשי, 2026, 2.25 נקודות.
+    שכר עם אגורות אינו מעוגל לפני חישוב המס; רק המס מעוגל לשקל."""
+    def test_matches_official_simulator(self):
+        for salary, expected in (("10000", 575), ("15000", 1572), ("20000", 2682), ("19003", 2372),
+                                 ("18004.50", 2172), ("19003.50", 2373), ("19006.50", 2374)):
+            with self.subTest(salary=salary):
+                self.assertEqual(e.monthly_deduction_by_regulation(D(salary), D("2.25"), 2026), expected)
