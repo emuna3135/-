@@ -1296,6 +1296,8 @@ class CalcFromCardIn(BaseModel):
     car_gross_weight_kg: Optional[float] = Field(None, gt=0)
     base_salary: Optional[float] = Field(None, gt=0)   # חריגה חד-פעמית לחודש
     manual_income_tax: Optional[float] = None
+    manual_points: Optional[float] = Field(None, ge=0, le=30)      # טיפול ידני: סך נקודות זיכוי שחשב השכר מזין כשהמערכת לא יכולה לגזור אותן
+    manual_reason: Optional[str] = Field(None, max_length=300)     # סיבה (חובה כשמזינים נקודות ידנית)
     coordination_rate: Optional[float] = Field(None, ge=0, le=0.5)   # אישור תיאום מס: שיעור ניכוי קבוע מהאישור
     prev_cum_taxable: Optional[float] = None
     prev_cum_tax: Optional[float] = None
@@ -1324,8 +1326,17 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
                                     bool(y and y["other_income"]), (y or {}).get("other_income_credit"))
     pts, pts_note = 0.0, ""
     if mode == "cumulative" and body.coordination_rate is None:
+        # הנקודות נגזרות תמיד קודם, לפי הכללים שאומתו מול סימולטור רשות המסים. הזנה ידנית אפשרית רק כשהמערכת
+        # לא הצליחה לגזור נקודות (מצב שהסימולטור לא כיסה או לא הסביר); נקודות שנגזרו אינן ניתנות לשינוי כאן.
         pts, _status, pts_note = card.points_from_form101(body.year, d["is_resident"], d["gender"], y, body.month)
-        if pts is None and body.manual_income_tax is None:
+        if pts is not None and body.manual_points is not None:
+            raise HTTPException(422, "נקודות הזיכוי של העובד נגזרו אוטומטית לפי הכללים שאומתו מול סימולטור רשות המסים, ואי אפשר לשנות אותן כאן")
+        if pts is None and body.manual_points is not None:
+            if not (body.manual_reason or "").strip():
+                raise HTTPException(422, "בהזנת נקודות זיכוי ידנית חובה לציין סיבה")
+            pts = float(body.manual_points)
+            pts_note = f"הוזנו ידנית על ידי {user.email} (המערכת לא יכלה לגזור: {pts_note}): {pts:g} נקודות. סיבה: {body.manual_reason.strip()}"
+        elif pts is None and body.manual_income_tax is None:
             raise HTTPException(422, pts_note)
         pts = pts or 0.0
     p = PaystubIn(
@@ -1904,6 +1915,31 @@ def _card_row_who(db, company_id, row) -> dict:
     return who
 
 
+def _card_error_ctx(db, company_id, row) -> dict:
+    """הקשר לטיפול ידני בשורה שלא חושבה: מזהה עובד ונתוני החודש מהשורה, כדי שאפשר יהיה לחשב מחדש בלי להעלות שוב."""
+    who = _card_row_who(db, company_id, row)
+    try:
+        id_number = str(pick(row, "emp_id_number", "")).strip() or who.get("id", "")
+        emp = db.query(Employee).filter(Employee.company_id == company_id,
+                                        Employee.id_hash == emp_key(company_id, id_number)).first() if id_number else None
+        if emp is not None:
+            def num(key):
+                v = pick(row, key)
+                return float(v) if v not in (None, "") else None
+            calc = {"year": int(pick(row, "year", 0)), "month": int(pick(row, "month", 0)),
+                    "ot_hours_125": num("ot_hours_125") or 0, "ot_hours_150": num("ot_hours_150") or 0,
+                    "bonus": num("bonus") or 0, "tax_exempt": num("tax_exempt") or 0,
+                    "other_deductions": num("other_deductions") or 0}
+            base = num("base_salary")
+            if base:
+                calc["base_salary"] = base
+            who["employee_id"] = emp.id
+            who["calc"] = calc
+    except Exception:
+        pass
+    return who
+
+
 def _txt(v):
     return None if v is None or str(v).strip() == "" else str(v).strip()
 
@@ -1954,10 +1990,10 @@ async def upload_excel_card(
             results.append(out)
         except HTTPException as e:
             db.rollback()
-            errors.append({"row": i, "error": str(e.detail), **_card_row_who(db, company_id, row)})
+            errors.append({"row": i, "error": str(e.detail), **_card_error_ctx(db, company_id, row)})
         except Exception as e:
             db.rollback()
-            errors.append({"row": i, "error": str(e), **_card_row_who(db, company_id, row)})
+            errors.append({"row": i, "error": str(e), **_card_error_ctx(db, company_id, row)})
     audit(db, user.id, company_id, "upload_excel_card", "file", None,
           f"rows={len(rows)} ok={len(results)} errors={len(errors)}")
     db.commit()

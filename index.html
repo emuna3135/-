@@ -103,6 +103,7 @@ legend{font-weight:700;padding:0 0 0 8px;color:var(--ink)}
 .s-warn .chip{background:var(--warn-bg);color:var(--warn)} .s-bad .chip{background:var(--bad-bg);color:var(--bad)}
 .net{display:flex;justify-content:space-between;align-items:baseline;padding:20px;background:var(--ink);color:#fff}
 .net .big{font-size:2rem;font-weight:700}
+.fixbox{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin-block:8px 4px;padding:10px;background:#fff;color:var(--ink,#111);border:1px solid var(--line);border-radius:var(--r)}.fixbox label{display:grid;gap:4px;font-size:.9em}.fixbox input{min-width:9em}.fixbox .ok{color:var(--ok,#0a6b3c)}
 .unres{margin:16px 0 0;padding:14px 18px;background:var(--bad-bg);color:var(--bad);border-radius:var(--r)}
 .unres ul{margin:6px 0 0;padding-inline-start:20px}
 .flags{margin:12px 0 0;padding:12px 18px;background:var(--warn-bg);color:var(--warn);border-radius:var(--r)}
@@ -800,6 +801,40 @@ function flowBar(step) {
   }));
 }
 
+/* ---------- טיפול ידני בשורה שלא חושבה: נקודות זיכוי שחשבת השכר מזינה + סיבה, ואז התלוש עובר לאישור ---------- */
+function manualFixBox(x, onDone) {
+  const pts = h("input", { type: "number", step: "0.25", min: "0", max: "30", required: true });
+  const why = h("input", { type: "text", required: true, maxlength: 300, placeholder: "למשל: לפי טופס 101 מקורי" });
+  const msg = h("div", { "aria-live": "polite" });
+  return h("form", { class: "fixbox", onsubmit: async (e) => {
+    e.preventDefault(); msg.replaceChildren(h("span", {}, "מחשבת…"));
+    try {
+      const r = await api("POST", cp("/employees/" + x.employee_id + "/calculate"),
+        { ...x.calc, manual_points: Number(pts.value), manual_reason: why.value });
+      onDone(r);
+    } catch (err) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } },
+    h("label", {}, "סך נקודות זיכוי (הזנה ידנית)", pts), h("label", {}, "סיבה", why),
+    h("button", { class: "btn", type: "submit" }, "חישוב עם נקודות ידניות"), msg);
+}
+
+function failedRowsBox(onChange) {
+  const list = state.flow.errors || [];
+  if (!list.length) return null;
+  const items = list.map(x => {
+    const li = h("li", {}, errWho(x) + ": " + x.error);
+    if (x.employee_id && x.calc) {
+      li.append(manualFixBox(x, (r) => {
+        state.flow.results = state.flow.results.filter(p => flowKey(p) !== flowKey(r)).concat([r]);
+        state.flow.errors = state.flow.errors.filter(y => y !== x);
+        onChange(r);
+      }));
+    }
+    return li;
+  });
+  return h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו (אפשר לטפל בהן כאן ולהעביר לאישור):"), h("ul", {}, items));
+}
+
 function uploadView() {
   const file = h("input", { type: "file", accept: ".xlsx", required: true });
   const out = h("div", { "aria-live": "polite" });
@@ -820,9 +855,15 @@ function uploadView() {
       const r = await api("POST", cp("/upload-excel-card"), fd2, true);
       state.flow.results = r.paystubs; state.flow.errors = r.errors; state.flow.approved = {};
       nodes.push(h("p", {}, "חושבו " + r.processed + " תלושים, " + r.errors.length + " שורות לא חושבו."));
-      if (r.errors.length) nodes.push(h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו:"),
-        h("ul", {}, r.errors.slice(0, 30).map(x => h("li", {}, errWho(x) + ": " + x.error)))));
-      if (r.processed) nodes.push(h("button", { class: "btn", type: "button", onclick: () => render("review") }, "המשך לשלב 2: בדיקה ואישור"));
+      const failBox = h("div", {});
+      const go = h("div", {});
+      const redraw = () => {
+        const fb = failedRowsBox(redraw);
+        failBox.replaceChildren(...(fb ? [fb] : []));
+        go.replaceChildren(...(state.flow.results.length ? [h("button", { class: "btn", type: "button", onclick: () => render("review") }, "המשך לשלב 2: בדיקה ואישור (" + state.flow.results.length + " תלושים)")] : []));
+      };
+      redraw();
+      nodes.push(failBox, go);
       out.replaceChildren(...nodes);
     } catch (err) { out.replaceChildren(...nodes, h("div", { class: "err", role: "alert" }, err.message)); }
   } }, h("label", {}, "קובץ אקסל (גיליון נתוני החודש, גיליון 'עובדים' וגיליון 'טופס 101')", file),
@@ -834,14 +875,17 @@ function uploadView() {
 }
 
 function reviewView() {
-  const all = state.flow.results;
-  if (!all.length) return shell("review", "2. בדיקה ואישור", h("div", {}, flowBar(2), h("div", { class: "empty" }, "עוד אין תלושים לבדיקה. מתחילים בשלב 1."),
+  let all = state.flow.results;
+  if (!all.length) return shell("review", "2. בדיקה ואישור", h("div", {}, flowBar(2), failedRowsBox(() => render("review")), h("div", { class: "empty" }, "עוד אין תלושים לבדיקה. מתחילים בשלב 1."),
     h("button", { class: "btn", type: "button", onclick: () => render("upload") }, "לשלב 1")));
   const periods = [...new Set(all.map(periodOf))].sort((a, b) => (a.slice(3) + a.slice(0, 2)).localeCompare(b.slice(3) + b.slice(0, 2)));
   const sel = h("select", {}, periods.map(x => h("option", { value: x }, x)));
   sel.value = periods[periods.length - 1];
   const box = h("div", {});
+  const failWrap = h("div", {});
+  const drawFail = () => { const fb = failedRowsBox(() => { drawFail(); draw(); }); failWrap.replaceChildren(...(fb ? [fb] : [])); };
   const draw = () => {
+    all = state.flow.results;
     const rows = all.filter(p => periodOf(p) === sel.value);
     const okRows = rows.filter(slipOk);
     const cnt = rows.filter(p => state.flow.approved[flowKey(p)]).length;
@@ -861,10 +905,10 @@ function reviewView() {
             ok ? "" : " | נדרש טיפול ידני: לא ניתן לאשר"), slipView(p));
       }));
   };
-  sel.addEventListener("change", draw); draw();
+  sel.addEventListener("change", draw); draw(); drawFail();
   return shell("review", "2. בדיקה ואישור", h("div", {}, flowBar(2),
     h("p", {}, "חשבת השכר בודקת את הסכומים ואת החוק והסעיף שבכל שורה (פתיחת התלוש מציגה לכל שורה את הבסיס המשפטי), ומאשרת. תלוש עם סעיף שמסומן לטיפול ידני אי אפשר לאשר."),
-    h("label", {}, "חודש", sel), box));
+    h("label", {}, "חודש", sel), failWrap, box));
 }
 
 function issueView() {
