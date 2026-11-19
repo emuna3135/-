@@ -166,22 +166,22 @@ def family_credit_points(tax_year, gender, married, custody_birth_years=(), nonc
     if "benef" in flags:
         parts.append(("יחיד מוטב", D("0.5") if kids_custody else D(1), "§37 לפקודה"))
     if "widower" in flags:
-        parts.append(("נשואה לאלמן", D(0), "סעיף לא תועד; אומת בסימולטור"))
+        parts.append(("נשואה לאלמן", D(0), "אין תוספת נקודות; הילדים מחושבים בנפרד"))
     if special & {"nomesh", "niptar"}:
         both = {"nomesh", "niptar"} <= special
         lbl = ("חי/ה בנפרד והורה יחיד (נספר פעם אחת)" if both else
                "חי/ה בנפרד בלי משק בית משותף" if "nomesh" in special else "הורה יחיד")
-        parts.append((lbl, D(1), "סעיף לא תועד; אומת בסימולטור"))
+        parts.append((lbl, D(1), "§40(ב)(2) לפקודה" if "nomesh" in special and "niptar" not in special else "§40(ב)(1ב) לפקודה"))
     if "mezonut" in special:
-        parts.append(("משלם מזונות על ילדים שלא בחזקתו", D(1), "סעיף לא תועד; אומת בסימולטור"))
+        parts.append(("משלם מזונות על ילדים שלא בחזקתו", D(1), "§40(ב)(2) לפקודה; התאמה לסימון בטופס אומתה בסימולטור"))
     table = _T_FATHER_MARRIED if (married and gender == "M") else _T_MOTHER
-    law_c = "§66(ג)(5) לפקודה" if (married and gender == "M") else ("§66(ג)(4) לפקודה" if married else "§40(ב) לפקודה")
+    law_c = "§66(ג)(5) לפקודה" if (married and gender == "M") else ("§66(ג)(4) לפקודה" if married else "§40(ב)(1) לפקודה")
     for b in custody_birth_years:
         k = _age_bucket(tax_year, b)
         if k is not None:
             parts.append((f"ילד/ה שנולד/ה {b} בחזקתו", table[k], law_c))
             if "niptar" in flags:
-                parts.append((f"ילד/ה {b} (הורה יחיד, תוספת)", _T_NONCUST[k], "סעיף לא תועד; אומת בסימולטור"))
+                parts.append((f"ילד/ה {b} (הורה יחיד, תוספת)", _T_NONCUST[k], "§40(ב)(1ב) לפקודה, בצירוף פסקה (1א)"))
     for b in noncust_birth_years:
         k = _age_bucket(tax_year, b)
         if k is not None:
@@ -230,8 +230,8 @@ def foreign_points(worker_type, gender, months, tax_year):
     woman = gender == "F"
     if worker_type == "area_resident":
         if woman:
-            return None, MANUAL, ("תושבת האזור: הצו (התשנ\"ה-1995) מחיל את §§34,36,37 בלבד; הנוסח הרשמי של התוספת לאישה (§36א) לא נמצא. "
-                                  "נדרש טיפול ידני")
+            return 2.75, BY_LAW, ("תושבת האזור שאינה אזרחית ישראלית: 2.75 נקודות. 2.25 לפי צו מס הכנסה (זיכויים לתושבי האזור), התשנ\"ה-1995 "
+                                  "(§34: 2; §36: 1/4) ועוד 1/2 לפי §36א, שאינו מותנה בתושבות (\"בחישוב המס של אשה\", נבו 27.9.2026)")
         return 2.25, BY_LAW, "תושב האזור שאינו אזרח ישראלי: 2.25 נקודות (§34: 2; §36: 1/4), לפי צו מס הכנסה (זיכויים לתושבי האזור), התשנ\"ה-1995"
     if worker_type == "foreign_other":
         return None, MANUAL, "עובד זר שאינו חוקי או שאינו בסיעוד חוקי: אין בתקנות הזיכויים (2014) נקודות מאומתות לצירוף הזה. נדרש טיפול ידני"

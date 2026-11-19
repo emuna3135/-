@@ -72,7 +72,7 @@ class ForeignWorkers(unittest.TestCase):
 
     def test_area_resident(self):
         self.assertEqual(self.fp("area_resident", "M", None, 2026)[0], 2.25)
-        self.assertEqual(self.fp("area_resident", "F", None, 2026)[1], card.MANUAL)
+        self.assertEqual(self.fp("area_resident", "F", None, 2026)[0], 2.75)   # §36א חל על "אשה" בלי תנאי תושבות
 
     def test_everything_else_is_manual(self):
         self.assertEqual(self.fp("foreign_other", "M", 12, 2026)[1], card.MANUAL)
