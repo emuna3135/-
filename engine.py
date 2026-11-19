@@ -456,22 +456,36 @@ def recuperation_days(seniority_year):
     return item(D(10), BY_LAW, "משנה 20 ואילך: 10 ימים (י״פ 4689 20.10.1998 עמ' 189, צו הרחבה סעיף 5(א)) | מעודכן ל-2026, ניתן לעדכן אם השתנה החוק")
 
 
-def recuperation_pay(year, entitled_days, job_fraction="1", period_fraction="1", reduced_partial=None):
+RECUPERATION_DAY_2025_MAX = D("471.4")
+
+
+def recuperation_partial_reduction(entitled_days, avg_monthly_salary_oct_dec_2024, job_fraction="1"):
     """
-    דמי הבראה לתשלום = ימים x 418 x חלקיות משרה x חלקיות תקופה, פחות הפחתה:
-    יום הבראה אחד (או חצי יום לעובד בהפחתה חלקית: שכר חודשי ממוצע עד 6,150), באותן חלקיות.
-    reduced_partial חייב להיקבע במפורש (True/False); None = הכרעה ידנית, כי ההתאמה
-    של סף השכר למשרה חלקית לא אומתה. נבדק מול תרגיל אחד (רנה, 5 ימים, משרה מלאה = 1,672).
-    רק 2025: שנים אחרות לא מחושבות. החישוב כאן ברוטו; הטיפול במס/ב"ל לא נבדק.
+    "עובד בהפחתה חלקית" לפי חוק הקפאה והפחתה של דמי הבראה בשנת 2025: זכאי ללא החוק ל*פחות משישה* ימי הבראה,
+    ומשכורתו החודשית הממוצעת באוקטובר-דצמבר 2024 אינה עולה על 6,150 ₪ (כפול חלקיות המשרה).
+    """
+    days = D(str(entitled_days)); sal = D(str(avg_monthly_salary_oct_dec_2024))
+    limit = RECUPERATION_LOW_SALARY_2025 * D(str(job_fraction))
+    return days < 6 and sal <= limit
+
+
+def recuperation_pay(year, entitled_days, job_fraction="1", period_fraction="1", reduced_partial=None, day_price=None):
+    """
+    דמי הבראה 2025 לתשלום = ימים x מחיר יום x חלקיות, פחות הפחתה של מחיר יום הבראה אחד
+    (או מחציתו לעובד בהפחתה חלקית), באותן חלקיות. מחיר היום: לא פחות מ-418 ולא יותר מ-471.4 (ברירת מחדל 418).
+    מקור: חוק הקפאה והפחתה של דמי הבראה בשנת 2025, התשפ"ה-2025 (ספר החוקים 27.3.2025), הגדרות וסעיף 3.
+    reduced_partial חייב להיקבע במפורש (ראו recuperation_partial_reduction); None = הכרעה ידנית.
+    רק 2025: שנים אחרות לא מחושבות. החישוב ברוטו.
     """
     if year != 2025:
         return item(None, MANUAL, "תעריף וכללי הפחתה מוגדרים רק ל-2025")
     if reduced_partial is None:
-        return item(None, MANUAL, "יש להכריע אם העובד בהפחתה חלקית (שכר חודשי ממוצע עד 6,150, בהתאמה למשרה)")
+        return item(None, MANUAL, "יש להכריע אם העובד בהפחתה חלקית (פחות משישה ימי הבראה ושכר ממוצע 10-12/2024 עד 6,150, כפול חלקיות המשרה)")
+    price = RECUPERATION_DAY_2025 if day_price is None else min(max(D(str(day_price)), RECUPERATION_DAY_2025), RECUPERATION_DAY_2025_MAX)
     frac = D(str(job_fraction)) * D(str(period_fraction))
-    gross = D(str(entitled_days)) * RECUPERATION_DAY_2025 * frac
-    cut = RECUPERATION_DAY_2025 * (D("0.5") if reduced_partial else D(1)) * frac
-    return item(r2(max(gross - cut, D(0))), MANUAL, "ימים x 418 x חלקיות, פחות הפחתת 2025 (חוק הקפאה והפחתה, ספר החוקים 27.3.2025); סף 6,150 מוכפל בחלקיות המשרה (חוק הקפאה והפחתה של דמי הבראה בשנת 2025, הגדרת עובד בהפחתה חלקית; nevo.co.il/law_html/law00/234284.htm)")
+    gross = D(str(entitled_days)) * price * frac
+    cut = price * (D("0.5") if reduced_partial else D(1)) * frac
+    return item(r2(max(gross - cut, D(0))), BY_LAW, "ימים x מחיר יום (418-471.4) x חלקיות, פחות הפחתה (יום אחד, או חצי יום בהפחתה חלקית); חוק הקפאה והפחתה של דמי הבראה בשנת 2025, הגדרות וסעיף 3")
 
 
 # ---------------------------------------------------------------------------

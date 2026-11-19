@@ -221,6 +221,16 @@ class Benefits(unittest.TestCase):
         d3 = e.recuperation_days(3)["value"]
         self.assertEqual(e.recuperation_pay(2025, d3, job_fraction="0.5", reduced_partial=False)["value"], D("1045"))
 
+    def test_recuperation_partial_reduction_definition(self):
+        self.assertTrue(e.recuperation_partial_reduction(5, 6150))          # פחות מ-6 ימים ושכר עד 6,150
+        self.assertFalse(e.recuperation_partial_reduction(6, 5000))         # 6 ימים אינו "פחות משישה"
+        self.assertFalse(e.recuperation_partial_reduction(5, 6151))
+        self.assertTrue(e.recuperation_partial_reduction(5, 3075, "0.5"))   # סף כפול חלקיות
+        self.assertFalse(e.recuperation_partial_reduction(5, 3076, "0.5"))
+        r = e.recuperation_pay(2025, 5, reduced_partial=True)
+        self.assertEqual(r["value"], D("1881")); self.assertEqual(r["status"], e.BY_LAW)  # 5*418 - 209
+        self.assertEqual(e.recuperation_pay(2025, 5, day_price="500")["value"] if False else e.recuperation_pay(2025, 5, reduced_partial=False, day_price="500")["value"], D("1885.60"))  # מחיר נחתך ל-471.4: 4*471.4
+
     def test_team_building(self):
         ok = e.team_building_benefit(True, True, True, False, True, True, True, False)
         self.assertEqual(ok["value"], D(0))
