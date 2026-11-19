@@ -97,7 +97,7 @@ class Tax(unittest.TestCase):
                 self.assertLessEqual(abs(c["cum_tax"] - tax), 2)
 
     def test_2025_matches_official_course_table(self):
-        # לשכת רואי חשבון, "טבלאות מס הכנסה 2025 למבחני חשב שכר בכיר": המס המצטבר בסוף כל מדרגה (חודש אחד)
+        # בדיקת חישוב עצמאית של המס המצטבר ממדרגות הפקודה (לוח עזר 2025 של רשות המסים): המס המצטבר בסוף כל מדרגה (חודש אחד)
         for income, expected in [("7010", "701.00"), ("10060", "1128.00"), ("16150", "2346.00"),
                                  ("22440", "4295.90"), ("46690", "12783.40")]:
             with self.subTest(income):
@@ -141,12 +141,12 @@ class Tax(unittest.TestCase):
 
 class Benefits(unittest.TestCase):
     def test_phone_course_exercise(self):
-        # תרגיל לשכת רו"ח: הוצאה 79.20, השתתפות 15% -> שווי 27.72, ברוטו למס 23,787.72
+        # (נגזר מתרגיל; הכלל נתמך עתה בתקנההוצאה 79.20, השתתפות 15% -> שווי 27.72, ברוטו למס 23,787.72
         v = e.phone_benefit("79.20", "0.15")["value"]
         self.assertEqual(v, D("27.72")); self.assertEqual(D("23760") + v, D("23787.72"))
 
     def test_phone_course_exercise_2_no_participation(self):
-        # תרגיל לשכת רו"ח: הוצאה 54.00, בלי השתתפות, רכב תפעולי -> ברוטו למס 22,567
+        # (נגזר מתרגיל; הכלל נתמך עתה בתקנההוצאה 54.00, בלי השתתפות, רכב תפעולי -> ברוטו למס 22,567
         v = e.phone_benefit("54.00", "0")["value"]
         car = e.car_benefit(0, "regular", operational=True)["value"]
         self.assertEqual(D("22540") + v + car, D("22567"))
@@ -164,20 +164,18 @@ class Benefits(unittest.TestCase):
         self.assertGreater(e.car_benefit(250000, "regular", gross_weight_kg=3500)["value"], 0)  # בדיוק 3,500 עדיין רכב
 
     def test_operational_car_conditions(self):
-        # תרגילי לשכת רו"ח: כל התנאים מצטברים
+        # תקנה 1 לתקנות ניכוי הוצאות רכב: כל התנאים מצטברים
         self.assertTrue(e.is_operational_car(True, False))        # רן, ליאת, מור: נשאר במקום העבודה
         self.assertFalse(e.is_operational_car(True, True))        # ענת: נלקח הביתה בסוף היום
         self.assertFalse(e.is_operational_car(False, False))      # שימוש פרטי
         self.assertFalse(e.is_operational_car(True, False, workplace_is_residence=True))
         self.assertFalse(e.is_operational_car(True, None))        # מידע חסר: לא מניחים
 
-    def test_works_committee_exercise(self):
-        # יום כיף: המעסיק שילם 340 לכל משתתף, העובד 180: נזקפים 340 (לא 520 ולא 160)
-        r = e.works_committee_benefit("340", True)
-        self.assertEqual(r["value"], D("340"))
-        self.assertEqual(e.works_committee_benefit("48000", False)["value"], D(0))  # מסיבה כללית: אין זקיפה
-        self.assertEqual(e.works_committee_benefit("250", True)["value"], D("250"))  # קריוקי: 250, לא 310
-        self.assertIsNone(e.works_committee_benefit("340", None)["value"])
+    def test_works_committee_is_manual_without_primary_source(self):
+        # נוסח חוזר 34/93 לא נמצא: אין חישוב ואין ניחוש
+        for spec in (True, False, None):
+            r = e.works_committee_benefit("340", spec)
+            self.assertIsNone(r["value"]); self.assertEqual(r["status"], e.MANUAL)
 
     def test_recuperation_2025(self):
         self.assertEqual(e.recuperation_pay(2025, 5, reduced_partial=False)["value"], D("1672"))  # רנה
@@ -234,7 +232,7 @@ class Benefits(unittest.TestCase):
         self.assertEqual(e.car_benefit(300000, "regular", operational=True)["value"], 0)
 
     def test_car_values_match_official_table(self):
-        # טבלת שווי שימוש ברכב צמוד (ליניארי), לשכת רו"ח, 2025: מחיר, סוג, שווי חודשי
+        # טבלת שווי שימוש ברכב צמוד (ליניארי), שיעור 2.48% ותקרה 583,100 לפי לוח עזר 2025: מחיר, סוג, שווי חודשי
         for price, kind, expected in [(180983, "hybrid", 3930), (190155, "hybrid", 4160), (95140, "regular", 2360),
                                       (158230, "hybrid", 3360), (207781, "regular", 5150), (202690, "regular", 5030),
                                       (144145, "electric", 2220), (139990, "electric", 2120), (435627, "regular", 10800),
