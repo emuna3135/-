@@ -1980,6 +1980,34 @@ def payments_summary_view(company_id: str, year: int = Query(..., ge=2000, le=21
     return {"year": year, "months": payments_summary.summarize(year, stubs)}
 
 
+@app.get("/companies/{company_id}/month-sheet")
+def month_sheet(company_id: str, year: Optional[int] = None, month: Optional[int] = None,
+                user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """קובץ 'חודש חדש מוכן': שורה לכל עובד רשום. ברירת מחדל: החודש שאחרי התלוש האחרון שחושב (או החודש הנוכחי)."""
+    require_company(company_id, user, db)
+    if year is None or month is None:
+        last = db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year.isnot(None)) \
+                 .order_by(PaystubV2.year.desc(), PaystubV2.month.desc()).first()
+        if last and last.year and last.month:
+            year, month = (last.year + 1, 1) if last.month == 12 else (last.year, last.month + 1)
+        else:
+            t = datetime.date.today()
+            year, month = t.year, t.month
+    if not (2000 <= year <= 2100 and 1 <= month <= 12):
+        raise HTTPException(400, "שנה או חודש לא תקינים")
+    rows = db.query(Employee).filter(Employee.company_id == company_id).all()
+    emps = sorted(((d["id_number"], d["full_name"]) for d in (unseal(db, company_id, e.payload_enc) for e in rows)),
+                  key=lambda x: x[1])
+    if not emps:
+        raise HTTPException(404, "אין עובדים רשומים. יש להקים עובדים קודם")
+    import upload_template
+    audit(db, user.id, company_id, "month_sheet", "file", None, f"{month:02d}/{year} employees={len(emps)}")
+    db.commit()
+    return Response(content=upload_template.build_month_sheet(emps, year, month),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="month-{year}-{month:02d}.xlsx"'})
+
+
 @app.get("/upload-template")
 def upload_template_file():
     """תבנית אקסל ריקה להעלאה. בלי נתונים של משתמשים, ולכן פתוחה לכולם."""

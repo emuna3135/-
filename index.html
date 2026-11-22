@@ -975,6 +975,17 @@ function uploadView() {
     h("button", { class: "btn", type: "submit" }, "העלאה וחישוב"));
   return shell("upload", "1. העלאת אקסל וטופס 101", h("div", {}, flowBar(1),
     h("p", {}, "מעלים קובץ אחד: העובדים וטופס 101 של כל אחד מהם, ונתוני החודש. המערכת קולטת קודם את העובדים וטפסי 101, ורק אחר כך מחשבת. עובד קיים לא נדרס. סביבת בדיקה: נתונים בדויים בלבד."),
+    h("div", { class: "panel" }, h("p", {}, h("strong", {}, "חודש חדש מוכן: "), "קובץ עם כל העובדים הרשומים. השכר, הפנסיה והנקודות נלקחים מכרטיס העובד, ממלאים בו רק את החריגים של החודש (שעות נוספות, בונוס וכד') ומעלים חזרה כאן."),
+      h("button", { class: "btn", type: "button", onclick: async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try {
+          const res = await fetch(state.api + cp("/month-sheet"), { headers: { "Authorization": "Bearer " + state.token } });
+          if (!res.ok) { let m = "נכשל (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+          const cd = res.headers.get("Content-Disposition") || ""; const nm = (cd.match(/filename="([^"]+)"/) || [])[1] || "month.xlsx";
+          const url = URL.createObjectURL(await res.blob()); const a = h("a", { href: url, download: nm }); document.body.append(a); a.click(); a.remove();
+          out.replaceChildren(h("div", { class: "info" }, "הקובץ ירד: " + nm));
+        } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+        b.disabled = false; } }, "הורדת חודש חדש מוכן")),
     h("p", {}, h("a", { class: "btn ghost", href: state.api + "/upload-template", download: "payroll-template.xlsx" }, "הורדת תבנית ריקה למילוי"),
       " תבנית עם שלושה גיליונות ושורת דוגמה אחת. ממלאים בנתוני ניסוי שלכם, בלי נתוני עובדים אמיתיים."), form, out));
 }

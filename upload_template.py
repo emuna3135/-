@@ -98,3 +98,47 @@ def build_template() -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+MONTH_SHEET_HEAD = ["תעודת זהות", "שם עובד", "שנה", "חודש", "שעות 125", "שעות 150", "בונוס", "פטור ממס", "ניכויים אחרים", "שכר יסוד"]
+MONTH_SHEET_NOTE = ("חודש חדש מוכן: כל העובדים הרשומים כבר כאן. השכר, הפנסיה, נקודות הזיכוי ושיטת המס נלקחים מכרטיס העובד ומטופס 101, ולכן לא צריך להקליד אותם. "
+                    "ממלאים רק מה שחריג החודש: שעות נוספות, בונוס, פטור ממס, ניכויים אחרים. עמודת 'שכר יסוד' ריקה = השכר שבכרטיס; ממלאים אותה רק אם השכר החודש שונה. "
+                    "שורה של עובד שלא עובד החודש: למחוק. עובד חדש: להוסיף קודם במסך העובדים.")
+
+
+def build_month_sheet(employees, year, month) -> bytes:
+    """employees: [(תעודת זהות, שם)]. קובץ אקסל עם שורה לכל עובד ועמודות משתנות ב-0. עמודת ת.ז כטקסט (לא מאבדת אפסים מובילים)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "נתוני החודש"
+    ws.sheet_view.rightToLeft = True
+    head_font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
+    body_font = Font(name="Arial", size=11)
+    fill = PatternFill("solid", fgColor="1F4E79")
+    for c, h in enumerate(MONTH_SHEET_HEAD, 1):
+        x = ws.cell(1, c, h)
+        x.font, x.fill = head_font, fill
+        x.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.column_dimensions[get_column_letter(c)].width = max(12, len(h) + 4)
+    ws.column_dimensions["B"].width = 24
+    for r, (idn, name) in enumerate(employees, 2):
+        vals = [str(idn), name, int(year), int(month), 0, 0, 0, 0, 0, None]
+        for c, v in enumerate(vals, 1):
+            x = ws.cell(r, c, v)
+            x.font = body_font
+            x.alignment = Alignment(horizontal="center")
+            if c == 1:
+                x.number_format = "@"
+    ws.row_dimensions[1].height = 32
+    ws.freeze_panes = "A2"
+    h = wb.create_sheet("הסבר")
+    h.sheet_view.rightToLeft = True
+    h.column_dimensions["A"].width = 110
+    h.cell(1, 1, MONTH_SHEET_NOTE).font = body_font
+    h.cell(1, 1).alignment = Alignment(wrap_text=True, vertical="top")
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
