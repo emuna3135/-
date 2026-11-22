@@ -873,8 +873,8 @@ const periodOf = (p) => String(p.month).padStart(2, "0") + "/" + p.year;
 const slipOk = (p) => p.net != null && !(p.unresolved && p.unresolved.length) && p.overall_status !== "נדרש טיפול ידני";
 
 function flowBar(step) {
-  const names = ["1. העלאת אקסל וטופס 101", "2. בדיקה ואישור", "3. הפקת תלוש לפי תבנית", "4. דיווחים לרשויות"];
-  const views = ["upload", "review", "issue", "reports"];
+  const names = ["1. הכנת קובץ", "2. העלאה וחישוב", "3. בדיקה ואישור", "4. הפקת תלוש", "5. דיווחים לרשויות"];
+  const views = ["prep", "upload", "review", "issue", "reports"];
   return h("div", { class: "flowbar", role: "list" }, names.map((t, i) => {
     if (i + 1 < step)   // שלב קודם: כותרת לחיצה שמחזירה אליו
       return h("button", { type: "button", role: "listitem", class: "flowbar-i back", title: "חזרה לשלב " + (i + 1), onclick: () => render(views[i]) }, t);
@@ -940,6 +940,29 @@ function failedRowsBox(onChange) {
   return h("div", { class: "unres", role: "alert" }, h("strong", {}, "שורות שלא חושבו (ממלאים את פרטי המשפחה במילים, והמערכת מתרגמת לנקודות לפי החוק):"), h("ul", {}, items));
 }
 
+function prepView() {
+  const out = h("div", { "aria-live": "polite" });
+  return shell("prep", "1. הכנת קובץ", h("div", {}, flowBar(1),
+    h("p", {}, "בוחרים איך מתחילים. למשרד שכבר הוקם: חודש חדש מוכן. למשרד חדש: הקמה ראשונה."),
+    h("div", { class: "panel" }, h("p", {}, h("strong", {}, "חודש חדש מוכן: "), "קובץ עם כל העובדים הרשומים. השכר, הפנסיה והנקודות נלקחים מכרטיס העובד, ממלאים בו רק את החריגים של החודש (שעות נוספות, בונוס וכד') ומעלים חזרה כאן."),
+      h("button", { class: "btn", type: "button", onclick: async (ev) => {
+        const b = ev.currentTarget; b.disabled = true;
+        try {
+          if (state.demo) throw new Error("ההורדה זמינה אחרי כניסה למשרד עם עובדים רשומים. במצב הדוגמה אין קובץ אמיתי.");
+          const res = await fetch(state.api + cp("/month-sheet"), { headers: { "Authorization": "Bearer " + state.token } });
+          if (!res.ok) { let m = "נכשל (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+          const cd = res.headers.get("Content-Disposition") || ""; const nm = (cd.match(/filename="([^"]+)"/) || [])[1] || "month.xlsx";
+          const url = URL.createObjectURL(await res.blob()); const a = h("a", { href: url, download: nm }); document.body.append(a); a.click(); a.remove();
+          out.replaceChildren(h("div", { class: "info" }, "הקובץ ירד: " + nm));
+        } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+        b.disabled = false; } }, "הורדת חודש חדש מוכן")),
+    h("details", { class: "card" }, h("summary", {}, "הקמה ראשונה של משרד חדש (עובדים, טופס 101, פרטי מעביד, פנסיה)"),
+      h("p", {}, "מורידים תבנית אחת עם כמה גיליונות, ממלאים פעם אחת ומעלים. משם והלאה משתמשים ב'חודש חדש מוכן'. סביבת בדיקה: נתוני דמה בלבד."),
+      h("a", { class: "btn ghost", href: state.api + "/upload-template", download: "payroll-template.xlsx" }, "הורדת תבנית להקמה ראשונה")),
+    out,
+    h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: () => render("upload") }, "המשך לשלב 2: העלאה וחישוב"))));
+}
+
 function uploadView() {
   const file = h("input", { type: "file", accept: ".xlsx", required: true });
   const out = h("div", { "aria-live": "polite" });
@@ -965,7 +988,7 @@ function uploadView() {
       const redraw = () => {
         const fb = failedRowsBox(redraw);
         failBox.replaceChildren(...(fb ? [fb] : []));
-        go.replaceChildren(...(state.flow.results.length ? [h("button", { class: "btn", type: "button", onclick: () => render("review") }, "המשך לשלב 2: בדיקה ואישור (" + state.flow.results.length + " תלושים)")] : []));
+        go.replaceChildren(...(state.flow.results.length ? [h("button", { class: "btn", type: "button", onclick: () => render("review") }, "המשך לשלב 3: בדיקה ואישור (" + state.flow.results.length + " תלושים)")] : []));
       };
       redraw();
       nodes.push(failBox, go);
@@ -973,30 +996,16 @@ function uploadView() {
     } catch (err) { out.replaceChildren(...nodes, h("div", { class: "err", role: "alert" }, err.message)); }
   } }, h("label", {}, "העלאת הקובץ אחרי מילוי (חודש חדש מוכן, או תבנית ההקמה)", file),
     h("button", { class: "btn", type: "submit" }, "העלאה וחישוב"));
-  return shell("upload", "1. העלאת אקסל וטופס 101", h("div", {}, flowBar(1),
-    h("p", {}, "מעלים קובץ אחד: העובדים וטופס 101 של כל אחד מהם, ונתוני החודש. המערכת קולטת קודם את העובדים וטפסי 101, ורק אחר כך מחשבת. עובד קיים לא נדרס. סביבת בדיקה: נתונים בדויים בלבד."),
-    h("div", { class: "panel" }, h("p", {}, h("strong", {}, "חודש חדש מוכן: "), "קובץ עם כל העובדים הרשומים. השכר, הפנסיה והנקודות נלקחים מכרטיס העובד, ממלאים בו רק את החריגים של החודש (שעות נוספות, בונוס וכד') ומעלים חזרה כאן."),
-      h("button", { class: "btn", type: "button", onclick: async (ev) => {
-        const b = ev.currentTarget; b.disabled = true;
-        try {
-          if (state.demo) throw new Error("ההורדה זמינה אחרי כניסה למשרד עם עובדים רשומים. במצב הדוגמה אין קובץ אמיתי.");
-          const res = await fetch(state.api + cp("/month-sheet"), { headers: { "Authorization": "Bearer " + state.token } });
-          if (!res.ok) { let m = "נכשל (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
-          const cd = res.headers.get("Content-Disposition") || ""; const nm = (cd.match(/filename="([^"]+)"/) || [])[1] || "month.xlsx";
-          const url = URL.createObjectURL(await res.blob()); const a = h("a", { href: url, download: nm }); document.body.append(a); a.click(); a.remove();
-          out.replaceChildren(h("div", { class: "info" }, "הקובץ ירד: " + nm));
-        } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
-        b.disabled = false; } }, "הורדת חודש חדש מוכן")),
-    h("details", { class: "card" }, h("summary", {}, "הקמה ראשונה של משרד חדש (עובדים, טופס 101, פרטי מעביד, פנסיה)"),
-      h("p", {}, "מורידים תבנית אחת עם כמה גיליונות, ממלאים פעם אחת ומעלים. משם והלאה משתמשים ב'חודש חדש מוכן'. סביבת בדיקה: נתוני דמה בלבד."),
-      h("a", { class: "btn ghost", href: state.api + "/upload-template", download: "payroll-template.xlsx" }, "הורדת תבנית להקמה ראשונה")),
+  return shell("upload", "2. העלאה וחישוב", h("div", {}, flowBar(2),
+    h("p", {}, "מעלים את הקובץ שהכנת בשלב 1. המערכת קולטת קודם את העובדים וטפסי 101 (אם יש בקובץ), ורק אחר כך מחשבת. עובד קיים לא נדרס. סביבת בדיקה: נתונים בדויים בלבד."),
+    h("p", {}, "עוד לא הכנת קובץ? ", h("a", { href: "#", onclick: (e) => { e.preventDefault(); render("prep"); } }, "לשלב 1: הכנת קובץ")),
     form, out));
 }
 
 function reviewView() {
   let all = state.flow.results;
-  if (!all.length) return shell("review", "2. בדיקה ואישור", h("div", {}, flowBar(2), failedRowsBox(() => render("review")), h("div", { class: "empty" }, "עוד אין תלושים לבדיקה. מתחילים בשלב 1."),
-    h("button", { class: "btn", type: "button", onclick: () => render("upload") }, "לשלב 1")));
+  if (!all.length) return shell("review", "3. בדיקה ואישור", h("div", {}, flowBar(3), failedRowsBox(() => render("review")), h("div", { class: "empty" }, "עוד אין תלושים לבדיקה. בשלב 1 מכינים קובץ, ובשלב 2 מעלים וחושבים."),
+    h("button", { class: "btn", type: "button", onclick: () => render("prep") }, "לשלב 1")));
   const periods = [...new Set(all.map(periodOf))].sort((a, b) => (a.slice(3) + a.slice(0, 2)).localeCompare(b.slice(3) + b.slice(0, 2)));
   const sel = h("select", {}, periods.map(x => h("option", { value: x }, x)));
   sel.value = periods[periods.length - 1];
@@ -1027,7 +1036,7 @@ function reviewView() {
         h("label", { class: "check" }, reviewed, h("span", {}, "עברתי על כל התלושים והסכומים")),
         h("button", { class: "btn", type: "button", onclick: () => { if (!reviewed.checked) { reviewed.focus(); return; } okRows.forEach(p => state.flow.approved[flowKey(p)] = true); draw(); } }, "אישור כל התלושים התקינים"),
         h("button", { class: "btn ghost", type: "button", onclick: () => { rows.forEach(p => delete state.flow.approved[flowKey(p)]); draw(); } }, "ביטול כל האישורים"),
-        cnt ? h("button", { class: "btn", type: "button", onclick: () => render("issue") }, "המשך לשלב 3: הפקה (" + cnt + ")") : null),
+        cnt ? h("button", { class: "btn", type: "button", onclick: () => render("issue") }, "המשך לשלב 4: הפקה (" + cnt + ")") : null),
       ...rows.map(p => {
         const ok = slipOk(p);
         const cb = h("input", { type: "checkbox", checked: !!state.flow.approved[flowKey(p)], disabled: !ok, onclick: (ev) => ev.stopPropagation(),
@@ -1042,7 +1051,7 @@ function reviewView() {
       }));
   };
   sel.addEventListener("change", draw); draw(); drawFail();
-  return shell("review", "2. בדיקה ואישור", h("div", {}, flowBar(2),
+  return shell("review", "3. בדיקה ואישור", h("div", {}, flowBar(3),
     h("p", {}, "חשבת השכר בודקת את הסכומים ואת החוק והסעיף שבכל שורה (פתיחת התלוש מציגה לכל שורה את הבסיס המשפטי), ומאשרת. תלוש עם סעיף שמסומן לטיפול ידני אי אפשר לאשר."),
     h("label", {}, "חודש", sel), failWrap, box));
 }
@@ -1096,13 +1105,13 @@ function issueView() {
     out.replaceChildren(h("p", {}, "הופקו " + links.length + " תלושים."), links.length ? h("ul", {}, links) : null,
       fails.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "לא הופקו:"), h("ul", {}, fails)) : null);
   };
-  return shell("issue", "3. הפקת תלוש לפי תבנית", h("div", {}, flowBar(3),
+  return shell("issue", "4. הפקת תלוש", h("div", {}, flowBar(4),
     approved.length ? h("div", {}, h("p", {}, approved.length + " תלושים מאושרים. מסמנים למי להפיק."), listBox, h("label", {}, "תבנית", tpl), h("label", {}, "כתובת המעסיק (מופיעה בכל התלושים; חובה בתלוש)", addr),
       h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: make }, "הפקת התלושים המאושרים")), out)
-      : h("div", { class: "empty" }, "אין תלושים מאושרים. אישור נעשה בשלב 2."),
+      : h("div", { class: "empty" }, "אין תלושים מאושרים. אישור נעשה בשלב 3."),
     h("div", { class: "actions" },
-      h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 2"),
-      h("button", { class: "btn", type: "button", onclick: () => render("reports") }, "המשך לשלב 4: דיווחים לרשויות"))));
+      h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 3"),
+      h("button", { class: "btn", type: "button", onclick: () => render("reports") }, "המשך לשלב 5: דיווחים לרשויות"))));
 }
 
 
@@ -1259,7 +1268,7 @@ function reportsView() {
   f.year.addEventListener("change", () => { out.replaceChildren(); payments(); });
   load().then(() => { if (!profileOk()) profileBox.open = true; else run(false); });
   payments();
-  return shell("reports", "4. דיווחים לרשויות", h("div", {}, flowBar(4),
+  return shell("reports", "5. דיווחים לרשויות", h("div", {}, flowBar(5),
     h("p", { class: "muted" }, "המערכת מכינה את קובץ הדוח השנתי (טופס 126) מהתלושים. ההגשה לרשות נעשית בידי חשבת השכר. נתוני דמה בלבד."),
     h("section", { class: "rep-card" }, h("div", { class: "rep-head" }, h("h3", {}, "דוח שנתי למס הכנסה (126)"), h("label", { class: "rep-year" }, "שנת מס", f.year)),
       profileBox, tech, h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: () => run(true) }, "הפקת דוח לרשויות"), h("button", { class: "btn ghost", type: "button", onclick: () => run(false) }, "בדיקה מחדש")), out),
@@ -1277,19 +1286,32 @@ function homeView() {
   const step = (n, title, text, label, view) => h("section", { class: "flow-step" },
     h("div", { class: "flow-n", "aria-hidden": "true" }, n), h("h3", {}, title), h("p", {}, text),
     h("button", { class: "btn", type: "button", onclick: () => render(view) }, label));
+  const monthBox = h("div", { class: "panel", "aria-live": "polite" }, h("p", {}, "טוענת את מצב החודש…"));
+  if (state.demo || !state.companyId) monthBox.replaceChildren(h("p", {}, "מצב החודש מוצג אחרי כניסה למשרד."));
+  else api("GET", cp("/month-status")).then(m => {
+    if (!m.employees) { monthBox.replaceChildren(h("p", {}, h("strong", {}, "משרד חדש. "), "עוד אין עובדים. מתחילים בשלב 1: הקמה ראשונה.")); return; }
+    const nm = (x) => String(x.month).padStart(2, "0") + "/" + x.year;
+    if (!m.latest) { monthBox.replaceChildren(h("p", {}, m.employees + " עובדים רשומים. עוד לא חושב אף חודש. החודש הבא: " + nm(m.next) + ".")); return; }
+    monthBox.replaceChildren(
+      h("p", {}, h("strong", {}, "חודש " + nm(m.latest) + ": "), "חושבו " + m.latest.calculated + " תלושים מתוך " + m.employees + " עובדים."),
+      m.latest.missing.length ? h("div", { class: "flags" }, "לא חושבו: " + m.latest.missing.join(", ")) : h("div", { class: "info" }, "כל העובדים חושבו."),
+      h("p", {}, "החודש הבא: " + nm(m.next) + ". מתחילים בשלב 1: המשך מחודש קודם."));
+  }).catch(() => monthBox.replaceChildren(h("p", {}, "מצב החודש לא זמין כרגע.")));
   return shell("home", "תהליך עבודה",
     h("div", {},
       h("p", {}, "כל החישוב נעשה לפי החוק. אין צורך לחשב ידנית: בכל תוצאה מופיעים הסטטוס והמקור שלה (איזה חוק, איזה סעיף), ואת מה שאין לו מקור המערכת לא מנחשת ומסמנת לטיפול ידני."),
+      monthBox,
       h("div", { class: "flow" },
-        step("1", "העלאת אקסל וטופס 101", "קובץ אחד: העובדים, טופס 101 של כל עובד ונתוני החודש. המערכת קולטת וקובעת את הכול.", "להעלאת אקסל", "upload"),
-        step("2", "בדיקה ואישור", "חשבת השכר בודקת את הסכום ואת החוק והסעיף בכל שורה, ומאשרת.", "לבדיקה ואישור", "review"),
-        step("3", "הפקת תלוש לפי תבנית", "מפיקים את התלושים המאושרים בתבנית שנבחרה.", "להפקה", "issue"),
-        step("4", "דיווחים לרשויות", "מכינים קובץ דיווח שנתי (טופס 126) מהתלושים. המערכת בודקת מה חסר, ואת הקובץ מגישה חשבת השכר בעצמה.", "לדיווחים", "reports"))));
+        step("1", "הכנת קובץ", "ממשיכים מחודש קודם (קובץ מוכן עם כל העובדים) או מקימים משרד חדש.", "להכנת קובץ", "prep"),
+        step("2", "העלאה וחישוב", "מעלים את הקובץ, והמערכת מחשבת לפי כרטיס העובד וטופס 101.", "להעלאה", "upload"),
+        step("3", "בדיקה ואישור", "חשבת השכר בודקת את הסכום ואת החוק והסעיף בכל שורה, ומאשרת.", "לבדיקה ואישור", "review"),
+        step("4", "הפקת תלוש", "מפיקים את התלושים המאושרים בתבנית שנבחרה.", "להפקה", "issue"),
+        step("5", "דיווחים לרשויות", "מכינים קובץ דיווח (126, פנסיה). המערכת בודקת מה חסר, ואת הקובץ מגישה חשבת השכר בעצמה.", "לדיווחים", "reports"))));
 }
 
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, prep: prepView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }

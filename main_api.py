@@ -1980,6 +1980,28 @@ def payments_summary_view(company_id: str, year: int = Query(..., ge=2000, le=21
     return {"year": year, "months": payments_summary.summarize(year, stubs)}
 
 
+@app.get("/companies/{company_id}/month-status")
+def month_status(company_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """מצב החודש האחרון שחושב: כמה עובדים וכמה תלושים חושבו, ומי חסר. בלי ת.ז ובלי סכומים."""
+    require_company(company_id, user, db)
+    emps = db.query(Employee).filter(Employee.company_id == company_id).all()
+    out = {"employees": len(emps), "latest": None, "next": None}
+    last = db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year.isnot(None), PaystubV2.month.isnot(None)) \
+             .order_by(PaystubV2.year.desc(), PaystubV2.month.desc()).first()
+    if last:
+        done = {r.emp_key for r in db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == last.year,
+                                                              PaystubV2.month == last.month).all()}
+        missing = sorted(unseal(db, company_id, e.payload_enc)["full_name"] for e in emps if e.id_hash not in done)
+        out["latest"] = {"year": last.year, "month": last.month, "calculated": len(emps) - len(missing), "missing": missing}
+        out["next"] = {"year": last.year + 1, "month": 1} if last.month == 12 else {"year": last.year, "month": last.month + 1}
+    else:
+        t = datetime.date.today()
+        out["next"] = {"year": t.year, "month": t.month}
+    audit(db, user.id, company_id, "month_status", "report", None, f"employees={len(emps)}")
+    db.commit()
+    return out
+
+
 @app.get("/companies/{company_id}/month-sheet")
 def month_sheet(company_id: str, year: Optional[int] = None, month: Optional[int] = None,
                 user: User = Depends(current_user), db: Session = Depends(get_db)):
