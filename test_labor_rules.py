@@ -412,3 +412,18 @@ class DailyOvertimeThresholdByLaw(unittest.TestCase):
     def test_five_day_week_not_covered_is_manual(self):
         r = lr.daily_overtime_threshold_by_law(5)
         self.assertIsNone(r["value"]); self.assertEqual(r["status"], MANUAL)
+
+
+class TravelCap(unittest.TestCase):
+    def test_cap(self):
+        r = lr.travel_reimbursement_cap(20)
+        self.assertEqual(r["value"], D("452.00"))
+        self.assertEqual(r["status"], BY_LAW)
+
+    def test_one_way_and_employer_transport(self):
+        r = lr.travel_reimbursement_cap(20, one_way_days=2, employer_transport_days=3)
+        self.assertEqual(r["value"], D("22.60") * 15 + D("11.30") * 2)
+
+    def test_bad_days(self):
+        with self.assertRaises(ValueError):
+            lr.travel_reimbursement_cap(5, one_way_days=4, employer_transport_days=3)
