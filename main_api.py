@@ -1742,6 +1742,12 @@ COLUMN_MAP = {
     "life_insurance": ["life_insurance", "ביטוח חיים"],
     "tax_mode": ["tax_mode", "שיטת מס"],
     "manual_income_tax": ["manual_income_tax", "מס הכנסה ידני"],
+    # מצטבר מתחילת השנה עד החודש הקודם (למעבר באמצע שנה ממערכת אחרת). אופציונלי; בלעדיו נדרש שהחודש הקודם יחושב כאן
+    "prev_cum_taxable": ["prev_cum_taxable", "מצטבר קודם: הכנסה חייבת"],
+    "prev_cum_tax": ["prev_cum_tax", "מצטבר קודם: מס"],
+    "prev_cum_deposits": ["prev_cum_deposits", "מצטבר קודם: הפקדות"],
+    "prev_cum_life": ["prev_cum_life", "מצטבר קודם: ביטוח חיים"],
+    "prev_cum_ni_base": ["prev_cum_ni_base", "מצטבר קודם: שכר לביטוח לאומי"],
 }
 
 
@@ -2132,7 +2138,13 @@ async def upload_excel_card(
         raise HTTPException(400, "יותר מדי שורות (מעל 2000)")
 
     results, errors = [], []
-    for i, row in enumerate(rows, start=2):
+
+    def _ym(item):                      # מצטבר דורש סדר כרונולוגי: ממיינים לפי שנה וחודש (שורות לא תקינות נשארות בסוף)
+        try:
+            return (int(pick(item[1], "year", 0)), int(pick(item[1], "month", 0)))
+        except (TypeError, ValueError):
+            return (9999, 99)
+    for i, row in sorted(enumerate(rows, start=2), key=_ym):
         try:
             id_number = str(pick(row, "emp_id_number", "")).strip()
             if not id_number:
@@ -2152,7 +2164,9 @@ async def upload_excel_card(
                 base_salary=float(base) if base is not None else None,
                 worked=_txt(pick(row, "worked")), vacation=_txt(pick(row, "vacation")),
                 sick=_txt(pick(row, "sick")), payment=_txt(pick(row, "payment")),
-                regular_hour_value=float(pick(row, "regular_hour_value")) if pick(row, "regular_hour_value") is not None else None)
+                regular_hour_value=float(pick(row, "regular_hour_value")) if pick(row, "regular_hour_value") is not None else None,
+                **{k: float(pick(row, k)) for k in ("prev_cum_taxable", "prev_cum_tax", "prev_cum_deposits",
+                                                    "prev_cum_life", "prev_cum_ni_base") if pick(row, k) is not None})
             out = calculate_from_card(company_id, emp.id, body, user, db)
             results.append(out)
         except HTTPException as e:
