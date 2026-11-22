@@ -39,7 +39,7 @@ input[type=checkbox],input[type=radio]{inline-size:1.2rem;block-size:1.2rem;min-
 summary>input[type=checkbox]{margin-inline-end:10px}
 label>input[type=checkbox],label>input[type=radio]{order:-1}
 label:has(>input[type=checkbox]),label:has(>input[type=radio]){display:flex;flex-direction:row;align-items:center;gap:10px}
-ul.pick{list-style:none;padding:0;margin:8px 0;display:grid;gap:8px}
+table.tot{width:100%;border-collapse:collapse;margin:6px 0 12px}table.tot th,table.tot td{border:1px solid var(--line,#d5dde3);padding:6px 8px;text-align:center}ul.pick{list-style:none;padding:0;margin:8px 0;display:grid;gap:8px}
 ul.pick li label{padding:10px 14px;border:1px solid var(--line);border-radius:var(--r);background:#fff;cursor:pointer}
 summary{display:list-item;line-height:1.6}
 .pform{gap:8px;margin-block-start:8px}.pform:not([hidden]){display:grid}
@@ -934,10 +934,24 @@ function reviewView() {
     const rows = all.filter(p => periodOf(p) === sel.value);
     const okRows = rows.filter(slipOk);
     const cnt = rows.filter(p => state.flow.approved[flowKey(p)]).length;
+    const sum = (f) => rows.reduce((a, p) => a + (typeof f(p) === "number" ? f(p) : 0), 0);
+    const missing = (f) => rows.filter(p => f(p) == null).length;
+    const tot = [["ברוטו", p => p.gross], ["מס הכנסה", p => p.income_tax], ["ביטוח לאומי", p => p.national_insurance], ["מס בריאות", p => p.health],
+      ["פנסיה עובד", p => p.pension_employee], ["נטו", p => p.net]];
+    const totals = h("table", { class: "tot" }, h("thead", {}, h("tr", {}, tot.map(([t]) => h("th", {}, t)))),
+      h("tbody", {}, h("tr", {}, tot.map(([, f]) => h("td", {}, fmt(sum(f)) + (missing(f) ? " (חסר ב-" + missing(f) + ")" : ""))))));
+    const prevOf = (p) => {
+      const pm = p.month === 1 ? 12 : p.month - 1, py = p.month === 1 ? p.year - 1 : p.year;
+      return all.find(q => q.year === py && q.month === pm && (p.employee_id ? q.employee_id === p.employee_id : q.emp_id_number === p.emp_id_number));
+    };
+    const dlt = (cur, prev) => (typeof cur === "number" && typeof prev === "number") ? ((cur - prev >= 0 ? "+" : "") + fmt(cur - prev)) : "אין נתון";
+    const reviewed = h("input", { type: "checkbox", id: "rev-all", "aria-label": "עברתי על כל התלושים" });
     box.replaceChildren(
       h("p", {}, "בחודש " + sel.value + ": " + rows.length + " תלושים, " + okRows.length + " ללא סעיפים פתוחים, " + cnt + " אושרו."),
+      h("p", { class: "muted" }, "סיכום החודש (חייב להתאים לדוחות):"), totals,
       h("div", { class: "actions" },
-        h("button", { class: "btn", type: "button", onclick: () => { okRows.forEach(p => state.flow.approved[flowKey(p)] = true); draw(); } }, "אישור כל התלושים התקינים"),
+        h("label", { class: "check" }, reviewed, h("span", {}, "עברתי על כל התלושים והסכומים")),
+        h("button", { class: "btn", type: "button", onclick: () => { if (!reviewed.checked) { reviewed.focus(); return; } okRows.forEach(p => state.flow.approved[flowKey(p)] = true); draw(); } }, "אישור כל התלושים התקינים"),
         h("button", { class: "btn ghost", type: "button", onclick: () => { rows.forEach(p => delete state.flow.approved[flowKey(p)]); draw(); } }, "ביטול כל האישורים"),
         cnt ? h("button", { class: "btn", type: "button", onclick: () => render("issue") }, "המשך לשלב 3: הפקה (" + cnt + ")") : null),
       ...rows.map(p => {
@@ -947,7 +961,10 @@ function reviewView() {
           onchange: () => { if (cb.checked) state.flow.approved[flowKey(p)] = true; else delete state.flow.approved[flowKey(p)]; draw(); } });
         return h("details", { class: "card" },
           h("summary", {}, cb, h("span", {}, (p.emp_name || "") + " | ברוטו: " + fmt(p.gross) + " | נטו: " + (p.net == null ? "לא חושב" : fmt(p.net)) +
-            (ok ? "" : " | נדרש טיפול ידני: לא ניתן לאשר"))), slipView(p));
+            (ok ? "" : " | נדרש טיפול ידני: לא ניתן לאשר"))),
+          (() => { const pv = prevOf(p); return h("p", { class: "muted" }, pv
+            ? "לעומת " + periodOf(pv) + ": ברוטו " + dlt(p.gross, pv.gross) + " | מס " + dlt(p.income_tax, pv.income_tax) + " | נטו " + dlt(p.net, pv.net)
+            : "אין תלוש לחודש הקודם להשוואה"); })(), slipView(p));
       }));
   };
   sel.addEventListener("change", draw); draw(); drawFail();
