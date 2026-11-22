@@ -1966,6 +1966,64 @@ def report_pension_file(company_id: str, body: ReportPensionIn, user: User = Dep
     return Response(content=buf.getvalue(), media_type="application/zip", headers=hdr)
 
 
+class MonthlyPackageIn(BaseModel):
+    year: int = Field(..., ge=2000, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    employee_ids: List[str] = Field(..., min_length=1, max_length=500)   # רק עובדים שחשבת השכר אישרה
+    template: Optional[str] = Field(None, pattern="^[a-z0-9_]{1,40}$")
+    employer_address: Optional[str] = None
+    env: str = Field("test", pattern="^(test|production)$")
+    value_date: Optional[datetime.date] = None
+    asmachta: Optional[str] = Field(None, max_length=50)
+
+
+@app.post("/companies/{company_id}/reports/monthly-package")
+def monthly_package(company_id: str, body: MonthlyPackageIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """חבילה חודשית אחת אחרי אישור: תלושים, קובץ פנסיה, סיכום העברות ותשלומים לרשויות, והסבר. לא שולח ולא משלם דבר."""
+    require_company(company_id, user, db, "write")
+    import io, zipfile, monthly_package
+    zbuf = io.BytesIO()
+    drafts, skipped, stubs = [], [], []
+    with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as z:
+        for i, eid in enumerate(body.employee_ids, 1):
+            try:
+                emp, d = get_employee(db, company_id, eid)
+                pin = PayslipIn(year=body.year, month=body.month, employer_address=body.employer_address,
+                                approve=True, template=body.template)
+                resp = payslip_pdf(company_id, eid, pin, user, db)
+            except HTTPException as e:
+                skipped.append(f"עובד {i}: {e.detail}")
+                continue
+            if resp.headers.get("X-Payslip-Draft") == "true":
+                drafts.append(d["full_name"])
+            z.writestr(f"payslips/{i:03d}-{body.year}-{body.month:02d}.pdf", resp.body)
+            key = emp_key(company_id, d["id_number"])
+            row = (db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.emp_key == key,
+                                              PaystubV2.year == body.year, PaystubV2.month == body.month)
+                   .order_by(PaystubV2.created_at.desc()).first())
+            if row:
+                stubs.append(unseal(db, company_id, row.payload_enc))
+        if not stubs:
+            raise HTTPException(422, "אין תלושים מאושרים להפקה בחודש הזה. " + "; ".join(skipped))
+        xlsx, info = monthly_package.build_workbook(body.year, body.month, stubs)
+        z.writestr("summary.xlsx", xlsx)
+        try:
+            files, issues, ok = _report_pension(db, company_id, ReportPensionIn(year=body.year, month=body.month, env=body.env,
+                                                                               value_date=body.value_date, asmachta=body.asmachta))
+            for f in files:
+                z.writestr("pension/" + f["name"], f["xml"].encode("utf-8"))
+            pen = (f"{len(files)} קבצים" + ("" if ok else " (טיוטה: חסרים שדות חובה, ראו בדיקה במסך הדיווחים)")) if files else "לא הופק (אין נתוני פנסיה)"
+        except HTTPException as e:
+            pen = "לא הופק: " + str(e.detail)
+        z.writestr("README.txt", monthly_package.build_readme(body.year, body.month, info, drafts, pen, skipped).encode("utf-8"))
+    audit(db, user.id, company_id, "monthly_package", "report", None,
+          f"{body.month:02d}/{body.year} employees={info['employees']} drafts={len(drafts)} skipped={len(skipped)}")
+    db.commit()
+    return Response(content=zbuf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="package-{body.year}-{body.month:02d}.zip"',
+                             "X-Package-Drafts": str(len(drafts)), "X-Package-Skipped": str(len(skipped))})
+
+
 @app.get("/companies/{company_id}/payments-summary")
 def payments_summary_view(company_id: str, year: int = Query(..., ge=2000, le=2100),
                           user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -1994,6 +2052,11 @@ def month_status(company_id: str, user: User = Depends(current_user), db: Sessio
         missing = sorted(unseal(db, company_id, e.payload_enc)["full_name"] for e in emps if e.id_hash not in done)
         out["latest"] = {"year": last.year, "month": last.month, "calculated": len(emps) - len(missing), "missing": missing}
         out["next"] = {"year": last.year + 1, "month": 1} if last.month == 12 else {"year": last.year, "month": last.month + 1}
+        import monthly_package, payments_summary
+        out["deadlines"] = [
+            {"label": "תשלום שכר לעובדים", "date": monthly_package.wage_deadline(last.year, last.month), "source": "חוק הגנת השכר"},
+            {"label": "דיווח ותשלום ביטוח לאומי (102)", "date": payments_summary.btl_deadline(last.year, last.month), "source": "אתר ביטוח לאומי"},
+            {"label": "מס הכנסה, פנסיה והשתלמות", "date": None, "source": "נדרש טיפול ידני (אין מקור ראשוני)"}]
     else:
         t = datetime.date.today()
         out["next"] = {"year": t.year, "month": t.month}

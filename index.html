@@ -1056,6 +1056,30 @@ function reviewView() {
     h("label", {}, "חודש", sel), failWrap, box));
 }
 
+/* ---------- חבילה חודשית: תלושים + פנסיה + סיכום העברות ותשלומים, בלחיצה אחת אחרי אישור ---------- */
+function pkgPanel(approved) {
+  const out = h("div", { "aria-live": "polite" });
+  const periods = [...new Set(approved.map(periodOf))];
+  const btn = h("button", { class: "btn", type: "button", onclick: async () => {
+    if (periods.length !== 1) { out.replaceChildren(h("div", { class: "err", role: "alert" }, "החבילה מופקת לחודש אחד בכל פעם. נבחרו כמה חודשים: " + periods.join(", "))); return; }
+    if (state.demo) { out.replaceChildren(h("div", { class: "err", role: "alert" }, "ההפקה זמינה אחרי כניסה למשרד. במצב הדוגמה אין קבצים אמיתיים.")); return; }
+    btn.disabled = true; out.replaceChildren(h("p", {}, "מכינה חבילה…"));
+    try {
+      const p0 = approved[0];
+      const res = await fetch(state.api + cp("/reports/monthly-package"), { method: "POST",
+        headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" },
+        body: JSON.stringify({ year: p0.year, month: p0.month, employee_ids: approved.map(p => p.employee_id).filter(Boolean) }) });
+      if (!res.ok) { let m = "נכשל (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+      const url = URL.createObjectURL(await res.blob()); const a = h("a", { href: url, download: "package-" + p0.year + "-" + String(p0.month).padStart(2, "0") + ".zip" });
+      document.body.append(a); a.click(); a.remove();
+      const dr = Number(res.headers.get("X-Package-Drafts") || 0), sk = Number(res.headers.get("X-Package-Skipped") || 0);
+      out.replaceChildren(h("div", { class: "info" }, "החבילה ירדה. בפנים: תלושים, סיכום העברות ותשלומים, קובץ פנסיה (אם יש נתונים) והסבר."),
+        (dr || sk) ? h("div", { class: "flags" }, (dr ? dr + " תלושים הופקו כטיוטה. " : "") + (sk ? sk + " עובדים לא נכללו. " : "") + "הפרטים בקובץ ההסבר שבחבילה.") : null);
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+    btn.disabled = false; } }, "הפקת חבילה חודשית (" + approved.length + " עובדים)");
+  return h("div", { class: "panel" }, h("p", {}, h("strong", {}, "חבילה חודשית: "), "קובץ אחד עם התלושים של המאושרים, קובץ הפנסיה, סיכום העברות לעובדים ותשלומים לרשויות, והסבר. המערכת לא שולחת ולא משלמת דבר."), btn, out);
+}
+
 function issueView() {
   const approved = state.flow.results.filter(p => state.flow.approved[flowKey(p)]);
   const picked = {}; approved.forEach(p => picked[flowKey(p)] = true);
@@ -1109,6 +1133,7 @@ function issueView() {
     approved.length ? h("div", {}, h("p", {}, approved.length + " תלושים מאושרים. מסמנים למי להפיק."), listBox, h("label", {}, "תבנית", tpl), h("label", {}, "כתובת המעסיק (מופיעה בכל התלושים; חובה בתלוש)", addr),
       h("div", { class: "actions" }, h("button", { class: "btn", type: "button", onclick: make }, "הפקת התלושים המאושרים")), out)
       : h("div", { class: "empty" }, "אין תלושים מאושרים. אישור נעשה בשלב 3."),
+    approved.length ? pkgPanel(approved) : null,
     h("div", { class: "actions" },
       h("button", { class: "btn ghost", type: "button", onclick: () => render("review") }, "חזרה לשלב 3"),
       h("button", { class: "btn", type: "button", onclick: () => render("reports") }, "המשך לשלב 5: דיווחים לרשויות"))));
@@ -1295,6 +1320,7 @@ function homeView() {
     monthBox.replaceChildren(
       h("p", {}, h("strong", {}, "חודש " + nm(m.latest) + ": "), "חושבו " + m.latest.calculated + " תלושים מתוך " + m.employees + " עובדים."),
       m.latest.missing.length ? h("div", { class: "flags" }, "לא חושבו: " + m.latest.missing.join(", ")) : h("div", { class: "info" }, "כל העובדים חושבו."),
+      h("ul", {}, (m.deadlines || []).map(d => h("li", {}, d.label + ": " + (d.date ? d.date.split("-").reverse().join("/") + " (" + d.source + ")" : d.source)))),
       h("p", {}, "החודש הבא: " + nm(m.next) + ". מתחילים בשלב 1: המשך מחודש קודם."));
   }).catch(() => monthBox.replaceChildren(h("p", {}, "מצב החודש לא זמין כרגע.")));
   return shell("home", "תהליך עבודה",
