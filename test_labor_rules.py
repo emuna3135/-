@@ -135,10 +135,10 @@ class Recreation(unittest.TestCase):
         self.assertEqual(lr.recreation_reduction_type(3075, "0.5"), "partial")
         self.assertEqual(lr.recreation_reduction_type(3076, "0.5"), "full")
 
-    def test_recreation_official_source_is_by_law(self):
-        # טבלת הימים: הכנסת, מרכז המחקר והמידע, לוח 1 (20.1.2025) - מקור רשמי
-        self.assertEqual(lr.SOURCES["recreation"][0], "רשמי")
-        self.assertEqual(lr.recreation_pay_2025(1)["status"], BY_LAW)
+    def test_recreation_days_table_is_manual_until_primary_source(self):
+        # טבלת הימים: אין מקור ראשוני (נוסח הצו/ההסכם) - מקור משני בלבד -> נדרש טיפול ידני
+        self.assertEqual(lr.SOURCES["recreation"][0], "משני")
+        self.assertEqual(lr.recreation_pay_2025(1)["status"], MANUAL)
 
     def test_bad_reduction(self):
         self.assertIsNone(lr.recreation_pay_2025(1, reduction="odd")["value"])
@@ -362,7 +362,7 @@ class AnnualLeaveFiveDay(unittest.TestCase):
         import labor_rules as lr
         for y in (1, 2, 4, 5):
             r = lr.annual_leave_net_days_five_day_week(y)
-            self.assertEqual((r["value"], r["status"]), (12, lr.BY_LAW), y)
+            self.assertEqual((r["value"], r["status"]), (12, MANUAL), y)   # מקור משני בלבד (הכנסת) -> ידני
         for y in (6, 7, 8):
             r = lr.annual_leave_net_days_five_day_week(y)
             self.assertEqual((r["value"], r["status"]), (17, lr.BY_LAW), y)
