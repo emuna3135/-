@@ -135,10 +135,11 @@ class Recreation(unittest.TestCase):
         self.assertEqual(lr.recreation_reduction_type(3075, "0.5"), "partial")
         self.assertEqual(lr.recreation_reduction_type(3076, "0.5"), "full")
 
-    def test_recreation_days_table_is_manual_until_primary_source(self):
-        # טבלת הימים: אין מקור ראשוני (נוסח הצו/ההסכם) - מקור משני בלבד -> נדרש טיפול ידני
-        self.assertEqual(lr.SOURCES["recreation"][0], "משני")
-        self.assertEqual(lr.recreation_pay_2025(1)["status"], MANUAL)
+    def test_recreation_days_table_is_official(self):
+        # טבלת הימים נקראה מהמקור הרשמי: ילקוט הפרסומים 4689 עמ' 189 (צו הרחבה 1998)
+        self.assertEqual(lr.SOURCES["recreation"][0], "רשמי")
+        self.assertIn("4689", lr.SOURCES["recreation"][1])
+        self.assertEqual(lr.recreation_pay_2025(1)["status"], BY_LAW)
 
     def test_bad_reduction(self):
         self.assertIsNone(lr.recreation_pay_2025(1, reduction="odd")["value"])
