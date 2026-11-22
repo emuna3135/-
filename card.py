@@ -64,6 +64,13 @@ def child_credit_points(tax_year, birth_years, role):
     return total, BY_LAW, note
 
 
+def _sim_note(tax_year, base_note, sim_text):
+    """הערת אימות: האימות מול הסימולטור חל על שנת 2026 בלבד; שנה אחרת: לפי החוק ומסומן כלא נבדק."""
+    if tax_year is None or int(tax_year) in SIMULATOR_YEARS:
+        return base_note + "; " + sim_text
+    return base_note + f"; שנת מס {int(tax_year)}: לפי החוק בלבד. הסימולטור של רשות המסים מאפשר רק את השנה הנוכחית ולכן לא נבדק לשנה זו"
+
+
 def credit_points(is_resident, gender, other_credits_claimed=False, manual_points=None,
                   tax_year=None, child_birth_years=None, parent_role=None):
     """מחזיר (נקודות, סטטוס, הערה). זיכויים מעבר לתושב/ה ולאישה -> הזנה ידנית, פרט לילדים כשנמסרו
@@ -88,9 +95,9 @@ def credit_points(is_resident, gender, other_credits_claimed=False, manual_point
     if not is_resident:
         return None, MANUAL, "לא תושב ישראל: נקודות הזיכוי לא נגזרות אוטומטית"
     if gender == "F":
-        return POINTS_RESIDENT + POINTS_WOMAN_EXTRA, VERIFIED, "תושבת ישראל + אישה (2.25 + 0.5); מאומת מול תלושים וסימולטור רשות המסים"
+        return POINTS_RESIDENT + POINTS_WOMAN_EXTRA, VERIFIED, _sim_note(tax_year, "תושבת ישראל + אישה (2.25 + 0.5)", "מאומת מול תלושים וסימולטור רשות המסים (2026)")
     if gender == "M":
-        return POINTS_RESIDENT, VERIFIED, "תושב ישראל (סעיפים 34, 36): מאומת מול סימולטור רשות המסים (12.11.2026, גבר נשוי, 2.25)"
+        return POINTS_RESIDENT, VERIFIED, _sim_note(tax_year, "תושב ישראל (סעיפים 34, 36)", "מאומת מול סימולטור רשות המסים (12.11.2026, גבר נשוי, 2.25)")
     return None, MANUAL, "מין לא מוגדר: נקודות הזיכוי לא נגזרות אוטומטית"
 
 
@@ -278,7 +285,7 @@ def _points_base(tax_year, is_resident, gender, y):
     noncust = list(y.get("noncustody_birth_years") or [])
     flags = list(y.get("family_flags") or [])
     if not (custody or noncust or flags):
-        return credit_points(is_resident, gender)
+        return credit_points(is_resident, gender, tax_year=tax_year)
     marital = y.get("marital")
     if marital not in MARITAL:
         return None, MANUAL, "נמסרו ילדים או מצב משפחתי מיוחד בלי מצב משפחתי: נדרשת הזנה ידנית של הסך"

@@ -723,6 +723,65 @@ const propsView = () => listView("props", "מסמכים לאישור", "/proposa
    ["נוצר", r => h("span", { class: "num" }, (r.created_at || "").slice(0, 10))]],
   "אין מסמכים. העלאת טופס 101, טופס 106 או הנחיה חדשה תיצור כאן הצעה שממתינה לאישור שלך.",
   (r) => { state.pending = r.id; render("prop"); });
+/* ---------- רשימת בדיקה מלאה לטופס 101: כל שדה, מה נקרא ומה לא, ותיקון ידני שמחשב נקודות מחדש ---------- */
+const F101 = [
+  ["tax_year", "שנת מס", "int"], ["id_number", "תעודת זהות", "text"], ["signed_on", "תאריך חתימה", "date"],
+  ["income_type", "סוג הכנסה", "enum", [["main", "משרה עיקרית"], ["additional", "משרה נוספת"]]],
+  ["other_income", "יש הכנסות אחרות", "bool"], ["other_credits_claimed", "זיכויים נוספים מעבר לבסיס (סעיף ח)", "bool"],
+  ["marital", "מצב משפחתי", "enum", [["single", "רווק/ה"], ["married", "נשוי/אה"], ["divorced", "גרוש/ה"], ["widowed", "אלמן/ה"], ["separated", "פרוד/ה"]]],
+  ["custody_birth_years", "שנות לידה של ילדים בחזקתו/ה", "years"], ["noncustody_birth_years", "שנות לידה של ילדים שלא בחזקתו/ה", "years"],
+  ["family_flags", "מצב משפחתי מיוחד", "flags"],
+  ["aliyah_date", "תאריך עלייה", "date"], ["discharge_date", "תאריך שחרור משירות", "date"], ["soldier_full_service", "שירות מלא", "bool"],
+  ["disabled_children", "ילדים עם מוגבלות", "int"], ["reserve_days_prev_year", "ימי מילואים בשנה הקודמת", "int"],
+  ["alimony_ex_spouse", "מזונות לבן/בת זוג לשעבר", "bool"]];
+function f101Show(def, v) {
+  if (v === undefined || v === null) return null;
+  const [, , kind, opts] = def;
+  if (kind === "bool") return v ? "כן" : "לא";
+  if (kind === "enum") return (opts.find(o => o[0] === v) || [, v])[1];
+  if (kind === "years") return v.length ? v.join(", ") : "אין";
+  if (kind === "flags") return v.length ? v.map(x => (LIFE_OPTS.find(o => o[0] === x) || [, x])[1]).join(", ") : "אין";
+  return String(v);
+}
+function f101Panel(p, reload) {
+  const f = p.fields || {}, editable = p.status === "pending";
+  const cp0 = ((p.validation || {}).checks || {}).credit_points;
+  const unread = F101.filter(d => f[d[0]] === undefined || f[d[0]] === null);
+  const msg = h("div", { "aria-live": "polite" });
+  const rows = F101.map(def => {
+    const [key, label, kind, opts] = def, val = f[key], known = !(val === undefined || val === null);
+    const editor = h("div", { class: "panel", hidden: true });
+    let get;
+    if (kind === "bool") { const s = h("select", {}, h("option", { value: "1" }, "כן (מסומן)"), h("option", { value: "0" }, "לא (לא מסומן)")); s.value = val === false ? "0" : "1"; get = () => s.value === "1"; editor.append(s); }
+    else if (kind === "enum") { const s = h("select", {}, opts.map(o => h("option", { value: o[0] }, o[1]))); if (known) s.value = val; get = () => s.value; editor.append(s); }
+    else if (kind === "int") { const i = h("input", { type: "number", value: known ? val : "" }); get = () => Number(i.value); editor.append(i); }
+    else if (kind === "date") { const i = h("input", { type: "date", value: known ? val : "" }); get = () => i.value; editor.append(i); }
+    else if (kind === "years") { const i = h("input", { type: "text", placeholder: "שנות לידה מופרדות בפסיק, ריק = אין", value: known ? val.join(", ") : "" });
+      get = () => i.value.split(",").map(x => x.trim()).filter(Boolean).map(Number); editor.append(i); }
+    else if (kind === "flags") { const boxes = LIFE_OPTS.map(o => { const c = h("input", { type: "checkbox" }); c.checked = known && val.includes(o[0]); return [o[0], c, o[1]]; });
+      get = () => boxes.filter(b => b[1].checked).map(b => b[0]); boxes.forEach(b => editor.append(h("label", { class: "check" }, b[1], b[2]))); }
+    else { const i = h("input", { type: "text", value: known ? val : "" }); get = () => i.value.trim(); editor.append(i); }
+    const save = h("button", { class: "btn", type: "button", onclick: async () => {
+      try { const v = get(); if (kind === "int" && !Number.isFinite(v)) throw new Error("יש להזין מספר");
+        if (kind === "years" && v.some(n => !Number.isInteger(n))) throw new Error("שנות לידה לא תקינות");
+        if (kind === "date" && !v) throw new Error("יש לבחור תאריך");
+        await api("PUT", cp("/proposals/" + p.id + "/fields"), { [key]: v }); toast("נשמר והנקודות חושבו מחדש"); reload(); }
+      catch (e) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)); } } }, "שמירה וחישוב מחדש");
+    editor.append(save);
+    const btn = editable ? h("button", { class: "btn ghost", type: "button", onclick: () => { editor.hidden = !editor.hidden; } }, known ? "תיקון" : "סימון ידני") : null;
+    return h("div", { class: "f101row" },
+      h("div", { style: "display:flex;gap:.6rem;align-items:center;flex-wrap:wrap" },
+        h("strong", {}, label + ": "),
+        known ? h("span", {}, f101Show(def, val)) : h("span", { class: "err", style: "padding:0 .4rem" }, "לא נקרא"), btn),
+      editor);
+  });
+  return h("div", { class: "panel" },
+    h("p", { class: "info" }, "כל שדות טופס 101 מוצגים כאן. בדקי אותם מול המסמך המקורי. שדה שלא נקרא (ריבוע לא מסומן או טקסט לא ברור) מסומן באדום; לחצי \"סימון ידני\" כדי להשלים או \"תיקון\" כדי לשנות, והנקודות מחושבות מחדש."),
+    unread.length ? h("div", { class: "flags", role: "status" }, "לא נקראו " + unread.length + " שדות: " + unread.map(d => d[1]).join(", ")) : h("div", { class: "info" }, "כל השדות נקראו."),
+    cp0 ? h("div", { class: cp0.points == null ? "flags" : "info", role: "status" },
+      cp0.points == null ? "נקודות זיכוי: לא נגזרו אוטומטית. " + cp0.note : "נקודות זיכוי: " + cp0.points + " (" + cp0.status + "). " + cp0.note) : null,
+    msg, ...rows);
+}
 function propView() {
   const box = h("div", {}, h("p", {}, "טוענת…"));
   api("GET", cp("/proposals/" + state.pending)).then(p => {
@@ -738,6 +797,7 @@ function propView() {
       catch (e) { msg.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)); }
     };
     put(box,
+      p.kind === "form101" ? f101Panel(p, () => render("prop")) :
       h("div", { class: "panel" }, h("p", { class: "info" }, "הנתונים שמוצגים כאן נקלטו מהמסמך. בדקי אותם מול המסמך המקורי לפני אישור."),
         h("dl", { class: "fields" }, Object.entries(p.fields || {}).flatMap(([k, val]) => [h("dt", {}, FIELD[k] || k), h("dd", {}, val === true ? "כן" : val === false ? "לא" : String(val))]))),
       errKeys.length ? h("div", { class: "unres", role: "alert" }, h("strong", {}, "שגיאות שחוסמות אישור:"), h("ul", {}, errKeys.map(k => h("li", {}, k + ": " + v.errors[k])))) : null,
