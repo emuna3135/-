@@ -1028,10 +1028,34 @@ function reviewView() {
       return all.find(q => q.year === py && q.month === pm && (p.employee_id ? q.employee_id === p.employee_id : q.emp_id_number === p.emp_id_number));
     };
     const dlt = (cur, prev) => (typeof cur === "number" && typeof prev === "number") ? ((cur - prev >= 0 ? "+" : "") + fmt(cur - prev)) : "אין נתון";
+    /* מה דורש תשומת לב: רשימה ממוינת כדי שהחשבת תבדוק רק את החריגים. סף השינוי הוא בדיקת עקביות פנימית (לא חוק): שינוי ברוטו של יותר מ-20% מהחודש הקודם */
+    const attn = [];
+    rows.forEach(p => {
+      const name = p.emp_name || "";
+      if (!slipOk(p)) attn.push([0, name, "נדרש טיפול ידני: " + ((p.unresolved && p.unresolved.length) ? p.unresolved.join(", ") : (p.net == null ? "הנטו לא חושב" : "יש סעיף ללא מקור"))]);
+      (p.flags || []).forEach(f => attn.push([1, name, f]));
+      const pv = prevOf(p);
+      if (pv && typeof p.gross === "number" && typeof pv.gross === "number" && pv.gross > 0) {
+        const ch = (p.gross - pv.gross) / pv.gross;
+        if (Math.abs(ch) > 0.2) attn.push([2, name, "ברוטו השתנה ב-" + Math.round(ch * 100) + "% לעומת " + periodOf(pv) + " (בדיקת עקביות, לא חוק)"]);
+      }
+    });
+    const pm = (() => { const [m, y] = sel.value.split("/").map(Number); return m === 1 ? [12, y - 1] : [m - 1, y]; })();
+    all.filter(q => q.month === pm[0] && q.year === pm[1]).forEach(q => {
+      const same = rows.some(p => (q.employee_id ? p.employee_id === q.employee_id : p.emp_id_number === q.emp_id_number));
+      if (!same) attn.push([2, q.emp_name || "", "היה לו תלוש בחודש הקודם ואין תלוש החודש (לוודא שסיים עבודה או שחסר בקובץ)"]);
+    });
+    attn.sort((a, b) => a[0] - b[0]);
+    const attnBox = attn.length
+      ? h("div", { class: "card", role: "region", "aria-label": "דורש תשומת לב" },
+          h("p", {}, "דורש תשומת לב (" + attn.length + "): אלה הדברים שכדאי לבדוק קודם. מה שלא מופיע כאן לא סומן כחריג."),
+          h("ul", {}, attn.slice(0, 50).map(([, n, t]) => h("li", {}, (n ? n + ": " : "") + t))),
+          attn.length > 50 ? h("p", { class: "muted" }, "מוצגים 50 הראשונים מתוך " + attn.length) : null)
+      : h("p", { class: "muted" }, "לא נמצאו חריגים לחודש זה לפי הבדיקות של המערכת. עדיין יש לעבור על הסכומים לפני אישור.");
     const reviewed = h("input", { type: "checkbox", id: "rev-all", "aria-label": "עברתי על כל התלושים" });
     box.replaceChildren(
       h("p", {}, "בחודש " + sel.value + ": " + rows.length + " תלושים, " + okRows.length + " ללא סעיפים פתוחים, " + cnt + " אושרו."),
-      h("p", { class: "muted" }, "סיכום החודש (חייב להתאים לדוחות):"), totals,
+      h("p", { class: "muted" }, "סיכום החודש (חייב להתאים לדוחות):"), totals, attnBox,
       h("div", { class: "actions" },
         h("label", { class: "check" }, reviewed, h("span", {}, "עברתי על כל התלושים והסכומים")),
         h("button", { class: "btn", type: "button", onclick: () => { if (!reviewed.checked) { reviewed.focus(); return; } okRows.forEach(p => state.flow.approved[flowKey(p)] = true); draw(); } }, "אישור כל התלושים התקינים"),
