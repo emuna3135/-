@@ -1028,17 +1028,14 @@ function reviewView() {
       return all.find(q => q.year === py && q.month === pm && (p.employee_id ? q.employee_id === p.employee_id : q.emp_id_number === p.emp_id_number));
     };
     const dlt = (cur, prev) => (typeof cur === "number" && typeof prev === "number") ? ((cur - prev >= 0 ? "+" : "") + fmt(cur - prev)) : "אין נתון";
-    /* מה דורש תשומת לב: רשימה ממוינת כדי שהחשבת תבדוק רק את החריגים. סף השינוי הוא בדיקת עקביות פנימית (לא חוק): שינוי ברוטו של יותר מ-20% מהחודש הקודם */
+    /* מה דורש תשומת לב: רשימה ממוינת כדי שהחשבת תבדוק רק את החריגים; לכל שורה כתובה הסיבה המדויקת כפי שהמערכת רשמה אותה */
     const attn = [];
     rows.forEach(p => {
       const name = p.emp_name || "";
-      if (!slipOk(p)) attn.push([0, name, "נדרש טיפול ידני: " + ((p.unresolved && p.unresolved.length) ? p.unresolved.join(", ") : (p.net == null ? "הנטו לא חושב" : "יש סעיף ללא מקור"))]);
-      (p.flags || []).forEach(f => attn.push([1, name, f]));
-      const pv = prevOf(p);
-      if (pv && typeof p.gross === "number" && typeof pv.gross === "number" && pv.gross > 0) {
-        const ch = (p.gross - pv.gross) / pv.gross;
-        if (Math.abs(ch) > 0.2) attn.push([2, name, "ברוטו השתנה ב-" + Math.round(ch * 100) + "% לעומת " + periodOf(pv) + " (בדיקת עקביות, לא חוק)"]);
-      }
+      const manual = Object.entries(p.items || {}).filter(([, v]) => v && (v.status === "נדרש טיפול ידני" || v.value == null));
+      manual.forEach(([k, v]) => attn.push([0, name, (LABELS[k] || k) + ": " + (v.value == null ? "לא חושב. " : "") + "סיבה: " + (v.note || "לא צוינה סיבה במערכת") + " (סטטוס מקור: " + v.status + ")"]));
+      if (!manual.length && !slipOk(p)) attn.push([0, name, p.net == null ? "הנטו לא חושב ואין בתלוש סעיף שמסביר זאת" : "התלוש מסומן כנדרש טיפול ידני: " + ((p.unresolved || []).join(", ") || "לא צוינה סיבה")]);
+      (p.flags || []).forEach(f => attn.push([1, name, "אזהרה: " + f]));
     });
     const pm = (() => { const [m, y] = sel.value.split("/").map(Number); return m === 1 ? [12, y - 1] : [m - 1, y]; })();
     all.filter(q => q.month === pm[0] && q.year === pm[1]).forEach(q => {
