@@ -196,6 +196,7 @@ SCHEMAS = {
         "disabled_children": (lambda v: _clean_int(v, 0, 20), False),
         "alimony_ex_spouse": (_clean_bool, False),
         "locality": (_clean_locality, False),
+        "city": (lambda v: _clean_str(v, 40), False),       # עיר מגורים כפי שנקראה מהטופס (לבדיקה מול רשימת היישובים בלבד)
         "reserve_days_prev_year": (lambda v: _clean_int(v, 0, 366), False),
     },
     KIND_FORM106: {
@@ -278,6 +279,11 @@ def validate(kind, clean, ctx=None, today=None):
             v.errors["id_number"] = "ספרת ביקורת של ת.ז לא תקינה"
         if idn is not None and ctx.get("id_number") not in (None, idn):
             v.errors["id_number"] = "ת.ז בטופס לא תואמת לעובד שנבחר"
+        if clean.get("city"):
+            import places
+            w = places.warning_for(clean["city"])
+            if w:
+                v.warnings.append(w)
         signed = clean.get("signed_on")
         year = clean.get("tax_year")
         if signed:
