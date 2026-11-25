@@ -15,6 +15,7 @@ import termination
 import attendance_pdf
 import components
 import deductions
+import balances
 import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
@@ -1080,6 +1081,33 @@ def save_stub(db: Session, company_id: str, res: dict) -> None:
             company_id=company_id, emp_key=key, year=res["year"], month=res["month"],
             payload_enc=seal(db, company_id, {k: str(v) for k, v in c.items()})))
     db.flush()  # כדי שהחודש הבא באותו קובץ יראה את המצטבר
+
+
+class BalancesIn(BaseModel):
+    kind: str = Field(pattern="^(sick|vacation|recreation)$")
+    year_of_service: int = Field(1, ge=1, le=60)
+    opening: float = Field(0, ge=0)
+    used: float = Field(0, ge=0)
+    month_fractions: List[float] = Field(default_factory=list, max_length=600)
+    five_day_week: bool = False
+    days_worked: Optional[float] = Field(None, ge=0, le=366)
+    continuous_year: bool = True
+
+
+@app.post("/companies/{company_id}/balances")
+def calc_balances(company_id: str, body: BalancesIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "read")
+    try:
+        if body.kind == "sick":
+            r = balances.sick_balance(body.opening, body.month_fractions, body.used)
+        elif body.kind == "vacation":
+            r = balances.vacation_balance(body.year_of_service, body.five_day_week, body.days_worked,
+                                          body.continuous_year, body.opening, body.used)
+        else:
+            r = balances.recreation_balance(body.year_of_service, body.used)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return {"kind": body.kind, **{k: (float(v) if isinstance(v, Decimal) else v) for k, v in r.items()}}
 
 
 @app.post("/companies/{company_id}/calculate-paystub")
