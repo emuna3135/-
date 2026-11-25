@@ -14,6 +14,7 @@ import templating
 import termination
 import attendance_pdf
 import components
+import deductions
 import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
@@ -347,6 +348,7 @@ class PaystubIn(BaseModel):
     components: List[dict] = Field(default_factory=list, max_length=20)
     component_month: dict = Field(default_factory=dict)          # כמויות החודש לרכיבי כמות (למשל ימי נסיעות)
     pension_base_codes: List[str] = Field(default_factory=list, max_length=20)   # רכיבים שרואת החשבון קבעה שנכללים בבסיס הפנסיה
+    fixed_deductions: List[dict] = Field(default_factory=list, max_length=20)   # ניכויים קבועים/הלוואות (deductions.py)
     pension_include_ot: bool = False      # עפ"י רואת חשבון/הסכם: לכלול שעות נוספות בבסיס הפנסיה
     pension_include_bonus: bool = False   # עפ"י רואת חשבון/הסכם: לכלול בונוס בבסיס הפנסיה
 
@@ -394,6 +396,8 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
     pension_base = base + extras_pension \
         + (ot if p.pension_include_ot else Decimal(0)) \
         + (Decimal(str(p.bonus)) if p.pension_include_bonus else Decimal(0))
+    ded = deductions.month_deductions(p.fixed_deductions, p.year, p.month)
+    other_total = Decimal(str(p.other_deductions)) + ded["amount"]
     benefits = {}
     if p.phone_expense > 0:
         benefits["שווי רט\"ן"] = pe.phone_benefit(p.phone_expense, p.phone_employee_share_rate,
@@ -428,7 +432,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         study_fund_employee_rate=p.study_fund_employee_rate,
         life_insurance=p.life_insurance, manual_income_tax=p.manual_income_tax,
         pension_base=pension_base, noncash_benefits=noncash,
-        other_deductions=p.other_deductions,
+        other_deductions=other_total,
         employer_pension_rate=p.employer_pension_rate,
         employer_severance_rate=p.employer_severance_rate,
         employer_study_fund_rate=p.employer_study_fund_rate, weight=p.month_weight,
@@ -457,7 +461,8 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         flags.append("שכר מינימום לתקופה זו לא מאומת במערכת - לבדוק ידנית")
     elif hourly < Decimal(mw[1]):
         flags.append(f"שכר שעתי נמוך משכר המינימום השעתי ({mw[1]} ל-182 שעות) - לבדוק")
-    if p.other_deductions > 0 and Decimal(str(p.other_deductions)) > gross / 4:
+    flags.extend(ded["open"])
+    if other_total > 0 and other_total > gross / 4:
         flags.append("ניכויי רשות מעל רבע מהשכר: חוק הגנת השכר §25(א)(6) מגביל ניכוי חוב על פי התחייבות בכתב "
                      "לרבע משכר העבודה (לבדוק סוג הניכוי; מקדמות לפי §25(א)(7) כפופות לכלל אחר)")
 
@@ -470,6 +475,10 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         "gross": float(pe.r2(gross)), "overtime_pay": float(pe.r2(ot)),
         "taxable": float(pe.r2(taxable)), "bonus": float(p.bonus),
         "benefits": {k: float(v) for k, v in benefits.items()},
+        "fixed_deductions": [{"code": l["code"], "label": l["label"], "kind": l["kind"], "amount": float(l["amount"])}
+                             for l in ded["lines"]],
+        "deduction_balances": [{"code": b["code"], "label": b["label"], "remaining_after": float(b["remaining_after"])}
+                               for b in ded["balances"]],
         "components": [{"code": l["code"], "name": l["name"], "amount": float(l["amount"]), "note": l["note"]}
                        for l in comp_lines],
         "points": p.credit_points if p.tax_mode == "cumulative" else "-",
@@ -1128,6 +1137,7 @@ class EmployeeIn(BaseModel):
     zip: Optional[str] = Field(None, pattern=r"^\d{5}$")
     fixed_components: List[dict] = Field(default_factory=list, max_length=20)   # רכיבי שכר קבועים (components.CATALOG)
     pension_base_codes: List[str] = Field(default_factory=list, max_length=20)   # נקבע ע"י רואת החשבון
+    fixed_deductions: List[dict] = Field(default_factory=list, max_length=20)
     pension_include_ot: bool = False      # נקבע ע"י רואת החשבון/הסכם
     pension_include_bonus: bool = False
 
@@ -1454,6 +1464,7 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         prev_cum_ni_base=body.prev_cum_ni_base,
         components=d.get("fixed_components", []), component_month=body.component_month,
         pension_base_codes=d.get("pension_base_codes", []),
+        fixed_deductions=d.get("fixed_deductions", []),
         pension_include_ot=bool(d.get("pension_include_ot", False)),
         pension_include_bonus=bool(d.get("pension_include_bonus", False)),
         period=body.period or f"{body.month:02d}/{body.year}")
