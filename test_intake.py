@@ -41,3 +41,27 @@ class Classify(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExcelInspect(unittest.TestCase):
+    def _wb(self, sheets):
+        import io
+        from openpyxl import Workbook
+        wb = Workbook(); wb.remove(wb.active)
+        for name, header in sheets.items():
+            ws = wb.create_sheet(name); ws.append(header); ws.append(["x"] * len(header))
+        b = io.BytesIO(); wb.save(b); return b.getvalue()
+
+    def test_employees_workbook(self):
+        import employee_import
+        r = intake.inspect_excel(self._wb({employee_import.SHEET_EMPLOYEES: ["תעודת זהות", "שם"]}))
+        self.assertEqual(r["kind"], "employees_workbook")
+
+    def test_attendance_candidate_headers_only(self):
+        r = intake.inspect_excel(self._wb({"דוח": ["תאריך", "כניסה", "יציאה", "סה\"כ שעות"]}))
+        self.assertEqual(r["kind"], "attendance_candidate")
+        self.assertNotIn("x", sum(r["headers"].values(), []))
+
+    def test_unknown_and_broken(self):
+        self.assertEqual(intake.inspect_excel(self._wb({"a": ["foo", "bar"]}))["kind"], "unknown")
+        self.assertEqual(intake.inspect_excel(b"not excel")["kind"], "unknown")

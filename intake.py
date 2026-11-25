@@ -84,3 +84,36 @@ def classify(data, filename=""):
             return {"kind": "unknown", "reason": "PDF סרוק (בלי טקסט): נא לבחור את סוג הקובץ"}
         return classify_text(text)
     return {"kind": "unknown", "reason": "סוג קובץ לא נתמך (מותר: PDF, אקסל, תמונה)"}
+
+
+# ---------------------------------------------------------------------------
+# אקסל: זיהוי מבנה (בלי לקרוא נתונים). אקסל נוכחות: הקורא ייכתב רק מול דוגמה אמיתית של המשתמשת (כותרות שונות בכל מערכת נוכחות).
+# ---------------------------------------------------------------------------
+ATTENDANCE_HEADERS = ("תאריך", "יום", "כניסה", "יציאה", "שעת כניסה", "שעת יציאה", "סה\"כ", "שעות", "שעות נוספות",
+                      "שעות 100%", "שעות 125%", "שעות 150%", "הפסקה", "חופשה", "מחלה", "היעדרות")
+MAX_HEADERS = 40
+
+
+def inspect_excel(data):
+    """מחזיר {kind: employees_workbook|attendance_candidate|unknown, sheets: [...], headers: {גיליון: [כותרות שורה ראשונה]}}.
+    כותרות בלבד (לא תוכן שורות), כדי לא לחשוף נתונים אישיים. כותרת = עד 40 תווים."""
+    import employee_import
+    from openpyxl import load_workbook
+    try:
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except Exception:
+        return {"kind": "unknown", "reason": "לא ניתן לקרוא את קובץ האקסל", "sheets": [], "headers": {}}
+    sheets, headers = list(wb.sheetnames), {}
+    for name in sheets[:10]:
+        ws = wb[name]
+        first = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+        headers[name] = [str(c).strip()[:40] for c in first[:MAX_HEADERS] if c is not None and str(c).strip()]
+    if employee_import.SHEET_EMPLOYEES in sheets:
+        return {"kind": "employees_workbook", "reason": "חוברת הקמת עובדים (גיליון 'עובדים')", "sheets": sheets, "headers": headers}
+    for name, hs in headers.items():
+        hits = {h for h in hs for m in ATTENDANCE_HEADERS if m == h or m in h}
+        if len(hits) >= 3:
+            return {"kind": "attendance_candidate",
+                    "reason": "נראה כדוח נוכחות אך מבנה העמודות לא נקרא: נדרשת דוגמה אמיתית כדי לכתוב קורא עם אימות סכומים",
+                    "sheets": sheets, "headers": headers}
+    return {"kind": "unknown", "reason": "מבנה אקסל לא מוכר", "sheets": sheets, "headers": headers}

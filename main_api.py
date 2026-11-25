@@ -2134,6 +2134,31 @@ class MasavIn(BaseModel):
     institution_name: str = Field(..., min_length=1, max_length=30)
 
 
+@app.post("/companies/{company_id}/intake")
+async def intake_file(company_id: str, file: UploadFile = File(...),
+                      user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """תיבת העלאה אחת: מזהה את סוג הקובץ ומחזיר לאן להמשיך. לא שומר, לא מחשב ולא שולח לספק חיצוני."""
+    require_company(company_id, user, db, "write")
+    data = await file.read(proposals.MAX_FILE_BYTES + 1)
+    if len(data) > proposals.MAX_FILE_BYTES:
+        raise HTTPException(400, "הקובץ גדול מדי")
+    c = intake.classify(data, file.filename or "")
+    nxt = {"form101": "POST /companies/{id}/proposals/form101 (נדרש employee_id; קריאה אוטומטית רק עם ALLOW_EXTERNAL_AI, אחרת הזנה ידנית)",
+           "attendance": "POST /companies/{id}/parse-hours-pdf (תצוגה מקדימה עם אימות מול שורת הסיכום)",
+           "image": "נא לבחור את סוג המסמך ידנית",
+           "unknown": "נא לבחור את סוג המסמך ידנית"}
+    out = {"kind": c["kind"], "reason": c["reason"], "next": nxt.get(c["kind"])}
+    if c["kind"] == "excel":
+        x = intake.inspect_excel(data)
+        out.update(kind=x["kind"], reason=x["reason"], sheets=x["sheets"], headers=x["headers"])
+        out["next"] = {"employees_workbook": "POST /companies/{id}/employees/upload-excel (חוברת הקמת עובדים)",
+                       "attendance_candidate": "אין עדיין קורא לאקסל נוכחות: יש להעלות דוגמה כדי לבנות קורא עם אימות",
+                       "unknown": "נא לבחור את סוג המסמך ידנית"}.get(x["kind"])
+    audit(db, user.id, company_id, "intake", "file", None, f"kind={out['kind']}")
+    db.commit()
+    return out
+
+
 @app.post("/companies/{company_id}/masav")
 def masav_file(company_id: str, body: MasavIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """קובץ זיכוי שכר במבנה מס"ב מהתלושים השמורים של החודש. המערכת לא משדרת: החשב מעלה את הקובץ בעצמו."""
