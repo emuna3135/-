@@ -889,3 +889,9 @@ card.points_from_form101 (עטיפה): ללא נתוני משפחה = בסיס; 
 - נסיעות: נבדק https://www.malam-payroll.com/wp-content/uploads/2026/08/nesiot16.8.26.pdf (משני) - הוא רק עותק של י"פ 7319 (2016), 22.60, ללא עדכון. לא נמצא צו מאוחר ב-gov.il. התקרה 22.60 נשארת.
 - רשות שוק ההון: חוזר גופים מוסדיים 2026-9-2 (26.3.2026), https://www.gov.il/BlobFolder/dynamiccollectorresultitem/regulation-legislation-2026/he/Regulation-2026-9-2-the-manner-of-depositing-payments-to-the-provident-fund-draft-PDF.pdf - חוזר רשמי על אופן הפקדת תשלומים (דוחה מועדי תוקף; סעיף 10: הפקדה עד המוקדם מבין 7 ימי עסקים מתשלום המשכורת או 15 יום מתום החודש). אינו מזכיר עובדים זרים. לא נמצא חוזר 05/2026 על עובדים זרים.
 - רשות המסים: https://www.gov.il/he/service/income-tax-calculator - דף ריק (הסימולטור נטען בדפדפן); אין בו כללי תושב חוץ/שני מעסיקים. נדרש להוריד ידנית הוראות ניכוי מס במקור מ-gov.il.
+
+## סבב חיפוש נוסף 25.11.2026 (ללא שינוי קוד)
+- 12 ימי חופשה: חיפוש בדומיינים של הכנסת וgov.il להצעות חוק 613 (4.1.2016, עמ' 32) - לא הוחזר הקובץ. התוצאות היו רק חוברות לא קשורות (1951, 1097/2016, מרכז המחקר 2021). נשאר "משני"/ידני. נדרש להעלות מאתר הכנסת.
+- נסיעות: חיפוש ב-gov.il (מאגר צווי הרחבה https://www.gov.il/he/Departments/dynamiccollectors/extension-orders) - לא נמצא צו מאוחר מי"פ 7319. לא נקרא תוכן המאגר עצמו. התקרה 22.60 נשארת.
+- רשות שוק ההון: לא הופיע חוזר 05/2026 או 09/2026 על עובדים זרים. הופיע רק https://www.gov.il/BlobFolder/dynamiccollectorresultitem/regulation-legislation310/he/Regulation-2026-8-2-P.pdf (לא נקרא, לא ידוע אם קשור).
+- רשות המסים: הופיעו חוזר 02/2026 https://www.gov.il/BlobFolder/policy/inst-02-2026/he/IncomeTax_inst-02-2026.pdf (אישורי ניכוי במקור) ולוח עזר 2026 https://www.gov.il/BlobFolder/generalpage/income-tax-monthly-deductions-booklet/he/generalInformation_income-tax-monthly-deductions-booklet_monthly-deductions-booklet-2026.pdf - לא נקראו; מועמדים לסבב הבא לתושב חוץ/שני מעסיקים.
