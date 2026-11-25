@@ -465,6 +465,7 @@ def recuperation_days(seniority_year):
 
 
 RECUPERATION_DAY_2025_MAX = D("471.4")
+RECUPERATION_DAY_2026 = D("451.50")
 
 
 def recuperation_partial_reduction(entitled_days, avg_monthly_salary_oct_dec_2024, job_fraction="1"):
@@ -485,8 +486,15 @@ def recuperation_pay(year, entitled_days, job_fraction="1", period_fraction="1",
     reduced_partial חייב להיקבע במפורש (ראו recuperation_partial_reduction); None = הכרעה ידנית.
     רק 2025: שנים אחרות לא מחושבות. החישוב ברוטו.
     """
+    if year == 2026:
+        # שנת ההבראה 2026: 451.50 ליום, סעיף 3 לצו ההרחבה (הסכם 7011/2026), ילקוט הפרסומים 14863, 18.8.2026 (נקרא מילה במילה).
+        # ההפחתה של 2025 הייתה בחוק שכותרתו "בשנת 2025" ואינה חלה כאן. הגדרת "שנת הבראה" (12 החודשים שלפני עדכון המחיר, 1.7-30.6):
+        # גילוי דעת הממונה על יחסי עבודה (gov.il, עודכן 8.9.2026) - הנוסח המלא של הסכם 7011/2026 לא נקרא.
+        frac = D(str(job_fraction)) * D(str(period_fraction))
+        return item(r2(D(str(entitled_days)) * RECUPERATION_DAY_2026 * frac), BY_LAW,
+                    "ימים x 451.50 x חלקיות; צו הרחבה סעיף 3 (י\"פ 14863, 18.8.2026), ללא הפחתה. שנת ההבראה לפי גילוי דעת הממונה; נוסח הסכם 7011/2026 לא נקרא; לא כולל הפרשים למי ששולם לו 418")
     if year != 2025:
-        return item(None, MANUAL, "תעריף וכללי הפחתה מוגדרים רק ל-2025")
+        return item(None, MANUAL, "תעריף וכללי הפחתה מוגדרים רק ל-2025 ו-2026")
     if reduced_partial is None:
         return item(None, MANUAL, "יש להכריע אם העובד בהפחתה חלקית (פחות משישה ימי הבראה ושכר ממוצע 10-12/2024 עד 6,150, כפול חלקיות המשרה)")
     price = RECUPERATION_DAY_2025 if day_price is None else min(max(D(str(day_price)), RECUPERATION_DAY_2025), RECUPERATION_DAY_2025_MAX)

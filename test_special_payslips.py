@@ -40,9 +40,10 @@ class Recuperation(unittest.TestCase):
         self.assertIsNone(r["recuperation_gross"]["value"])
         self.assertTrue(r["open"])
 
-    def test_2026_not_computed(self):
+    def test_2026_computed(self):
         r = sp.recuperation_month(2026, 7, "10000", 3, False)
-        self.assertIsNone(r["recuperation_gross"]["value"])
+        self.assertEqual(r["recuperation_gross"]["value"], D("2709.00"))   # 6 ימים x 451.50
+        self.assertEqual(r["recuperation_gross"]["status"], "עפ\"י החוק")
 
 
 if __name__ == "__main__":

@@ -184,7 +184,10 @@ class Benefits(unittest.TestCase):
         self.assertEqual(e.recuperation_pay(2025, 5, reduced_partial=False)["value"], D("1672"))  # רנה
         self.assertEqual(e.recuperation_pay(2025, 5, reduced_partial=True)["value"], D("1881"))  # ליבי (תרגיל)
         self.assertIsNone(e.recuperation_pay(2025, 5)["value"])
-        self.assertIsNone(e.recuperation_pay(2026, 5, reduced_partial=False)["value"])
+        self.assertEqual(e.recuperation_pay(2026, 5)["value"], D("2257.50"))   # 5 x 451.50
+        self.assertEqual(e.recuperation_pay(2026, 5)["status"], e.BY_LAW)
+        self.assertEqual(e.recuperation_pay(2026, 6, job_fraction="0.5")["value"], D("1354.50"))
+        self.assertIsNone(e.recuperation_pay(2027, 5)["value"])
 
     def test_recuperation_second_year(self):
         d = e.recuperation_days(2)["value"]                      # דנה: 6 ימים
