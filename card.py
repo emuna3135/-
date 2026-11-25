@@ -101,7 +101,7 @@ def credit_points(is_resident, gender, other_credits_claimed=False, manual_point
     return None, MANUAL, "מין לא מוגדר: נקודות הזיכוי לא נגזרות אוטומטית"
 
 
-def tax_mode(present, income_type="main", other_income=False, other_income_credit=None):
+def tax_mode(present, income_type="main", other_income=False, other_income_credit=None, salary_kind="monthly"):
     """
     מחזיר (שיטה, הערה). 'cumulative' = ניכוי לפי לוח הניכויים; 'no_coordination' = שיעור מרבי (47%).
     other_income_credit (סעיף "הכנסות אחרות" בטופס 101, הערות 7-8): 'here' = "אבקש לקבל נקודות זיכוי ומדרגות מס כנגד הכנסתי זו"
@@ -112,6 +112,16 @@ def tax_mode(present, income_type="main", other_income=False, other_income_credi
         return "no_coordination", "אין טופס 101 חתום לשנה: ניכוי בשיעור המרבי (תקנה 5(א))"
     if income_type == "additional":
         return "no_coordination", "משרה נוספת: ניכוי בשיעור המרבי (תקנה 5(א)) אלא אם הוגש אישור תיאום מס"
+    # טופס 101, דברי הסבר 4-5 (רשות המסים, כללים והוראות לשנת 2026 מ-12.1.2026, נקרא מילה במילה):
+    # משכורת חלקית: מס בשיעור מירבי אלא אם זו הכנסה יחידה (אז לפי לוח הניכויים). שכר עבודה (עובד יומי): לפי לוח יומי אלא אם זו הכנסה יחידה.
+    if salary_kind == "partial":
+        if other_income:
+            return "no_coordination", "משכורת חלקית עם הכנסה אחרת: ניכוי בשיעור מירבי (טופס 101, דברי הסבר 4)"
+        return "cumulative", "משכורת חלקית שהיא הכנסה יחידה: ניכוי לפי לוח הניכויים (טופס 101, דברי הסבר 4)"
+    if salary_kind == "daily":
+        return "manual", "שכר עבודה (עובד יומי): הלוח היומי לא מחובר לחישוב מהכרטיס (טופס 101, דברי הסבר 5); נדרש הזנה ידנית של המס"
+    if salary_kind != "monthly":
+        return "manual", "סוג משכורת לא מוכר בטופס 101"
     if other_income:
         if other_income_credit == "here":
             return "cumulative", "הוצהרה הכנסה אחרת ובחרו נקודות זיכוי ומדרגות כנגדה (טופס 101, הערות 7-8): ניכוי לפי לוח הניכויים"

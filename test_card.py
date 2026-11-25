@@ -38,6 +38,11 @@ class Mode(unittest.TestCase):
         self.assertEqual(card.tax_mode(True, "main", True)[0], "no_coordination")
         self.assertEqual(card.tax_mode(True, "main", True, "elsewhere")[0], "no_coordination")
         self.assertEqual(card.tax_mode(True, "main", True, "here")[0], "cumulative")
+        # משכורת חלקית / יומי: טופס 101, דברי הסבר 4-5 (כללים והוראות 2026)
+        self.assertEqual(card.tax_mode(True, "main", False, None, "partial")[0], "cumulative")
+        self.assertEqual(card.tax_mode(True, "main", True, "here", "partial")[0], "no_coordination")
+        self.assertEqual(card.tax_mode(True, "main", False, None, "daily")[0], "manual")
+        self.assertEqual(card.tax_mode(False, "main", False, None, "daily")[0], "no_coordination")   # בלי 101: מרבי
 
 
 if __name__ == "__main__":

@@ -1102,6 +1102,7 @@ class EmployeeIn(BaseModel):
 class Form101In(BaseModel):
     signed_on: Optional[datetime.date] = None     # תאריך חתימה. ריק = אין 101 לשנה
     income_type: str = Field("main", pattern="^(main|additional)$")
+    salary_kind: str = Field("monthly", pattern="^(monthly|partial|daily)$")   # טופס 101 חלק ד': משכורת חודש / חלקית / שכר עבודה (יומי)
     other_income: bool = False
     other_income_credit: Optional[str] = Field(None, pattern="^(here|elsewhere)$")   # טופס 101 הערות 7-8: here = נקודות זיכוי ומדרגות כנגד הכנסה זו
     other_credits_claimed: bool = False           # סומנו זיכויים מעבר לתושב/ה ואישה
@@ -1379,7 +1380,12 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
     y = unseal(db, company_id, yr_row.payload_enc) if yr_row else None
     present = bool(y and y.get("signed_on"))
     mode, mode_note = card.tax_mode(present, y["income_type"] if y else "main",
-                                    bool(y and y["other_income"]), (y or {}).get("other_income_credit"))
+                                    bool(y and y["other_income"]), (y or {}).get("other_income_credit"),
+                                    (y or {}).get("salary_kind", "monthly"))
+    if mode == "manual":
+        if body.manual_income_tax is None and body.coordination_rate is None:
+            raise HTTPException(422, mode_note)
+        mode = "cumulative"      # המס מוזן ידנית (manual_income_tax) או לפי אישור תיאום
     pts, pts_note = 0.0, ""
     if mode == "cumulative" and body.coordination_rate is None:
         pts, _status, pts_note = card.points_from_form101(body.year, d["is_resident"], d["gender"], y, body.month)
