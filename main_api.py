@@ -13,6 +13,7 @@ import payslip
 import templating
 import termination
 import attendance_pdf
+import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
 import sources_catalog
@@ -2298,6 +2299,20 @@ async def upload_excel_card(
           f"rows={len(rows)} ok={len(results)} errors={len(errors)}")
     db.commit()
     return {"processed": len(results), "errors": errors, "paystubs": results}
+
+
+@app.post("/companies/{company_id}/intake/classify")
+async def intake_classify(company_id: str, file: UploadFile = File(...),
+                          user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """תיבת העלאה אחת: מזהה אם הקובץ הוא טופס 101, דוח נוכחות או אקסל. זיהוי בלבד: לא קורא נתונים ולא שומר דבר."""
+    require_company(company_id, user, db, "write")
+    content = await file.read(10 * 1024 * 1024 + 1)
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "הקובץ גדול מדי (מעל 10MB)")
+    r = intake.classify(content, file.filename or "")
+    audit(db, user.id, company_id, "intake_classify", "file", None, f"kind={r['kind']}")
+    db.commit()
+    return {"filename": file.filename, **r}
 
 
 @app.post("/companies/{company_id}/parse-hours-pdf")
