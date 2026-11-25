@@ -895,3 +895,8 @@ card.points_from_form101 (עטיפה): ללא נתוני משפחה = בסיס; 
 - נסיעות: חיפוש ב-gov.il (מאגר צווי הרחבה https://www.gov.il/he/Departments/dynamiccollectors/extension-orders) - לא נמצא צו מאוחר מי"פ 7319. לא נקרא תוכן המאגר עצמו. התקרה 22.60 נשארת.
 - רשות שוק ההון: לא הופיע חוזר 05/2026 או 09/2026 על עובדים זרים. הופיע רק https://www.gov.il/BlobFolder/dynamiccollectorresultitem/regulation-legislation310/he/Regulation-2026-8-2-P.pdf (לא נקרא, לא ידוע אם קשור).
 - רשות המסים: הופיעו חוזר 02/2026 https://www.gov.il/BlobFolder/policy/inst-02-2026/he/IncomeTax_inst-02-2026.pdf (אישורי ניכוי במקור) ולוח עזר 2026 https://www.gov.il/BlobFolder/generalpage/income-tax-monthly-deductions-booklet/he/generalInformation_income-tax-monthly-deductions-booklet_monthly-deductions-booklet-2026.pdf - לא נקראו; מועמדים לסבב הבא לתושב חוץ/שני מעסיקים.
+
+## סבב חיפוש 25.11.2026 (שלישי, ללא שינוי קוד)
+- 12 ימי חופשה: נבדקו ארבעה קבצי כנסת שהופיעו בחיפוש: fs.knesset.gov.il/20/law/20_ls1_313712.pdf (הצעות חוק ממשלה 31.8.2015), 20_ls1_315302.pdf (שכר מינימום), 20_ls2_320659.pdf (נספח 613 - חיסכון פנסיוני בני זוג), 20_lsr_343167.pdf (ס"ח 7.6.2016). אף אחד אינו הצעת חוק חופשה שנתית. לא נמצא קובץ הצעות חוק 613 מ-4.1.2016. נשאר "משני"/ידני.
+- לוח עזר ניכויים 2026 (רשות המסים, gov.il/BlobFolder/generalpage/income-tax-monthly-deductions-booklet/...monthly-deductions-booklet-2026.pdf) נקרא: אין בו כללים לתושב חוץ כעובד ולא למעסיק נוסף/שני מעסיקים. נשאר ידני; לא לחזור על קובץ זה.
+- רשות שוק ההון: חיפוש ב-gov.il שוב לא הניב חוזר על הפקדות עובדים זרים.
