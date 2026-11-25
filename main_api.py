@@ -329,7 +329,9 @@ class PaystubIn(BaseModel):
     car_gross_weight_kg: Optional[float] = Field(None, gt=0)   # 3,500 ק"ג ומעלה: אין שווי
     credit_points: float = Field(2.25, ge=0)
     locality: Optional[str] = Field(None, max_length=80)      # יישוב מוטב §11 (שם כמו בלוח העזר 2026)
-    tax_mode: str = Field("cumulative", pattern="^(cumulative|no_coordination|fixed_rate)$")
+    tax_mode: str = Field("cumulative", pattern="^(cumulative|no_coordination|fixed_rate|daily)$")
+    daily_wage: Optional[float] = Field(None, gt=0)      # עובד יומי (tax_mode=daily): שכר ליום עבודה
+    days_worked: Optional[int] = Field(None, ge=1, le=31)
     fixed_rate: Optional[float] = Field(None, ge=0, le=0.5)      # אישור תיאום מס: שיעור ניכוי קבוע (tax_mode=fixed_rate)
     pension_employee_rate: float = Field(0.06, ge=0, le=0.5)
     study_fund_employee_rate: float = Field(0, ge=0, le=0.5)
@@ -386,6 +388,12 @@ def load_prev(db: Session, company_id: str, p: PaystubIn) -> dict:
 
 def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
     base = Decimal(str(p.base_salary))
+    if p.tax_mode == "daily":
+        if not (p.daily_wage and p.days_worked):
+            raise ValueError("עובד יומי: חובה שכר יומי וימי עבודה")
+        if p.ot_hours_125 or p.ot_hours_150:
+            raise ValueError("עובד יומי: שעות נוספות דורשות חישוב ידני (אין כלל רשמי מאומת לשכר שעתי של עובד יומי)")
+        base = Decimal(str(p.daily_wage)) * p.days_worked
     hourly = base / MONTHLY_HOURS
     ot = hourly * Decimal("1.25") * Decimal(str(p.ot_hours_125)) \
         + hourly * Decimal("1.50") * Decimal(str(p.ot_hours_150))
@@ -438,7 +446,8 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         employer_pension_rate=p.employer_pension_rate,
         employer_severance_rate=p.employer_severance_rate,
         employer_study_fund_rate=p.employer_study_fund_rate, weight=p.month_weight,
-        locality=loc, fixed_rate=p.fixed_rate)
+        locality=loc, fixed_rate=p.fixed_rate,
+        daily=((p.daily_wage, p.days_worked) if p.tax_mode == "daily" else None))
 
     flags = []
     if comp_lines:
@@ -483,7 +492,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
                                for b in ded["balances"]],
         "components": [{"code": l["code"], "name": l["name"], "amount": float(l["amount"]), "note": l["note"]}
                        for l in comp_lines],
-        "points": p.credit_points if p.tax_mode == "cumulative" else "-",
+        "points": p.credit_points if p.tax_mode in ("cumulative", "daily") else "-",
         "items": items,
         "income_tax": items["income_tax"]["value"],
         "national_insurance": items["national_insurance"]["value"],
@@ -1409,6 +1418,8 @@ async def upload_employees_excel(company_id: str, file: UploadFile = File(...),
 
 
 class CalcFromCardIn(BaseModel):
+    daily_wage: Optional[float] = Field(None, gt=0)
+    days_worked: Optional[int] = Field(None, ge=1, le=31)
     year: int = Field(..., ge=2000, le=2100)
     month: int = Field(..., ge=1, le=12)
     ot_hours_125: float = Field(0, ge=0)
@@ -1458,12 +1469,15 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
     mode, mode_note = card.tax_mode(present, y["income_type"] if y else "main",
                                     bool(y and y["other_income"]), (y or {}).get("other_income_credit"),
                                     (y or {}).get("salary_kind", "monthly"))
+    if mode == "manual" and (y or {}).get("salary_kind") == "daily" and body.daily_wage and body.days_worked \
+            and body.manual_income_tax is None and body.coordination_rate is None:
+        mode = "daily"           # עובד יומי: תוספת ב' (engine.daily_wage_deduction)
     if mode == "manual":
         if body.manual_income_tax is None and body.coordination_rate is None:
             raise HTTPException(422, mode_note)
         mode = "cumulative"      # המס מוזן ידנית (manual_income_tax) או לפי אישור תיאום
     pts, pts_note = 0.0, ""
-    if mode == "cumulative" and body.coordination_rate is None:
+    if mode in ("cumulative", "daily") and body.coordination_rate is None:
         pts, _status, pts_note = card.points_from_form101(body.year, d["is_resident"], d["gender"], y, body.month)
         if pts is None and body.manual_income_tax is None:
             raise HTTPException(422, pts_note)
@@ -1475,6 +1489,7 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         tax_exempt=body.tax_exempt, credit_points=pts, locality=(y or {}).get("locality"),
         tax_mode=("fixed_rate" if body.coordination_rate is not None else mode),
         fixed_rate=body.coordination_rate,
+        daily_wage=body.daily_wage, days_worked=body.days_worked,
         pension_employee_rate=d["pension_employee_rate"],
         study_fund_employee_rate=d["study_fund_employee_rate"],
         life_insurance=d["life_insurance_monthly"],

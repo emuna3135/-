@@ -258,7 +258,7 @@ def tax_before_credits(cum_taxable, months, year=2025):
 
 
 def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, weight=1, locality=None,
-               fixed_rate=None):
+               fixed_rate=None, daily=None):
     """
     mode: 'cumulative' (משרה עיקרית עם 101) או 'no_coordination' (47% מהברוטו).
     prev: dict עם cum_taxable, cum_tax, cum_deposits, cum_life (ואופציונלי cum_weight).
@@ -275,6 +275,23 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
         "cum_life": prev["cum_life"] + D(str(life)),
         "cum_weight": cum_weight,
     }
+    if mode == "daily":
+        # עובד בשכר יומי (שכר עבודה): תוספת ב' לתקנות הניכוי, לכל יום עבודה; daily = (שכר יומי, ימי עבודה בחודש).
+        # נקרא מהנוסח הרשמי (btl.gov.il/Laws1/02_0103_100076.pdf); אין סימולטור יומי של רשות המסים לאימות, ואין זיכוי פנסיה בתוספת ב'.
+        try:
+            w, n = D(str(daily[0])), D(str(daily[1]))
+        except Exception:
+            w = n = None
+        if w is None or w <= 0 or n <= 0 or n != n.to_integral_value():
+            new["cum_tax"] = prev["cum_tax"]
+            return item(None, MANUAL, "עובד יומי: שכר יומי או ימי עבודה חסרים/לא תקינים"), new
+        per_day = daily_wage_deduction(w, points, year)
+        if per_day["value"] is None:
+            new["cum_tax"] = prev["cum_tax"]
+            return item(None, MANUAL, per_day["note"]), new
+        month_tax = D(per_day["value"]) * n
+        new["cum_tax"] = prev["cum_tax"] + month_tax
+        return item(month_tax, BY_LAW, f"תוספת ב' לתקנות הניכוי: {per_day['value']} ש\"ח ליום x {n:g} ימים; בלי זיכוי פנסיה/ביטוח חיים; לא אומת מול סימולטור יומי"), new
     if mode == "fixed_rate":
         # אישור תיאום מס עם שיעור ניכוי קבוע: חשב השכר מזין את השיעור מהאישור; האישור עצמו לא נבדק במערכת
         if fixed_rate is None or not (D(0) <= D(str(fixed_rate)) <= D("0.5")):
@@ -532,7 +549,7 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
                   life_insurance=0, manual_income_tax=None, other_deductions=0,
                   employer_pension_rate="0", employer_severance_rate="0",
                   employer_study_fund_rate="0", weight=1, noncash_benefits=0,
-                  irregular_payment=0, locality=None, fixed_rate=None):
+                  irregular_payment=0, locality=None, fixed_rate=None, daily=None):
     gross = D(str(gross))
     taxable_gross = gross if taxable_gross is None else D(str(taxable_gross))
     base = gross if pension_base is None else D(str(pension_base))
@@ -542,7 +559,7 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
     pension = deposit(base, pension_employee_rate)
     study = deposit(base, study_fund_employee_rate)
     tax, cum = income_tax(year, month, mode, taxable_gross, points, prev,
-                          pension["value"], life_insurance, weight, locality, fixed_rate)
+                          pension["value"], life_insurance, weight, locality, fixed_rate, daily)
     if manual_income_tax is not None:   # חשב השכר רשאי תמיד לעקוף את החישוב; מסומן כידני
         tax = item(r0(manual_income_tax), MANUAL, "הוזן ידנית על ידי המשתמש")
         cum["cum_tax"] = prev["cum_tax"] + tax["value"]
