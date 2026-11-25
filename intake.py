@@ -30,9 +30,21 @@ def _norm(t):
     return "".join(ch for ch in (t or "") if ch.isalnum())
 
 
-def _hits(text, markers):
-    n, rev = _norm(text), _norm(text)[::-1]
-    return sum(1 for m in markers if _norm(m) and (_norm(m) in n or _norm(m) in rev))
+def _has(n, rev, m):
+    k = _norm(m)
+    return bool(k) and (k in n or k in rev)
+
+
+def _hits(text, markers, loose=False):
+    """סימן נספר אם הביטוי מופיע (בכיוון כלשהו), או אם כל מילה שלו מופיעה בנפרד (כשה-PDF מערבב כיווני כתיבה בתוך משפט)."""
+    n = _norm(text)
+    rev = n[::-1]
+    c = 0
+    for m in markers:
+        words = m.replace("/", " ").split()
+        if _has(n, rev, m) or (loose and len(words) > 1 and all(_has(n, rev, w) for w in words)):
+            c += 1
+    return c
 
 
 def classify_text(text):
@@ -41,7 +53,7 @@ def classify_text(text):
     ins = _hits(t, INSTRUCTION_MARKERS)
     if ins >= 2:
         return {"kind": "unknown", "reason": "נראה מסמך הוראות או הסבר ולא טופס ממולא; נא לבחור את סוג הקובץ"}
-    a, b = _hits(t, FORM101_MARKERS), _hits(t, ATTENDANCE_MARKERS)
+    a, b = _hits(t, FORM101_MARKERS, loose=True), _hits(t, ATTENDANCE_MARKERS)
     if a >= FORM101_MIN and a > b:
         return {"kind": "form101", "reason": f"נמצאו {a} מתוך {len(FORM101_MARKERS)} סימני זיהוי של טופס 101"}
     if b >= ATTENDANCE_MIN and b >= a:
