@@ -347,6 +347,8 @@ class PaystubIn(BaseModel):
     components: List[dict] = Field(default_factory=list, max_length=20)
     component_month: dict = Field(default_factory=dict)          # כמויות החודש לרכיבי כמות (למשל ימי נסיעות)
     pension_base_codes: List[str] = Field(default_factory=list, max_length=20)   # רכיבים שרואת החשבון קבעה שנכללים בבסיס הפנסיה
+    pension_include_ot: bool = False      # עפ"י רואת חשבון/הסכם: לכלול שעות נוספות בבסיס הפנסיה
+    pension_include_bonus: bool = False   # עפ"י רואת חשבון/הסכם: לכלול בונוס בבסיס הפנסיה
 
 
 def load_prev(db: Session, company_id: str, p: PaystubIn) -> dict:
@@ -387,6 +389,11 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
     extras, extras_pension, comp_lines, comp_open = components.extras_for_paystub(
         p.components, p.component_month, p.pension_base_codes)
     cash_gross = core_cash + extras
+    # בסיס פנסיה: ברירת מחדל = שכר יסוד בלבד (צו הרחבה לפנסיית חובה, ילקוט הפרסומים 6302, סעיף 6(ב):
+    # "שכר העובד ורכיביו כמשמעם בחוק ובתקנות פיצויי פיטורים"; שעות נוספות ובונוס אינם ברשימה).
+    pension_base = base + extras_pension \
+        + (ot if p.pension_include_ot else Decimal(0)) \
+        + (Decimal(str(p.bonus)) if p.pension_include_bonus else Decimal(0))
     benefits = {}
     if p.phone_expense > 0:
         benefits["שווי רט\"ן"] = pe.phone_benefit(p.phone_expense, p.phone_employee_share_rate,
@@ -420,7 +427,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         pension_employee_rate=p.pension_employee_rate,
         study_fund_employee_rate=p.study_fund_employee_rate,
         life_insurance=p.life_insurance, manual_income_tax=p.manual_income_tax,
-        pension_base=core_cash + extras_pension, noncash_benefits=noncash,
+        pension_base=pension_base, noncash_benefits=noncash,
         other_deductions=p.other_deductions,
         employer_pension_rate=p.employer_pension_rate,
         employer_severance_rate=p.employer_severance_rate,
@@ -432,8 +439,13 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         flags.extend(comp_open)
         if p.pension_base_codes:
             flags.append("בסיס פנסיה כולל רכיבים שנבחרו (עפ\"י רואת חשבון): " + ", ".join(p.pension_base_codes))
-        else:
-            flags.append("בסיס פנסיה: שכר יסוד, שעות נוספות ובונוס; רכיבים נוספים לא נכללו (נדרש אישור רואת חשבון)")
+    if ot > 0 or p.bonus > 0:
+        inc = [n for n, on, v in (("שעות נוספות", p.pension_include_ot, ot), ("בונוס", p.pension_include_bonus, p.bonus)) if v > 0 and on]
+        exc = [n for n, on, v in (("שעות נוספות", p.pension_include_ot, ot), ("בונוס", p.pension_include_bonus, p.bonus)) if v > 0 and not on]
+        if inc:
+            flags.append("בסיס פנסיה כולל " + ", ".join(inc) + " (עפ\"י רואת חשבון)")
+        if exc:
+            flags.append("בסיס פנסיה: שכר יסוד בלבד, ללא " + ", ".join(exc) + " (עפ\"י החוק: צו הרחבה לפנסיית חובה, סעיף 6(ב); הרחבה בהסכם: נדרש אישור רואת חשבון)")
     if ot > 0:
         flags.append("שעות נוספות: חישוב לפי שכר יסוד/182, לא אומת מול תלוש")
     if p.bonus > 0:
@@ -1116,6 +1128,8 @@ class EmployeeIn(BaseModel):
     zip: Optional[str] = Field(None, pattern=r"^\d{5}$")
     fixed_components: List[dict] = Field(default_factory=list, max_length=20)   # רכיבי שכר קבועים (components.CATALOG)
     pension_base_codes: List[str] = Field(default_factory=list, max_length=20)   # נקבע ע"י רואת החשבון
+    pension_include_ot: bool = False      # נקבע ע"י רואת החשבון/הסכם
+    pension_include_bonus: bool = False
 
 
 class Form101In(BaseModel):
@@ -1440,6 +1454,8 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         prev_cum_ni_base=body.prev_cum_ni_base,
         components=d.get("fixed_components", []), component_month=body.component_month,
         pension_base_codes=d.get("pension_base_codes", []),
+        pension_include_ot=bool(d.get("pension_include_ot", False)),
+        pension_include_bonus=bool(d.get("pension_include_bonus", False)),
         period=body.period or f"{body.month:02d}/{body.year}")
     try:
         res = compute(p, db, company_id)
