@@ -16,6 +16,7 @@ import attendance_pdf
 import components
 import deductions
 import balances
+import masav
 import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
@@ -1149,6 +1150,9 @@ class EmployeeIn(BaseModel):
     end_date: Optional[datetime.date] = None
     is_resident: bool = True
     bank_account: Optional[str] = None
+    bank_code: Optional[str] = Field(None, pattern=r"^\d{1,2}$")       # מבנה מס"ב: בנק 2 ספרות
+    bank_branch: Optional[str] = Field(None, pattern=r"^\d{1,3}$")     # סניף 3 ספרות
+    bank_account_no: Optional[str] = Field(None, pattern=r"^\d{1,9}$") # חשבון עד 9 ספרות
     base_salary: float = Field(..., gt=0)
     pension_employee_rate: float = Field(0.06, ge=0, le=0.5)
     study_fund_employee_rate: float = Field(0, ge=0, le=0.5)
@@ -2119,6 +2123,54 @@ def payments_summary_view(company_id: str, year: int = Query(..., ge=2000, le=21
     audit(db, user.id, company_id, "payments_summary", "report", None, f"year={year}")
     db.commit()
     return {"year": year, "months": payments_summary.summarize(year, stubs)}
+
+
+class MasavIn(BaseModel):
+    year: int = Field(..., ge=2020, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    institution_code: str = Field(..., pattern=r"^\d{1,8}$")   # קוד מוסד שהוקצה ע"י מס"ב
+    sending_code: str = Field(..., pattern=r"^\d{1,5}$")       # מוסד שולח, מס"ב
+    pay_date: datetime.date
+    institution_name: str = Field(..., min_length=1, max_length=30)
+
+
+@app.post("/companies/{company_id}/masav")
+def masav_file(company_id: str, body: MasavIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """קובץ זיכוי שכר במבנה מס"ב מהתלושים השמורים של החודש. המערכת לא משדרת: החשב מעלה את הקובץ בעצמו."""
+    require_company(company_id, user, db, "read")
+    import base64
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == body.year,
+                                        PaystubV2.month == body.month).order_by(PaystubV2.created_at).all()]
+    if not stubs:
+        raise HTTPException(404, "אין תלושים שמורים לחודש הזה")
+    emps = {e.id_hash: unseal(db, company_id, e.payload_enc) for e in
+            db.query(Employee).filter(Employee.company_id == company_id).all()}
+    pays, missing = [], []
+    for i, st in enumerate(stubs, 1):
+        e = emps.get(emp_key(company_id, st["emp_id_number"]))
+        if st.get("net") is None or Decimal(str(st["net"])) <= 0:
+            missing.append(f"{st.get('emp_name')}: אין נטו חיובי לתשלום")
+            continue
+        if not e or not (e.get("bank_code") and e.get("bank_branch") and e.get("bank_account_no")):
+            missing.append(f"{st.get('emp_name')}: חסרים בנק/סניף/חשבון בכרטיס העובד")
+            continue
+        pays.append({"bank": e["bank_code"], "branch": e["bank_branch"], "account": e["bank_account_no"],
+                     "id_number": st["emp_id_number"], "name": st["emp_name"], "amount": str(st["net"]), "ref": i})
+    if missing:
+        raise HTTPException(422, "לא ניתן לייצר קובץ: " + "; ".join(missing))
+    try:
+        data, summary = masav.build(pays, body.institution_code, body.sending_code, body.institution_name, body.pay_date)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    problems = masav.verify(data)
+    if problems:
+        raise HTTPException(500, "בדיקת האיזון העצמית נכשלה: " + "; ".join(problems))
+    audit(db, user.id, company_id, "masav_file", "report", None, f"{body.month:02d}/{body.year} count={summary['count']}")
+    db.commit()
+    return {"filename": f"masav-{body.year}-{body.month:02d}.txt", "file_b64": base64.b64encode(data).decode("ascii"),
+            "count": summary["count"], "total": float(summary["total"]), "encoding": summary["encoding"],
+            "status": summary["status"], "notes": summary["notes"]}
 
 
 @app.get("/companies/{company_id}/month-status")
