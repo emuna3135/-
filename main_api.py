@@ -13,6 +13,7 @@ import payslip
 import templating
 import termination
 import attendance_pdf
+import components
 import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
@@ -342,6 +343,10 @@ class PaystubIn(BaseModel):
     prev_cum_life: Optional[float] = None
     prev_cum_ni_base: Optional[float] = None
     period: Optional[str] = None
+    # רכיבי שכר קבועים נוספים (components.CATALOG): נסיעות, פרמיה, תוספות, החזר טלפון. ריק = התנהגות כמו קודם.
+    components: List[dict] = Field(default_factory=list, max_length=20)
+    component_month: dict = Field(default_factory=dict)          # כמויות החודש לרכיבי כמות (למשל ימי נסיעות)
+    pension_base_codes: List[str] = Field(default_factory=list, max_length=20)   # רכיבים שרואת החשבון קבעה שנכללים בבסיס הפנסיה
 
 
 def load_prev(db: Session, company_id: str, p: PaystubIn) -> dict:
@@ -378,7 +383,10 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
     hourly = base / MONTHLY_HOURS
     ot = hourly * Decimal("1.25") * Decimal(str(p.ot_hours_125)) \
         + hourly * Decimal("1.50") * Decimal(str(p.ot_hours_150))
-    cash_gross = base + ot + Decimal(str(p.bonus))
+    core_cash = base + ot + Decimal(str(p.bonus))
+    extras, extras_pension, comp_lines, comp_open = components.extras_for_paystub(
+        p.components, p.component_month, p.pension_base_codes)
+    cash_gross = core_cash + extras
     benefits = {}
     if p.phone_expense > 0:
         benefits["שווי רט\"ן"] = pe.phone_benefit(p.phone_expense, p.phone_employee_share_rate,
@@ -412,7 +420,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         pension_employee_rate=p.pension_employee_rate,
         study_fund_employee_rate=p.study_fund_employee_rate,
         life_insurance=p.life_insurance, manual_income_tax=p.manual_income_tax,
-        pension_base=cash_gross, noncash_benefits=noncash,
+        pension_base=core_cash + extras_pension, noncash_benefits=noncash,
         other_deductions=p.other_deductions,
         employer_pension_rate=p.employer_pension_rate,
         employer_severance_rate=p.employer_severance_rate,
@@ -420,6 +428,12 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         locality=loc, fixed_rate=p.fixed_rate)
 
     flags = []
+    if comp_lines:
+        flags.extend(comp_open)
+        if p.pension_base_codes:
+            flags.append("בסיס פנסיה כולל רכיבים שנבחרו (עפ\"י רואת חשבון): " + ", ".join(p.pension_base_codes))
+        else:
+            flags.append("בסיס פנסיה: שכר יסוד, שעות נוספות ובונוס; רכיבים נוספים לא נכללו (נדרש אישור רואת חשבון)")
     if ot > 0:
         flags.append("שעות נוספות: חישוב לפי שכר יסוד/182, לא אומת מול תלוש")
     if p.bonus > 0:
@@ -444,6 +458,8 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         "gross": float(pe.r2(gross)), "overtime_pay": float(pe.r2(ot)),
         "taxable": float(pe.r2(taxable)), "bonus": float(p.bonus),
         "benefits": {k: float(v) for k, v in benefits.items()},
+        "components": [{"code": l["code"], "name": l["name"], "amount": float(l["amount"]), "note": l["note"]}
+                       for l in comp_lines],
         "points": p.credit_points if p.tax_mode == "cumulative" else "-",
         "items": items,
         "income_tax": items["income_tax"]["value"],
@@ -1098,6 +1114,8 @@ class EmployeeIn(BaseModel):
     street: Optional[str] = Field(None, max_length=20)
     city: Optional[str] = Field(None, max_length=15)
     zip: Optional[str] = Field(None, pattern=r"^\d{5}$")
+    fixed_components: List[dict] = Field(default_factory=list, max_length=20)   # רכיבי שכר קבועים (components.CATALOG)
+    pension_base_codes: List[str] = Field(default_factory=list, max_length=20)   # נקבע ע"י רואת החשבון
 
 
 class Form101In(BaseModel):
@@ -1363,6 +1381,7 @@ class CalcFromCardIn(BaseModel):
     prev_cum_life: Optional[float] = None
     prev_cum_ni_base: Optional[float] = None
     period: Optional[str] = None
+    component_month: dict = Field(default_factory=dict)       # כמויות החודש לרכיבי כמות מכרטיס העובד
     # נתוני תלוש שמגיעים מרישומי המעסיק (לא מחושבים בחוק): נשמרים עם החישוב ומוצגים בתלוש
     worked: Optional[str] = Field(None, max_length=80)
     vacation: Optional[str] = Field(None, max_length=80)
@@ -1419,6 +1438,8 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         prev_cum_taxable=body.prev_cum_taxable, prev_cum_tax=body.prev_cum_tax,
         prev_cum_deposits=body.prev_cum_deposits, prev_cum_life=body.prev_cum_life,
         prev_cum_ni_base=body.prev_cum_ni_base,
+        components=d.get("fixed_components", []), component_month=body.component_month,
+        pension_base_codes=d.get("pension_base_codes", []),
         period=body.period or f"{body.month:02d}/{body.year}")
     try:
         res = compute(p, db, company_id)

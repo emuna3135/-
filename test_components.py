@@ -43,3 +43,26 @@ class Build(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Extras(unittest.TestCase):
+    def test_none(self):
+        self.assertEqual(c.extras_for_paystub([], {}), (D(0), D(0), [], []))
+
+    def test_premium_not_in_pension_by_default(self):
+        g, pen, lines, open_ = c.extras_for_paystub([{"code": "011", "amount": 500}], {})
+        self.assertEqual((g, pen), (D("500.00"), D(0)))
+
+    def test_premium_in_pension_when_chosen(self):
+        g, pen, *_ = c.extras_for_paystub([{"code": "011", "amount": 500}], {}, ["011"])
+        self.assertEqual((g, pen), (D("500.00"), D("500.00")))
+
+    def test_duplicates_with_existing_fields_rejected(self):
+        for code in ("001", "007", "008", "010"):
+            with self.assertRaises(ValueError):
+                c.extras_for_paystub([{"code": code, "amount": 1}], {})
+
+    def test_travel_by_days_flags_open(self):
+        g, pen, lines, open_ = c.extras_for_paystub([{"code": "004", "rate": 22.6}], {"004": 20})
+        self.assertEqual(g, D("452.00"))
+        self.assertTrue(any("פטור" in o for o in open_))

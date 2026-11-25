@@ -25,6 +25,8 @@ CATALOG = {
     "020": ("החזר טלפון", "phone_reimbursement", False),
 }
 BASE_CODE = "001"
+# קודים שמחושבים בשדות הקיימים (משכורת, שעות נוספות, בונוס) ולא מוזנים כרכיב נוסף, כדי למנוע ספירה כפולה
+HANDLED_ELSEWHERE = ("001", "007", "008", "010")
 
 
 def _q(x, name):
@@ -78,3 +80,17 @@ def build_lines(fixed, month, pension_base_codes=()):
     return {"lines": lines, "gross": gross, "pension_base": pension,
             "pension_base_status": 'עפ"י רואת חשבון' if pension_base_codes else "שכר יסוד בלבד",
             "severance_wage": sev_wage, "open": open_}
+
+
+def extras_for_paystub(extra, month, pension_base_codes=()):
+    """
+    רכיבים נוספים לתלוש (מעבר למשכורת, שעות נוספות ובונוס שמחושבים בשדות הקיימים).
+    מחזיר (סכום ברוטו נוסף, החלק לבסיס פנסיה, שורות, הערות פתוחות). בלי רכיבים: (0, 0, [], []).
+    """
+    if not extra:
+        return D(0), D(0), [], []
+    bad = [str(c.get("code")) for c in extra if str(c.get("code")) in HANDLED_ELSEWHERE]
+    if bad:
+        raise ValueError("רכיב " + ", ".join(bad) + " מחושב משדות המשכורת, השעות הנוספות והבונוס ולא כרכיב נוסף")
+    r = build_lines(extra, month, pension_base_codes)
+    return r["gross"], r["pension_base"], r["lines"], r["open"]
