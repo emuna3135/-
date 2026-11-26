@@ -17,6 +17,7 @@ import components
 import deductions
 import balances
 import masav
+import cost_report
 import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
@@ -2211,6 +2212,29 @@ def masav_file(company_id: str, body: MasavIn, user: User = Depends(current_user
     return {"filename": f"masav-{body.year}-{body.month:02d}.txt", "file_b64": base64.b64encode(data).decode("ascii"),
             "count": summary["count"], "total": float(summary["total"]), "encoding": summary["encoding"],
             "status": summary["status"], "notes": summary["notes"]}
+
+
+def _plain(o):
+    if isinstance(o, Decimal):
+        return float(o)
+    if isinstance(o, dict):
+        return {k: _plain(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_plain(v) for v in o]
+    return o
+
+
+@app.get("/companies/{company_id}/reports/employer-cost")
+def employer_cost_report(company_id: str, year: int = Query(..., ge=2020, le=2100),
+                         user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """דוח עלות מעביד לפי עובד וחודש מהתלושים השמורים (דוח ניהולי פנימי, לא דוח רשמי)."""
+    require_company(company_id, user, db, "read")
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == year)
+             .order_by(PaystubV2.created_at).all()]
+    audit(db, user.id, company_id, "employer_cost", "report", None, f"year={year}")
+    db.commit()
+    return _plain(cost_report.employer_cost(year, stubs))
 
 
 @app.get("/companies/{company_id}/month-status")
