@@ -396,7 +396,7 @@ function shell(view, title, content) {
       h("button", { class: "nav", onclick: async () => {
         try { if (state.token && !state.demo) await api("POST", "/auth/logout"); } catch (e) { /* יוצאים בכל מקרה */ }
         state.token = null; state.demo = false; render("login"); } }, "יציאה")),
-    h("button", { class: "fab", type: "button", onclick: () => render("feedback") }, "משוב על המערכת"), h("main", {}, h("div", { class: "trial", role: "note" }, "גרסת ניסוי: נתוני דמה בלבד. אין להזין נתונים אמיתיים של עובדים, ואין להסתמך על התוצאה בלי בדיקה. הנתונים עשויים להימחק."), h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
+    h("button", { class: "fab", type: "button", onclick: () => render("feedback") }, "משוב על המערכת"), h("main", {}, h("div", { class: "trial", role: "note" }, "מערכת דמו, הנתונים לא נשמרים. נתוני דמה בלבד: אין להזין נתונים אמיתיים של עובדים, ואין להסתמך על התוצאה בלי בדיקה."), h("div", { class: "topline" }, h("h2", { class: "page" }, title), state.demo && h("div", { class: "demo" }, "נתוני דוגמה: המספרים אינם חישוב אמיתי")), content));
 }
 const cp = (p) => "/companies/" + state.companyId + p;
 
