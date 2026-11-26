@@ -2214,6 +2214,35 @@ def masav_file(company_id: str, body: MasavIn, user: User = Depends(current_user
             "status": summary["status"], "notes": summary["notes"]}
 
 
+class Form102TaxIn(BaseModel):
+    year: int = Field(..., ge=2020, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    represent_number: str
+    taxpayer_number: str
+    register_number: str
+    payment_method: int = 9
+    payment_date: Optional[str] = None
+    non_employment: bool = False
+
+
+@app.post("/companies/{company_id}/form102-tax")
+def form102_tax_data(company_id: str, body: Form102TaxIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """נתוני דיווח 102 למס הכנסה (סוג ניכוי 00) לפי מפרט ה-API של רשות המסים. המערכת לא משדרת: החשב בודק ומשדר בעצמו."""
+    require_company(company_id, user, db, "read")
+    import form102_tax
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == body.year,
+                                        PaystubV2.month == body.month).order_by(PaystubV2.created_at).all()]
+    try:
+        out = form102_tax.build(body.year, body.month, stubs, body.represent_number, body.taxpayer_number,
+                                body.register_number, body.payment_method, body.payment_date, body.non_employment)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    audit(db, user.id, company_id, "form102_tax", "report", None, f"{body.month:02d}/{body.year} status={out['status']}")
+    db.commit()
+    return out
+
+
 def _plain(o):
     if isinstance(o, Decimal):
         return float(o)
