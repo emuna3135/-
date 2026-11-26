@@ -384,7 +384,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
+const NAV = [["hours", "קליטת נוכחות"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
   const nav = [navBtn(["home", "תהליך עבודה"]), navBtn(["calc", "חישוב"]), navBtn(["showcalc", "הצג חישוב"]), navBtn(["feedback", "משוב על המערכת"]),
@@ -1437,9 +1437,46 @@ function showCalcView() {
     h("button", { type: "button", onclick: go }, "הצג חישוב"), out));
 }
 
+
+/* ---------- קליטת דוח נוכחות (PDF או אקסל): תצוגה מקדימה בלבד, בלי חישוב שכר ובלי שמירה ---------- */
+function hoursView() {
+  const file = h("input", { type: "file", accept: ".pdf,.xlsx,.xlsm", required: true });
+  const out = h("div", { "aria-live": "polite" });
+  const mapIn = {};
+  const MAP_FIELDS = [["date", "תאריך"], ["entry", "כניסה"], ["exit", "יציאה"], ["total", "סה\"כ שעות"], ["regular", "שעות רגילות"], ["ot125", "שעות 125%"], ["ot150", "שעות 150%"]];
+  const mapBox = h("details", {}, h("summary", {}, "הקובץ לא מזוהה? מיפוי עמודות ידני"),
+    h("p", { class: "muted" }, "לכל שדה כתבי את הכותרת בדיוק כפי שהיא בקובץ, או את אות העמודה (A, B…). שדות שלא קיימים משאירים ריקים."),
+    h("div", { class: "row2" }, MAP_FIELDS.map(([k, t]) => h("label", {}, t, (mapIn[k] = h("input", { type: "text", maxlength: "40" }))))));
+  const mm = (n) => Math.floor(n / 60) + ":" + String(n % 60).padStart(2, "0");
+  const showEmp = (e) => h("section", { class: "card" }, h("h3", {}, (e.name || e.id || "עובד אחד") + (e.employee_found ? " (קיים במערכת)" : "")),
+    h("p", {}, "ימי עבודה: " + e.working_days + " · סה\"כ נוכחות: " + mm(e.totals.presence_min) + " · שעות רגילות: " + mm(e.totals.regular_min) +
+      " · 125%: " + mm(e.totals.overtime_min["125"]) + " · 150%: " + mm(e.totals.overtime_min["150"])),
+    h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["תאריך", "נוכחות", "רגילות", "125%", "150%"].map(c => h("th", {}, c)))),
+      h("tbody", {}, e.days.map(d => h("tr", {}, h("td", {}, d.date), h("td", {}, mm(d.total_min)), h("td", {}, mm(d.regular_min)), h("td", {}, mm(d.overtime_min["125"])), h("td", {}, mm(d.overtime_min["150"])))))));
+  const form = h("form", { onsubmit: async (ev) => {
+    ev.preventDefault(); out.replaceChildren(h("p", {}, "קוראת…"));
+    const f = file.files[0]; const isPdf = /\.pdf$/i.test(f.name);
+    const fd = new FormData(); fd.append("file", f);
+    const mp = {}; Object.entries(mapIn).forEach(([k, i]) => { if (i.value.trim()) mp[k] = i.value.trim(); });
+    if (!isPdf && Object.keys(mp).length) fd.append("mapping", JSON.stringify(mp));
+    try {
+      const r = await api("POST", cp(isPdf ? "/parse-hours-pdf" : "/parse-hours-excel"), fd, true);
+      const emps = r.employees || [{ name: null, id: r.id_number, days: (r.days || []).map(d => ({ date: d.date, total_min: d.presence_min, regular_min: d.regular_min, overtime_min: d.overtime_min })),
+        working_days: r.working_days, totals: { presence_min: r.totals.presence_min, regular_min: r.totals.regular_min, overtime_min: r.totals.overtime_min }, employee_found: r.employee_found }];
+      const ok = /^מאומת/.test(r.verification);
+      out.replaceChildren(h("div", { class: ok ? "card" : "unres", role: "status" }, h("strong", {}, "אימות: "), r.verification),
+        ...(r.warnings || []).length ? [h("div", { class: "unres", role: "alert" }, h("strong", {}, "נדרשת בדיקה (" + r.warnings.length + "):"), h("ul", {}, r.warnings.slice(0, 40).map(w => h("li", {}, w))))] : [],
+        ...emps.map(showEmp));
+    } catch (e) { out.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)); mapBox.open = !isPdf; }
+  } }, h("label", {}, "קובץ נוכחות (PDF או אקסל)", file), mapBox, h("button", { class: "btn", type: "submit" }, "קריאה ובדיקה"));
+  return shell("hours", "קליטת דוח נוכחות", h("div", {},
+    h("p", {}, "הקריאה היא תצוגה מקדימה בלבד: המערכת לא מחשבת שכר ולא שומרת. היא בודקת את הסכומים מול שורת הסיכום של הדוח, ומסמנת כל דבר שלא הצליחה לקרוא במקום לנחש. את השעות הנוספות מעבירים לגיליון החודש אחרי שבדקת."),
+    form, out));
+}
+
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, prep: prepView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, showcalc: showCalcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, prep: prepView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, showcalc: showCalcView, hours: hoursView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }

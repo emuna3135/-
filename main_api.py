@@ -13,6 +13,8 @@ import payslip
 import templating
 import termination
 import attendance_pdf
+import json
+import attendance_excel
 import components
 import deductions
 import balances
@@ -2201,7 +2203,7 @@ async def intake_file(company_id: str, file: UploadFile = File(...),
         x = intake.inspect_excel(data)
         out.update(kind=x["kind"], reason=x["reason"], sheets=x["sheets"], headers=x["headers"])
         out["next"] = {"employees_workbook": "POST /companies/{id}/employees/upload-excel (חוברת הקמת עובדים)",
-                       "attendance_candidate": "אין עדיין קורא לאקסל נוכחות: יש להעלות דוגמה כדי לבנות קורא עם אימות",
+                       "attendance_candidate": "POST /companies/{id}/parse-hours-excel (תצוגה מקדימה עם אימות מול שורת הסיכום; אם הכותרות לא מוכרות: מיפוי עמודות ידני)",
                        "unknown": "נא לבחור את סוג המסמך ידנית"}.get(x["kind"])
     audit(db, user.id, company_id, "intake", "file", None, f"kind={out['kind']}")
     db.commit()
@@ -2567,6 +2569,49 @@ async def intake_classify(company_id: str, file: UploadFile = File(...),
     audit(db, user.id, company_id, "intake_classify", "file", None, f"kind={r['kind']}")
     db.commit()
     return {"filename": file.filename, **r}
+
+
+@app.post("/companies/{company_id}/parse-hours-excel")
+async def parse_hours_excel(
+    company_id: str,
+    file: UploadFile = File(...),
+    mapping: Optional[str] = Form(None),
+    sheet: Optional[str] = Form(None),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    קריאת דוח נוכחות באקסל לתצוגה מקדימה בלבד: אינה מחשבת שכר ואינה שומרת דבר.
+    כותרות מוכרות מזוהות לבד; אחרת החשבת שולחת mapping (JSON: {"date":"A","entry":"B","exit":"C","total":"D"}). לא מנחשים.
+    """
+    require_company(company_id, user, db, "write")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "הקובץ גדול מדי (מעל 5MB)")
+    if not (file.filename or "").lower().endswith((".xlsx", ".xlsm")):
+        raise HTTPException(400, "יש להעלות קובץ אקסל (xlsx)")
+    mp = None
+    if mapping:
+        try:
+            mp = json.loads(mapping)
+            if not isinstance(mp, dict):
+                raise ValueError
+        except ValueError:
+            raise HTTPException(400, "המיפוי חייב להיות JSON של שדה: כותרת או אות עמודה")
+    try:
+        result = attendance_excel.parse_workbook(content, mp, sheet)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    for e in result["employees"]:
+        emp = None
+        if e.get("id") and secure.valid_israeli_id(str(e["id"])):
+            emp = db.query(Employee).filter(Employee.company_id == company_id,
+                                            Employee.id_hash == emp_key(company_id, str(e["id"]).zfill(9))).first()
+        e["employee_found"] = bool(emp)
+        e["employee_id"] = emp.id if emp else None
+    audit(db, user.id, company_id, "parse_hours_excel", "file", None, f"employees={len(result['employees'])}")
+    db.commit()
+    return result
 
 
 @app.post("/companies/{company_id}/parse-hours-pdf")

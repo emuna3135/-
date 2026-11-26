@@ -55,6 +55,16 @@ chk("126 check", c.post(f"/companies/{cid}/reports/126/check", headers=H, json=d
 chk("106 check", c.post(f"/companies/{cid}/reports/106/check", headers=H, json=dict(year=2026)), ok=(200, 422))
 chk("templates", c.get("/templates", headers=H))
 chk("upload-template", c.get("/upload-template"))
+import io as _io, datetime as _dt, openpyxl as _ox
+_wb = _ox.Workbook(); _ws = _wb.active
+_ws.append(["תאריך", "יום", "כניסה", "יציאה", "סה\"כ", "שעות רגילות", "שעות 125%"])
+_ws.append([_dt.date(2026, 1, 4), "א", "08:00", "17:00", "09:00", "08:00", "01:00"])
+_ws.append(["סה\"כ", None, None, None, "09:00", "08:00", "01:00"])
+_b = _io.BytesIO(); _wb.save(_b)
+r = chk("parse-hours-excel", c.post(f"/companies/{cid}/parse-hours-excel", headers=H, files={"file": ("h.xlsx", _b.getvalue(), "application/octet-stream")}))
+assert r.json()["verification"].startswith("מאומת"), r.json()
+chk("parse-hours-excel bad", c.post(f"/companies/{cid}/parse-hours-excel", headers=H, files={"file": ("h.xlsx", b"nope", "application/octet-stream")}), ok=(400,))
+
 bad = [x for x in res if not x[2]]
 print(len(res), "קריאות;", len(bad), "כשלו")
 for n, s_, g in res:
