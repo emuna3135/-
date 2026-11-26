@@ -991,3 +991,9 @@ card.points_from_form101 (עטיפה): ללא נתוני משפחה = בסיס; 
 ## ב380. סכמה נפרדת במסד (DB_SCHEMA) לסביבת הבדיקות (26.11.2026)
 - main_api: משתנה סביבה DB_SCHEMA (PostgreSQL בלבד) יוצר סכמה ומריץ את המערכת בתוכה, כך שסביבה ב-dev-components יכולה לשבת באותו מסד חינמי עם הדמו הישן בלי לגעת בטבלאות שלו. נבדק מקומית: טבלה users קיימת ב-public לא שונתה, והטבלאות החדשות נוצרו ב-components; 62 קריאות e2e עברו.
 - חשוב: DB_SCHEMA בלי DATABASE_URL של PostgreSQL מפיל את העלייה בכוונה. יש להגדיר את שניהם יחד.
+
+## ב381. שירות בדיקות עם מסד קבוע payroll-live-z4d6 (26.11.2026)
+- נוצר דרך render.yaml (Blueprint exs-dc3vd9p7lnhs73ev2tq0, create_new, autoSync כבוי): שירות srv-dc3vdeajnfac73b1fvn0, https://payroll-live-z4d6.onrender.com, ענף dev-components, DATABASE_URL מחובר מהמסד payroll-test-db דרך fromDatabase (הסיסמה לא נראתה), DB_SCHEMA=components (סכמה נפרדת: הדמו הישן לא נגוע). לוג: Application startup complete, GET / 200.
+- FIELD_KEY של השירות נוצר אקראית ומוזן ב-Render בלבד; אין להחליפו כשיש נתונים שמורים (הם מוצפנים בו).
+- השירות הזמני הקודם (payroll-components, SQLite) מיותר עכשיו ואפשר להשעות אותו.
+- המסד החינמי פג ב-15.12.2026.
