@@ -152,6 +152,10 @@ def parse_employee(row):
         out["position_scope_percent"] = _num(scope, "היקף משרה %")
     if out["base_salary"] <= 0:
         raise RowError("שכר יסוד חייב להיות חיובי")
+    if out["birth_date"] and out["start_date"] and out["start_date"] < out["birth_date"]:
+        raise RowError("תאריך תחילת העבודה מוקדם מתאריך הלידה")
+    if out["start_date"] and out["start_date"] > (datetime.date.today() + datetime.timedelta(days=366)).isoformat():
+        raise RowError("תאריך תחילת העבודה רחוק בעתיד (יותר משנה)")
     return out
 
 

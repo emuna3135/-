@@ -24,6 +24,7 @@ import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
 import sources_catalog
+import eligibility
 import employee_import
 import authpolicy
 import proposals
@@ -323,6 +324,10 @@ MONTHLY_HOURS = Decimal("182")   # לא מאומת - משמש רק לחישוב 
 class PaystubIn(BaseModel):
     emp_id_number: str
     emp_name: str
+    birth_date: Optional[str] = None       # לבדיקת גיל לביטוח לאומי (eligibility.py)
+    gender: Optional[str] = None
+    worker_type: Optional[str] = None
+    start_date: Optional[str] = None       # תחילת עבודה: חודש התחלה = מצטבר קודם אפס
     year: int = Field(..., ge=2000, le=2100)
     month: int = Field(..., ge=1, le=12)
     base_salary: float = Field(..., gt=0)
@@ -377,8 +382,14 @@ class PaystubIn(BaseModel):
 
 def load_prev(db: Session, company_id: str, p: PaystubIn) -> dict:
     """המצטבר עד החודש הקודם. חסר ובאמצע השנה -> שגיאה ברורה, לא ניחוש."""
-    if p.month == 1:
-        return dict(pe.ZERO_PREV)
+    if p.month == 1 or (eligibility.is_start_month(p.start_date, p.year, p.month)
+                        and p.prev_cum_taxable is None):
+        out = dict(pe.ZERO_PREV)        # חודש 1, או חודש תחילת העבודה: אין חודשים קודמים אצל המעסיק
+        if p.month > 1:
+            out["cum_weight"] = Decimal(0)      # בלי זה החודשים שלפני תחילת העבודה היו נספרים כחודשי עבודה (ממוצע נמוך מדי, מס אפס)
+            out["cum_ni_base"] = Decimal(0)
+            out["cum_months"] = Decimal(0)
+        return out
     row = (db.query(Cumulative)
            .filter(Cumulative.company_id == company_id,
                    Cumulative.emp_key == emp_key(company_id, p.emp_id_number),
@@ -392,6 +403,8 @@ def load_prev(db: Session, company_id: str, p: PaystubIn) -> dict:
             out["cum_weight"] = Decimal(d["cum_weight"])
         if "cum_ni_base" in d:
             out["cum_ni_base"] = Decimal(d["cum_ni_base"])
+        if "cum_months" in d:
+            out["cum_months"] = Decimal(d["cum_months"])
         return out
     if p.prev_cum_taxable is not None and p.prev_cum_tax is not None:
         return {"cum_taxable": Decimal(str(p.prev_cum_taxable)),
@@ -453,6 +466,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         loc = localities.lookup(p.locality, p.year)
         if loc is None:
             raise ValueError("יישוב לא מוכר או שנת מס שאינה 2026: אין הנחת יישוב מוטב, נדרשת הזנה ידנית")
+    elig = eligibility.ni_health_issue(p.birth_date, p.gender, p.worker_type, p.year, p.month)
     r = pe.compute_month(
         year=p.year, month=p.month, gross=gross, taxable_gross=taxable,
         points=p.credit_points, mode=p.tax_mode, prev=prev,
@@ -465,13 +479,21 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         employer_severance_rate=p.employer_severance_rate,
         employer_study_fund_rate=p.employer_study_fund_rate, weight=p.month_weight,
         locality=loc, fixed_rate=p.fixed_rate,
-        daily=((p.daily_wage, p.days_worked) if p.tax_mode == "daily" else None))
+        daily=((p.daily_wage, p.days_worked) if p.tax_mode == "daily" else None),
+        ni_manual_reason=elig["ni"], health_manual_reason=elig["health"])
 
     flags = []
     if comp_lines:
         flags.extend(comp_open)
         if p.pension_base_codes:
             flags.append("בסיס פנסיה כולל רכיבים שנבחרו (עפ\"י רואת חשבון): " + ", ".join(p.pension_base_codes))
+    if elig["missing_birth"]:
+        flags.append("תאריך לידה חסר: לא נבדק גיל לביטוח לאומי (מתחת ל-18 או בגיל פרישה יש שיעורים אחרים)")
+    if p.tax_exempt > 0:
+        flags.append("סכום פטור ממס: ביטוח לאומי ובריאות חושבו על הברוטו המלא. לפי תקנות 1995 אין דמי ביטוח על הכנסה פטורה ממס, "
+                     "ולכן הכלל לא ממומש; לבדוק מול רואת חשבון")
+    if p.month > 1 and eligibility.is_start_month(p.start_date, p.year, p.month) and p.prev_cum_taxable is None:
+        flags.append("חודש תחילת העבודה: המצטבר מהחודשים הקודמים הוגדר אפס. לוודא בטופס 101 שלא הייתה הכנסה מתחילת השנה עד תחילת העבודה")
     if ot > 0 or p.bonus > 0:
         inc = [n for n, on, v in (("שעות נוספות", p.pension_include_ot, ot), ("בונוס", p.pension_include_bonus, p.bonus)) if v > 0 and on]
         exc = [n for n, on, v in (("שעות נוספות", p.pension_include_ot, ot), ("בונוס", p.pension_include_bonus, p.bonus)) if v > 0 and not on]
@@ -1502,6 +1524,8 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         pts = pts or 0.0
     p = PaystubIn(
         emp_id_number=d["id_number"], emp_name=d["full_name"], year=body.year, month=body.month,
+        birth_date=d.get("birth_date"), gender=d.get("gender"), worker_type=(y or {}).get("worker_type"),
+        start_date=d.get("start_date"),
         base_salary=body.base_salary or d["base_salary"],
         ot_hours_125=body.ot_hours_125, ot_hours_150=body.ot_hours_150, bonus=body.bonus,
         tax_exempt=body.tax_exempt, credit_points=pts, locality=(y or {}).get("locality"),

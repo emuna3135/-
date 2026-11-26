@@ -274,6 +274,7 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
         "cum_deposits": prev["cum_deposits"] + D(str(deposits)),
         "cum_life": prev["cum_life"] + D(str(life)),
         "cum_weight": cum_weight,
+        "cum_months": prev.get("cum_months", D(month - 1)) + 1,    # חודשי עבודה אצל המעסיק (לתקרת הפקדות); שונה מ-month כשהעובד התחיל באמצע השנה
     }
     if mode == "daily":
         # עובד בשכר יומי (שכר עבודה): תוספת ב' לתקנות הניכוי, לכל יום עבודה; daily = (שכר יומי, ימי עבודה בחודש).
@@ -323,7 +324,7 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
         new["cum_tax"] = prev["cum_tax"]
         return item(None, MANUAL, "שנת המס לא נתמכת; הזינו את המס ידנית"), new
     before = tax_before_credits(new["cum_taxable"], cum_weight, year)
-    eligible = min(new["cum_deposits"], PENSION_CREDIT_CAP_MONTHLY * month)
+    eligible = min(new["cum_deposits"], PENSION_CREDIT_CAP_MONTHLY * new["cum_months"])
     loc_credit = D(0)
     if locality is not None:    # (שיעור, תקרה שנתית): הנחה על הכנסה מיגיעה אישית עד התקרה (מצטבר: תקרה x חודשים/12)
         l_rate, l_cap = locality
@@ -339,7 +340,7 @@ def income_tax(year, month, mode, taxable_gross, points, prev, deposits, life, w
         note += " | מדרגות 2026 לפי לוח עזר רשות המסים; נבדק מול תלושים רק עד 14,647"
     if cum_weight != month:
         note += " | חודש עבודה חלקי: לא מאומת מעבר לתלוש אחד"
-    if new["cum_deposits"] > PENSION_CREDIT_CAP_MONTHLY * month:
+    if new["cum_deposits"] > PENSION_CREDIT_CAP_MONTHLY * new["cum_months"]:
         note += " | הפקדות מעל התקרה: הזיכוי הוגבל"
     if month_tax < 0:
         note += " | חודש עם החזר מס"
@@ -549,13 +550,18 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
                   life_insurance=0, manual_income_tax=None, other_deductions=0,
                   employer_pension_rate="0", employer_severance_rate="0",
                   employer_study_fund_rate="0", weight=1, noncash_benefits=0,
-                  irregular_payment=0, locality=None, fixed_rate=None, daily=None):
+                  irregular_payment=0, locality=None, fixed_rate=None, daily=None,
+                  ni_manual_reason=None, health_manual_reason=None):
     gross = D(str(gross))
     taxable_gross = gross if taxable_gross is None else D(str(taxable_gross))
     base = gross if pension_base is None else D(str(pension_base))
     prev = prev or dict(ZERO_PREV)
 
     ni, health = ni_health(year, gross, month)
+    if ni_manual_reason:        # גיל/סוג עובד שהשיעורים שלו לא ממומשים: לא מנחשים, מסמנים לטיפול ידני
+        ni = item(None, MANUAL, ni_manual_reason)
+    if health_manual_reason:
+        health = item(None, MANUAL, health_manual_reason)
     pension = deposit(base, pension_employee_rate)
     study = deposit(base, study_fund_employee_rate)
     tax, cum = income_tax(year, month, mode, taxable_gross, points, prev,
