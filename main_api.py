@@ -62,7 +62,19 @@ if not JWT_SECRET:
     print("WARNING: JWT_SECRET not set - using a temporary random key")
 RATE_LIMITER = authpolicy.RateLimiter()
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+# DB_SCHEMA (אופציונלי, PostgreSQL בלבד): מריץ את המערכת בסכמה נפרדת באותו מסד, כך שסביבה אחת לא נוגעת בטבלאות של סביבה אחרת.
+_DB_SCHEMA = os.getenv("DB_SCHEMA", "").strip()
+_engine_args = {}
+if _DB_SCHEMA:
+    import re as _re
+    if not _re.fullmatch(r"[a-z][a-z0-9_]{0,40}", _DB_SCHEMA) or not DATABASE_URL.startswith("postgresql"):
+        raise RuntimeError("DB_SCHEMA חייב להיות אותיות קטנטנות/ספרות/קו תחתון, ורק עם PostgreSQL")
+    _boot = create_engine(DATABASE_URL)
+    with _boot.begin() as _c:
+        _c.exec_driver_sql(f'CREATE SCHEMA IF NOT EXISTS "{_DB_SCHEMA}"')
+    _boot.dispose()
+    _engine_args["connect_args"] = {"options": f"-csearch_path={_DB_SCHEMA}"}
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, **_engine_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
