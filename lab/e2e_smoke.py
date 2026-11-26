@@ -66,3 +66,19 @@ print("102:", o["status"], o["summary"], o["input"]["PaymentAmount"])
 assert o["summary"]["employees"] == 3
 s126 = c.post(f"/companies/{cid}/reports/126/check", headers=H, json=dict(year=2026, hebrew_visual=False, encoding="cp1255"))
 print("126 check:", s126.status_code, str(s126.json())[:300])
+
+e = ids[0]
+r = chk("show-calculation", c.get(f"/companies/{cid}/employees/{e}/calculation?year=2026&month=10", headers=H))
+o = r.json()
+assert o["items"]["income_tax"]["status"] and o["overridable"]["income_tax"] and o["net"]
+chk("show-calculation 404", c.get(f"/companies/{cid}/employees/{e}/calculation?year=2025&month=3", headers=H), ok=(404,))
+r = chk("override via show", c.post(f"/companies/{cid}/employees/{e}/override", headers=H, json=dict(year=2026, month=10, field="income_tax", new_value=100, reason="בדיקה")))
+o2 = c.get(f"/companies/{cid}/employees/{e}/calculation?year=2026&month=10", headers=H).json()
+assert float(o2["income_tax"]) == 100 and o2["net"] < o["net"], (o2["income_tax"], o2["net"], o["net"])
+print("override ok: net", o["net"], "->", o2["net"])
+bad = [x for x in res if not x[2]]
+print(len(res), "קריאות;", len(bad), "כשלו")
+
+if os.environ.get("DUMP_CALC"):
+    json.dump({"calc": c.get(f"/companies/{cid}/employees/{e}/calculation?year=2026&month=10", headers=H).json(),
+               "emps": c.get(f"/companies/{cid}/employees", headers=H).json()}, open(os.environ["DUMP_CALC"], "w"), ensure_ascii=False, default=str)

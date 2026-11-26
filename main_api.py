@@ -1605,6 +1605,24 @@ def override_item(company_id: str, employee_id: str, body: OverrideIn,
     return {"company_id": company_id, "employee_id": emp.id, **public_res(new_res)}
 
 
+@app.get("/companies/{company_id}/employees/{employee_id}/calculation")
+def show_calculation(company_id: str, employee_id: str, year: int, month: int,
+                     user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """"הצג חישוב": החישוב השמור האחרון של העובד לחודש, עם הערות ומקורות לכל שורה ותיקונים ידניים. קריאה בלבד."""
+    require_company(company_id, user, db, "read")
+    emp, d = get_employee(db, company_id, employee_id)
+    key = emp_key(company_id, d["id_number"])
+    row = (db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.emp_key == key,
+                                      PaystubV2.year == year, PaystubV2.month == month)
+           .order_by(PaystubV2.created_at.desc()).first())
+    if not row:
+        raise HTTPException(404, "לא נמצא חישוב לחודש הזה. חשבו את החודש קודם")
+    res = unseal(db, company_id, row.payload_enc)
+    audit(db, user.id, company_id, "show_calculation", "employee", emp.id, f"{month:02d}/{year}")
+    db.commit()
+    return {"company_id": company_id, "employee_id": emp.id, "overridable": overrides.ALLOWED, **public_res(res)}
+
+
 class TerminationIn(BaseModel):
     end_date: datetime.date
     ended_by: str = Field(..., pattern="^(dismissed|resigned)$")

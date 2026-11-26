@@ -384,10 +384,10 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["calc", "חישוב תלוש"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
+const NAV = [["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
-  const nav = [navBtn(["home", "תהליך עבודה"]), navBtn(["feedback", "משוב על המערכת"]),
+  const nav = [navBtn(["home", "תהליך עבודה"]), navBtn(["calc", "חישוב"]), navBtn(["showcalc", "הצג חישוב"]), navBtn(["feedback", "משוב על המערכת"]),
     h("details", { open: NAV.some(([k]) => k === view) ? true : false }, h("summary", { class: "nav" }, "עוד"), NAV.map(navBtn))];
   return h("div", { class: "app" },
     h("nav", { class: "rail", "aria-label": "ניווט ראשי" },
@@ -1357,9 +1357,73 @@ function homeView() {
         step("5", "דיווחים לרשויות", "מכינים קובץ דיווח (126, פנסיה). המערכת בודקת מה חסר, ואת הקובץ מגישה חשבת השכר בעצמה.", "לדיווחים", "reports"))));
 }
 
+
+/* ---------- הצג חישוב: כל התהליך של תלוש אחד, שורה אחרי שורה, עם מקור לכל שורה ואפשרות תיקון ידני ---------- */
+const ITEM_LABELS = { income_tax: "מס הכנסה", national_insurance: "ביטוח לאומי", health: "ביטוח בריאות", pension_employee: "פנסיה - עובד", study_fund_employee: "קרן השתלמות - עובד" };
+const STATUS_CLS = { "עפ\"י החוק": "ok", "עפ\"י רואת חשבון": "warn", "נדרש טיפול ידני": "bad" };
+function showCalcView() {
+  const out = h("div", { "aria-live": "polite" });
+  const empSel = h("select", {}, h("option", { value: "" }, "טוענת עובדים…"));
+  const now = new Date();
+  const yr = h("input", { type: "number", min: "2020", max: "2100", value: String(now.getFullYear()) });
+  const mo = h("input", { type: "number", min: "1", max: "12", value: String(now.getMonth() + 1) });
+  api("GET", cp("/employees")).then(list => {
+    empSel.replaceChildren(h("option", { value: "" }, "בחרי עובד"), ...list.map(e => h("option", { value: e.id }, e.full_name + " (" + e.id_number_masked + ")")));
+  }).catch(e => out.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)));
+  const row = (label, value, note) => h("tr", {}, h("td", {}, label), h("td", {}, h("span", { class: "num" }, value == null ? "—" : fmt(value))), h("td", {}, note || ""));
+  const draw = (r) => {
+    const items = Object.entries(r.items || {});
+    const itemRows = items.map(([k, it]) => {
+      const cls = STATUS_CLS[it.status] || "bad";
+      const over = (r.overridable || {})[k];
+      const val = h("input", { type: "number", step: "0.01", inputmode: "decimal", "aria-label": "ערך חדש" });
+      const why = h("input", { type: "text", maxlength: "500", placeholder: "סיבה (חובה)", "aria-label": "סיבה לתיקון" });
+      const msg = h("div", { role: "alert" });
+      const fix = over ? h("details", {}, h("summary", {}, "תיקון ידני"), h("div", { class: "row2" }, h("label", {}, "ערך חדש", val), h("label", {}, "סיבה", why)),
+        h("button", { type: "button", onclick: async () => {
+          msg.replaceChildren();
+          try {
+            const res = await api("POST", cp("/employees/" + r.employee_id + "/override"), { year: r.year, month: r.month, field: k, new_value: Number(val.value), reason: why.value });
+            draw({ ...res, overridable: r.overridable });
+          } catch (e) { msg.replaceChildren(h("div", { class: "err" }, e.message)); }
+        } }, "שמירת תיקון"), msg) : null;
+      return h("tr", {}, h("td", {}, ITEM_LABELS[k] || k),
+        h("td", {}, h("span", { class: "num" }, it.value == null ? "—" : fmt(it.value))),
+        h("td", {}, h("span", { class: "s-" + cls }, h("span", { class: "chip" }, it.status)), h("p", {}, it.note || ""), fix));
+    });
+    const manual = (r.unresolved || []).length ? h("div", { class: "err", role: "alert" }, "נדרש טיפול ידני: " + r.unresolved.map(u => (u.name || u.key || JSON.stringify(u))).join(", ")) : null;
+    out.replaceChildren(
+      h("h3", {}, r.emp_name + " · " + r.period),
+      manual,
+      h("section", { class: "card" }, h("h4", {}, "1. שכר ברוטו"),
+        h("table", { class: "t" }, h("tbody", {},
+          row("ברוטו", r.gross), row("שעות נוספות", r.overtime_pay), row("בונוס", r.bonus), row("חייב במס", r.taxable), row("בסיס פנסיה", r.pension_base)))),
+      h("section", { class: "card" }, h("h4", {}, "2. נקודות זיכוי"), h("p", {}, h("span", { class: "num" }, String(r.points == null ? "—" : r.points)), " נקודות. ההרכב מפורט בהערות שלמטה.")),
+      h("section", { class: "card" }, h("h4", {}, "3. ניכויים, עם החוק והסטטוס של כל שורה"),
+        h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["שורה", "סכום", "מקור והערות"].map(c => h("th", {}, c)))), h("tbody", {}, itemRows))),
+      h("section", { class: "card" }, h("h4", {}, "4. נטו לתשלום"), h("p", {}, h("span", { class: "num" }, r.net == null ? "—" : fmt(r.net)))),
+      h("section", { class: "card" }, h("h4", {}, "5. מצטבר מתחילת השנה"),
+        h("table", { class: "t" }, h("tbody", {}, row("הכנסה חייבת מצטברת", r.cumulative_taxable), row("מס מצטבר", r.cumulative_tax), row("בסיס ב\"ל מצטבר", r.cumulative_ni_base)))),
+      h("section", { class: "card" }, h("h4", {}, "6. עלות מעסיק"),
+        h("table", { class: "t" }, h("tbody", {}, ...Object.entries(r.employer || {}).map(([k, v]) => row({ pension: "פנסיה", severance: "פיצויים", study_fund: "קרן השתלמות", national_insurance: "ביטוח לאומי" }[k] || k, v))))),
+      h("section", { class: "card" }, h("h4", {}, "7. הערות ומקורות"), h("ul", {}, (r.flags || []).map(f => h("li", {}, f)))),
+      h("p", {}, h("button", { type: "button", class: "linkish", onclick: () => render("sources") }, "לכל מקורות החוק במערכת")));
+  };
+  const go = async () => {
+    if (!empSel.value) { out.replaceChildren(h("div", { class: "err", role: "alert" }, "בחרי עובד")); return; }
+    out.replaceChildren(h("p", {}, "טוענת…"));
+    try { draw(await api("GET", cp("/employees/" + empSel.value + "/calculation?year=" + yr.value + "&month=" + mo.value))); }
+    catch (e) { out.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)); }
+  };
+  return shell("showcalc", "הצג חישוב", h("div", {},
+    h("p", {}, "כל התהליך של תלוש אחד, שלב אחרי שלב. לכל שורה מופיעים הסטטוס, ההסבר והחוק. אפשר לתקן ידנית רק ניכוי, עם סיבה, והתיקון נרשם ביומן."),
+    h("div", { class: "row2" }, h("label", {}, "עובד", empSel), h("label", {}, "שנה", yr), h("label", {}, "חודש", mo)),
+    h("button", { type: "button", onclick: go }, "הצג חישוב"), out));
+}
+
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, prep: prepView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, prep: prepView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, showcalc: showCalcView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
