@@ -23,7 +23,7 @@ class AccountantPack(unittest.TestCase):
         self.assertEqual(len(set(ids)), 50)
         for i in ids:
             self.assertTrue(luhn_ok(i), i)
-            self.assertTrue(i.startswith("0001"), i)   # טווח המעבדה בלבד
+            self.assertTrue(i.startswith("0010"), i)   # טווח המעבדה בלבד
 
     def test_each_month_runs(self):
         for m in (1, 6, 12):
