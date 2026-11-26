@@ -328,6 +328,7 @@ class PaystubIn(BaseModel):
     birth_date: Optional[str] = None       # לבדיקת גיל לביטוח לאומי (eligibility.py)
     gender: Optional[str] = None
     worker_type: Optional[str] = None
+    old_age_pension: Optional[bool] = None
     start_date: Optional[str] = None       # תחילת עבודה: חודש התחלה = מצטבר קודם אפס
     year: int = Field(..., ge=2000, le=2100)
     month: int = Field(..., ge=1, le=12)
@@ -468,6 +469,10 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         if loc is None:
             raise ValueError("יישוב לא מוכר או שנת מס שאינה 2026: אין הנחת יישוב מוטב, נדרשת הזנה ידנית")
     elig = eligibility.ni_health_issue(p.birth_date, p.gender, p.worker_type, p.year, p.month)
+    ni_cat_name, ni_cat_reason = eligibility.ni_category(p.birth_date, p.gender, p.old_age_pension, p.year, p.month)
+    if ni_cat_reason:
+        elig["ni"] = elig["health"] = ni_cat_reason
+    ni_cat = eligibility._CATEGORIES.get(ni_cat_name) if ni_cat_name else None
     r = pe.compute_month(
         year=p.year, month=p.month, gross=gross, taxable_gross=taxable,
         points=p.credit_points, mode=p.tax_mode, prev=prev,
@@ -481,7 +486,7 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         employer_study_fund_rate=p.employer_study_fund_rate, weight=p.month_weight,
         locality=loc, fixed_rate=p.fixed_rate,
         daily=((p.daily_wage, p.days_worked) if p.tax_mode == "daily" else None),
-        ni_manual_reason=elig["ni"], health_manual_reason=elig["health"])
+        ni_manual_reason=elig["ni"], health_manual_reason=elig["health"], ni_category=ni_cat)
 
     flags = []
     if comp_lines:
@@ -1199,6 +1204,7 @@ class EmployeeIn(BaseModel):
     start_date: Optional[datetime.date] = None
     end_date: Optional[datetime.date] = None
     is_resident: bool = True
+    old_age_pension: Optional[bool] = None   # מקבל קצבת זקנה (קובע שיעורי ב"ל מגיל פרישה)
     bank_account: Optional[str] = None
     bank_code: Optional[str] = Field(None, pattern=r"^\d{1,2}$")       # מבנה מס"ב: בנק 2 ספרות
     bank_branch: Optional[str] = Field(None, pattern=r"^\d{1,3}$")     # סניף 3 ספרות
@@ -1525,7 +1531,7 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         pts = pts or 0.0
     p = PaystubIn(
         emp_id_number=d["id_number"], emp_name=d["full_name"], year=body.year, month=body.month,
-        birth_date=d.get("birth_date"), gender=d.get("gender"), worker_type=(y or {}).get("worker_type"),
+        birth_date=d.get("birth_date"), gender=d.get("gender"), old_age_pension=d.get("old_age_pension"), worker_type=(y or {}).get("worker_type"),
         start_date=d.get("start_date"),
         base_salary=body.base_salary or d["base_salary"],
         ot_hours_125=body.ot_hours_125, ot_hours_150=body.ot_hours_150, bonus=body.bonus,

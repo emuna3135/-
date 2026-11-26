@@ -56,7 +56,7 @@ NI_CAP_OFFICIAL = {2025, 2026}   # 2025: חוזר ב"ל 1515 (1.1.2025): הכנ�
 HEALTH_FULL_OVERRIDE = {(2025, 1): D("0.0516")}
 
 
-def ni_health(year, gross, month=None):
+def ni_health(year, gross, month=None, category=None):
     """מחזיר (שורת ב"ל, שורת בריאות). month אופציונלי; ללא חודש - שיעור השנה."""
     g = D(str(gross))
     if year not in NI_RATES:
@@ -73,6 +73,10 @@ def ni_health(year, gross, month=None):
         note = f"הכנסה מעל התקרה, חויב עד {cap}. "
     t, bl_lo, bl_hi, h_lo, h_hi = NI_RATES[year]
     h_hi = HEALTH_FULL_OVERRIDE.get((year, month), h_hi)
+    if category is not None:        # קטגוריה לפי גיל/קצבת זקנה (טבלת טופס 102 של ביטוח לאומי): שיעורי עובד שונים
+        bl_lo, bl_hi = category["ni"]
+        h_lo, h_hi = category["health"]
+        note += "קטגוריה: " + category["label"] + " (טופס 102, btl.gov.il; הפיצול לאומי/בריאות הוא הפרש מהסך שבטבלה) | "
     lo, hi = min(g, t), max(g - t, D(0))
     if high_zone and year in NI_CAP_OFFICIAL:
         status = BY_LAW
@@ -103,7 +107,7 @@ NI_EMPLOYER_RATES = {
 }
 
 
-def ni_employer(year, gross):
+def ni_employer(year, gross, category=None):
     """ביטוח לאומי של המעסיק לשכיר רגיל. מחזיר item. שנה לא נתמכת או שכר מעל סף בלי תקרה -> MANUAL."""
     g = D(str(gross))
     if year not in NI_EMPLOYER_RATES or year not in NI_MAX_INSURED:
@@ -115,7 +119,11 @@ def ni_employer(year, gross):
         note = f"הכנסה מעל התקרה, חויב עד {cap}. "
     t, lo_r, hi_r = NI_EMPLOYER_RATES[year]
     lo, hi = min(g, t), max(g - t, D(0))
-    note += "שכיר תושב ישראל בן 18 עד גיל פרישה; ללא עיגול (ערך מלא)"
+    if category is not None:
+        lo_r, hi_r = category["er"]
+        note += "קטגוריה: " + category["label"] + " (טופס 102); ללא עיגול (ערך מלא)"
+    else:
+        note += "שכיר תושב ישראל בן 18 עד גיל פרישה; ללא עיגול (ערך מלא)"
     return item(lo * lo_r + hi * hi_r, BY_LAW, note)
 
 
@@ -551,13 +559,13 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
                   employer_pension_rate="0", employer_severance_rate="0",
                   employer_study_fund_rate="0", weight=1, noncash_benefits=0,
                   irregular_payment=0, locality=None, fixed_rate=None, daily=None,
-                  ni_manual_reason=None, health_manual_reason=None):
+                  ni_manual_reason=None, health_manual_reason=None, ni_category=None):
     gross = D(str(gross))
     taxable_gross = gross if taxable_gross is None else D(str(taxable_gross))
     base = gross if pension_base is None else D(str(pension_base))
     prev = prev or dict(ZERO_PREV)
 
-    ni, health = ni_health(year, gross, month)
+    ni, health = ni_health(year, gross, month, ni_category)
     if ni_manual_reason:        # גיל/סוג עובד שהשיעורים שלו לא ממומשים: לא מנחשים, מסמנים לטיפול ידני
         ni = item(None, MANUAL, ni_manual_reason)
     if health_manual_reason:
@@ -605,7 +613,7 @@ def compute_month(*, year, month, gross, taxable_gross=None, points="2.75",
         "severance": deposit(base, employer_severance_rate),
         "study_fund": deposit(base, employer_study_fund_rate),
     }
-    ni_emp = ni_employer(year, gross)
+    ni_emp = ni_employer(year, gross, ni_category)
     if irregular_payment and D(str(irregular_payment)) > 0 and ni_emp["value"] is not None:
         ni_emp = dict(ni_emp, status=MANUAL, note=ni_emp["note"] + " | תשלום חריג בחודש: לא מאומת")
     employer["national_insurance"] = dict(ni_emp, basis=basis.for_item("national_insurance_employer"))

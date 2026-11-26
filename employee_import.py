@@ -23,6 +23,7 @@ ALIASES = {
     "is_resident": ("תושב", "is_resident"),
     "family_name": ("שם משפחה", "family_name"),
     "first_name": ("שם פרטי", "first_name"),
+    "old_age_pension": ("מקבל קצבת זקנה", "קצבת זקנה", "old_age_pension"),
     "street": ("רחוב ומספר בית", "רחוב", "street"),
     "city": ("עיר", "ישוב", "city"),
     "zip": ("מיקוד", "zip"),
@@ -130,6 +131,9 @@ def parse_employee(row):
         "base_salary": _num(_need(row, "base_salary"), "שכר יסוד"),
         "pension_employee_rate": _rate(_need(row, "pension_employee_rate"), "אחוז פנסיה עובד"),
     }
+    oap = _get(row, "old_age_pension")
+    if oap is not None:
+        out["old_age_pension"] = _yes_no(oap, "מקבל קצבת זקנה")
     for key, label in (("employer_pension_rate", "אחוז פנסיה מעסיק"), ("employer_severance_rate", "אחוז פיצויים מעסיק")):
         v = _get(row, key)
         if v is not None:

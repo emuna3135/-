@@ -17,23 +17,40 @@ class TestAge(unittest.TestCase):
         r = el.ni_health_issue("1985-05-05", "M", "resident", 2026, 6)
         self.assertEqual((r["ni"], r["health"], r["missing_birth"]), (None, None, False))
 
-    def test_minor_is_manual(self):
-        r = el.ni_health_issue("2009-03-03", "M", None, 2026, 1)
-        self.assertTrue(r["ni"] and r["health"])
+    def cat(self, birth, g, pension, y=2026, m=1):
+        return el.ni_category(birth, g, pension, y, m)
 
-    def test_man_67_and_over_manual_but_66_not(self):
-        self.assertIsNone(el.ni_health_issue("1959-12-31", "M", None, 2026, 1)["ni"])   # בן 66
-        self.assertTrue(el.ni_health_issue("1958-02-02", "M", None, 2026, 1)["ni"])     # בן 67 ומעלה
+    def test_minor_exempt_employee(self):
+        self.assertEqual(self.cat("2009-03-03", "M", None), ("exempt_employee", None))
 
-    def test_woman_flagged_from_62(self):
-        self.assertIsNone(el.ni_health_issue("1965-06-01", "F", None, 2026, 1)["ni"])   # בת 60
-        self.assertIsNone(el.ni_health_issue("1964-02-02", "F", None, 2026, 1)["ni"])   # בת 61 בסוף ינואר
-        self.assertTrue(el.ni_health_issue("1964-01-31", "F", None, 2026, 1)["ni"])     # בת 62 בסוף ינואר
-        self.assertTrue(el.ni_health_issue("1963-02-02", "F", None, 2026, 1)["ni"])
+    def test_regular_adult_none(self):
+        self.assertEqual(self.cat("1985-05-05", "M", None), (None, None))
+        self.assertEqual(self.cat("1959-12-31", "M", None), (None, None))      # גבר בן 66
+
+    def test_man_67_needs_pension_answer(self):
+        c, why = self.cat("1958-02-02", "M", None)
+        self.assertIsNone(c); self.assertTrue(why)
+        self.assertEqual(self.cat("1958-02-02", "M", False), ("age67_no_pension", None))
+        self.assertEqual(self.cat("1958-02-02", "M", True), ("exempt_employee", None))
+
+    def test_age_70_exempt_without_flag(self):
+        self.assertEqual(self.cat("1955-01-01", "M", None), ("exempt_employee", None))
+
+    def test_woman_uses_birth_year_table(self):
+        self.assertEqual(self.cat("1964-02-02", "F", None), (None, None))           # בת 61: לפני גיל פרישה
+        self.assertEqual(self.cat("1964-01-31", "F", None), (None, None))           # בת 62, פרישה ב-63 ו-6 חודשים
+        c, why = self.cat("1963-06-15", "F", None)                                  # בת 62.5, פרישה 63.3: עדיין לא
+        self.assertEqual((c, why), (None, None))
+        c, why = self.cat("1962-12-01", "F", None)                                  # בת 63 ו-1 חודש, פרישה 63: כן
+        self.assertTrue(why)
+        self.assertEqual(self.cat("1962-12-01", "F", False), ("woman_between", None))
+        self.assertEqual(self.cat("1958-02-02", "F", False), ("age67_no_pension", None))   # בת 67
+
+    def test_missing_birth(self):
+        self.assertEqual(self.cat(None, "M", None), (None, None))
 
     def test_foreign_worker_health_only(self):
         r = el.ni_health_issue("1990-12-12", "M", "foreign_legal", 2026, 1)
-        self.assertIsNone(r["ni"])
         self.assertTrue(r["health"])
 
     def test_area_resident_not_blocked(self):
@@ -102,3 +119,38 @@ class TestStartMonthTax(unittest.TestCase):
         prev["cum_months"] = D(0)
         mar = pe.compute_month(year=2026, month=3, gross=12000, points="2.25", prev=prev)
         self.assertEqual(mar["items"]["income_tax"]["value"], jan["items"]["income_tax"]["value"])
+
+
+class TestCategoryAmounts(unittest.TestCase):
+    """סכומים מחושבים ביד מטבלת טופס 102 (btl.gov.il), שכר 12,000, סף מופחת 7,703."""
+    def run_cat(self, name, gross=12000):
+        r = pe.compute_month(year=2026, month=1, gross=gross, ni_category=el._CATEGORIES[name])
+        return r["items"]["national_insurance"]["value"], r["items"]["health"]["value"], r["employer"]["national_insurance"]["value"]
+
+    def test_exempt(self):
+        ni, h, er = self.run_cat("exempt_employee")
+        self.assertEqual((float(ni), float(h)), (0.0, 0.0))
+        self.assertAlmostEqual(float(er), 7703 * 0.0061 + 4297 * 0.0212, places=6)
+
+    def test_age67(self):
+        ni, h, er = self.run_cat("age67_no_pension")
+        self.assertAlmostEqual(float(ni), 7703 * 0.0070 + 4297 * 0.0486, places=6)
+        self.assertAlmostEqual(float(h), 470.9618, places=4)
+        self.assertAlmostEqual(float(er), 7703 * 0.0413 + 4297 * 0.0696, places=6)
+
+    def test_woman_between(self):
+        ni, h, er = self.run_cat("woman_between")
+        self.assertAlmostEqual(float(ni), 7703 * 0.0072 + 4297 * 0.0507, places=6)
+        self.assertAlmostEqual(float(er), 7703 * 0.0417 + 4297 * 0.0712, places=6)
+
+    def test_total_employee_matches_table(self):
+        """סך עובד (לאומי+בריאות) חייב להתאים לטבלה: 3.93% / 10.03% ו-3.95% / 10.24%."""
+        for name, lo, hi in (("age67_no_pension", 0.0393, 0.1003), ("woman_between", 0.0395, 0.1024)):
+            c = el._CATEGORIES[name]
+            self.assertAlmostEqual(float(c["ni"][0] + c["health"][0]), lo, places=6)
+            self.assertAlmostEqual(float(c["ni"][1] + c["health"][1]), hi, places=6)
+
+    def test_default_unchanged(self):
+        ni, h, er = self.run_cat(None) if False else (None, None, None)
+        r = pe.compute_month(year=2026, month=1, gross=12000)
+        self.assertAlmostEqual(float(r["items"]["national_insurance"]["value"]), 380.9012, places=4)
