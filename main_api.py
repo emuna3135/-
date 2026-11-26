@@ -329,6 +329,7 @@ class PaystubIn(BaseModel):
     gender: Optional[str] = None
     worker_type: Optional[str] = None
     old_age_pension: Optional[bool] = None
+    origin_country: Optional[str] = None   # עובד זר: מדינת מוצא (אמנה או לא)
     start_date: Optional[str] = None       # תחילת עבודה: חודש התחלה = מצטבר קודם אפס
     year: int = Field(..., ge=2000, le=2100)
     month: int = Field(..., ge=1, le=12)
@@ -469,7 +470,11 @@ def compute(p: PaystubIn, db: Session, company_id: str) -> dict:
         if loc is None:
             raise ValueError("יישוב לא מוכר או שנת מס שאינה 2026: אין הנחת יישוב מוטב, נדרשת הזנה ידנית")
     elig = eligibility.ni_health_issue(p.birth_date, p.gender, p.worker_type, p.year, p.month)
-    ni_cat_name, ni_cat_reason = eligibility.ni_category(p.birth_date, p.gender, p.old_age_pension, p.year, p.month)
+    ni_cat_name, ni_cat_reason = eligibility.foreign_category(p.worker_type, p.origin_country)
+    if ni_cat_name is None and ni_cat_reason is None:
+        ni_cat_reason = eligibility.area_resident_issue(p.worker_type)
+    if ni_cat_name is None and ni_cat_reason is None:
+        ni_cat_name, ni_cat_reason = eligibility.ni_category(p.birth_date, p.gender, p.old_age_pension, p.year, p.month)
     if ni_cat_reason:
         elig["ni"] = elig["health"] = ni_cat_reason
     ni_cat = eligibility._CATEGORIES.get(ni_cat_name) if ni_cat_name else None
@@ -1252,6 +1257,7 @@ class Form101In(BaseModel):
     reserve_days_prev_year: Optional[int] = Field(None, ge=0, le=366)
     worker_type: Optional[str] = Field(None, pattern="^(resident|foreign_nursing|foreign_legal|area_resident|foreign_other)$")
     months_in_israel: Optional[int] = Field(None, ge=1, le=12)
+    origin_country: Optional[str] = Field(None, max_length=40)
 
 
 def get_employee(db: Session, company_id: str, employee_id: str):
@@ -1327,6 +1333,7 @@ class FamilyFixIn(BaseModel):
     family_flags: List[str] = Field(default_factory=list, max_length=7)
     worker_type: Optional[str] = Field(None, pattern="^(resident|foreign_nursing|foreign_legal|area_resident|foreign_other)$")
     months_in_israel: Optional[int] = Field(None, ge=1, le=12)
+    origin_country: Optional[str] = Field(None, max_length=40)
 
 
 @app.post("/companies/{company_id}/employees/{employee_id}/form101/{year}/family")
@@ -1348,6 +1355,8 @@ def fix_family(company_id: str, employee_id: str, year: int, body: FamilyFixIn,
         data["worker_type"] = body.worker_type
     if body.months_in_israel:
         data["months_in_israel"] = body.months_in_israel
+    if body.origin_country:
+        data["origin_country"] = body.origin_country
     row.payload_enc = seal(db, company_id, Form101In(**data).model_dump(mode="json"))
     audit(db, user.id, company_id, "fix_family", "employee", emp.id, f"year={year}")
     db.commit()
@@ -1531,7 +1540,7 @@ def calculate_from_card(company_id: str, employee_id: str, body: CalcFromCardIn,
         pts = pts or 0.0
     p = PaystubIn(
         emp_id_number=d["id_number"], emp_name=d["full_name"], year=body.year, month=body.month,
-        birth_date=d.get("birth_date"), gender=d.get("gender"), old_age_pension=d.get("old_age_pension"), worker_type=(y or {}).get("worker_type"),
+        birth_date=d.get("birth_date"), gender=d.get("gender"), old_age_pension=d.get("old_age_pension"), worker_type=(y or {}).get("worker_type"), origin_country=(y or {}).get("origin_country"),
         start_date=d.get("start_date"),
         base_salary=body.base_salary or d["base_salary"],
         ot_hours_125=body.ot_hours_125, ot_hours_150=body.ot_hours_150, bonus=body.bonus,
@@ -2556,7 +2565,7 @@ def _card_error_ctx(db, company_id, row) -> dict:
             if yr:
                 yd = unseal(db, company_id, yr.payload_enc)
                 who["family"] = {k: yd.get(k) for k in ("marital", "custody_birth_years", "noncustody_birth_years", "family_flags",
-                                                         "worker_type", "months_in_israel")}
+                                                         "worker_type", "months_in_israel", "origin_country")}
                 who["family"]["year"] = calc["year"]
             try:
                 _e, _d = get_employee(db, company_id, emp.id)

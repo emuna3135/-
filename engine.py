@@ -76,7 +76,7 @@ def ni_health(year, gross, month=None, category=None):
     if category is not None:        # קטגוריה לפי גיל/קצבת זקנה (טבלת טופס 102 של ביטוח לאומי): שיעורי עובד שונים
         bl_lo, bl_hi = category["ni"]
         h_lo, h_hi = category["health"]
-        note += "קטגוריה: " + category["label"] + " (טופס 102, btl.gov.il; הפיצול לאומי/בריאות הוא הפרש מהסך שבטבלה) | "
+        note += "קטגוריה: " + category["label"] + " (" + category.get("src", "טופס 102, btl.gov.il; הפיצול לאומי/בריאות הוא הפרש מהסך שבטבלה") + ") | "
     lo, hi = min(g, t), max(g - t, D(0))
     if high_zone and year in NI_CAP_OFFICIAL:
         status = BY_LAW
@@ -121,7 +121,7 @@ def ni_employer(year, gross, category=None):
     lo, hi = min(g, t), max(g - t, D(0))
     if category is not None:
         lo_r, hi_r = category["er"]
-        note += "קטגוריה: " + category["label"] + " (טופס 102); ללא עיגול (ערך מלא)"
+        note += "קטגוריה: " + category["label"] + " (" + category.get("src_er", "טופס 102") + "); ללא עיגול (ערך מלא)"
     else:
         note += "שכיר תושב ישראל בן 18 עד גיל פרישה; ללא עיגול (ערך מלא)"
     return item(lo * lo_r + hi * hi_r, BY_LAW, note)

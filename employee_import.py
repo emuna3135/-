@@ -43,6 +43,7 @@ ALIASES = {
     "flags": ("מצבי חיים", "family_flags"),
     "worker_type": ("סוג עובד", "worker_type"),
     "months_in_israel": ("חודשי שהייה בישראל", "months_in_israel"),
+    "origin_country": ("מדינת מוצא", "origin_country"),
 }
 
 
@@ -227,6 +228,7 @@ def parse_form101(row):
     return idn, year, {
         "worker_type": wtv,
         "months_in_israel": miv,
+        "origin_country": (str(_get(row, "origin_country")).strip() if _get(row, "origin_country") is not None else None),
         "signed_on": _date(_get(row, "signed_on"), "תאריך חתימה"),
         "income_type": income,
         "other_income": False if other is None else _yes_no(other, "הכנסה אחרת"),

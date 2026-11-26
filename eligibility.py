@@ -48,6 +48,45 @@ _CATEGORIES = {
 }
 
 
+_CATEGORIES.update({
+    # תושב חוץ (דף "שיעורי דמי הביטוח לתושב חוץ", btl.gov.il, מ-1.1.2026): ביטוח לאומי בלבד, בלי בריאות
+    "nonresident": dict(src="btl.gov.il, שיעורי תושב חוץ מ-1.1.2026", src_er="btl.gov.il, שיעורי תושב חוץ מ-1.1.2026", label="עובד זר (תושב חוץ): ביטוח לאומי בלבד", ni=(_D("0.001"), _D("0.0087")), health=(_D("0"), _D("0")),
+                        er=(_D("0.0075"), _D("0.0265"))),
+    # עובד ממדינת אמנה: "לפי האחוזים המלאים, פחות אחוזי דמי ביטוח בריאות" (חוזר ב"ל, עדכון 2015; חוזר 1680/2026 סעיפים 3.2, 4.2)
+    "treaty_no_health": dict(src="btl.gov.il, חוזר עובדים זרים ממדינות אמנה וחוזר 1680/2026", src_er="btl.gov.il, חוזר עובדים זרים ממדינות אמנה וחוזר 1680/2026", label="עובד זר ממדינת אמנה: כמו תושב ישראל בלי בריאות", ni=(_D("0.0104"), _D("0.07")),
+                             health=(_D("0"), _D("0")), er=(_D("0.0451"), _D("0.076"))),
+    # עובד זר בסיעוד/משק בית: 3.6% מהשכר, המעסיק בלבד (btl.gov.il/Insurance/Rates "עובד משק בית"; MasikOvedSARAM: 3.6% מינואר 2025)
+    "nursing_foreign": dict(src="btl.gov.il, עובד זר לצורך טיפול סיעודי, 3.6% מ-2025", src_er="btl.gov.il, עובד זר לצורך טיפול סיעודי, 3.6% מ-2025", label="עובד זר בסיעוד: 3.6% מהשכר, מעסיק בלבד", ni=(_D("0"), _D("0")), health=(_D("0"), _D("0")),
+                            er=(_D("0.036"), _D("0.036"))),
+})
+
+# מדינות האמנה לפי btl.gov.il/benefits/International_Conventions (נקרא 26.11.2026), מפתח: שם בעברית
+TREATY_COUNTRIES = {"אוסטריה", "אורוגוואי", "איטליה", "ארגנטינה", "בולגריה", "בלגיה", "בריטניה", "גרמניה", "דנמרק", "הולנד", "נורווגיה",
+                    "סלובקיה", "פולין", "פינלנד", "צ'כיה", "צרפת", "רומניה", "רוסיה", "שוודיה", "שווייץ"}
+# ארבע מדינות שבהן העובד מבוטח בשלושה ענפים בלבד (חוזר 1680/2026): השיעורים לא מפורטים
+THREE_BRANCH_COUNTRIES = {"ארגנטינה", "בולגריה", "פולין", "רומניה"}
+_COUNTRY_ALIASES = {"שוויץ": "שווייץ", "שוויץ ": "שווייץ", "הולנד": "הולנד", "ארה\"ב": "ארצות הברית", "בריטניה": "בריטניה",
+                    "אנגליה": "בריטניה", "צ׳כיה": "צ'כיה", "צכיה": "צ'כיה", "צ'כיה": "צ'כיה", "רוסיה": "רוסיה"}
+
+
+def foreign_category(worker_type, origin_country):
+    """עובד זר: (קטגוריה|None, סיבה לטיפול ידני|None). None,None = לא עובד זר."""
+    if worker_type not in FOREIGN_TYPES:
+        return None, None
+    if worker_type == "foreign_nursing":
+        return "nursing_foreign", None
+    c = str(origin_country or "").strip()
+    c = _COUNTRY_ALIASES.get(c, c)
+    if not c:
+        return None, ("עובד זר: חסרה מדינת מוצא. עובד ממדינת אמנה משלם כמו תושב ישראל בלי בריאות, וכל השאר לפי שיעורי תושב חוץ. "
+                      "יש למלא 'מדינת מוצא' בטופס 101. נדרש טיפול ידני עד אז")
+    if c in THREE_BRANCH_COUNTRIES:
+        return None, (f"עובד ממדינת אמנה ({c}) מבוטח בשלושה ענפים בלבד (חוזר ביטוח לאומי 1680/2026) והשיעורים לא מפורטים בחוזר. נדרש טיפול ידני")
+    if c in TREATY_COUNTRIES:
+        return "treaty_no_health", None
+    return "nonresident", None
+
+
 def women_retirement_months(birth_year: int):
     if birth_year < 1960:
         return 62 * 12
@@ -89,13 +128,15 @@ def ni_category(birth_date, gender, old_age_pension, year: int, month: int):
 
 
 def ni_health_issue(birth_date, gender, worker_type, year: int, month: int):
-    """מחזיר {'health': סיבה|None, 'missing_birth': bool}. גיל ופרישה מטופלים ב-ni_category; כאן נשאר עובד זר."""
-    out = {"ni": None, "health": None, "missing_birth": not birth_date}
-    if worker_type in FOREIGN_TYPES:
-        out["health"] = ("עובד זר: בטבלת ביטוח לאומי לתושבי ישראל (טופס 102) הוא לא מופיע; בדף 'מעסיק של תושב חוץ' יש שיעורי ב\"ל בלבד "
-                         "(מעסיק 0.75%/2.65%, עובד 0.1%/0.87%) בלי הגדרה מי נחשב תושב חוץ ובלי בריאות. מסמך הלשכה המשפטית: עובד זר אינו מבוטח "
-                         "בבריאות ממלכתית. ההגדרה מול רואת חשבון או ביטוח לאומי; לא ממומש; נדרש טיפול ידני")
-    return out
+    """מחזיר {'ni','health': סיבה ידנית|None, 'missing_birth': bool}. עובד זר מטופל ב-foreign_category."""
+    return {"ni": None, "health": None, "missing_birth": not birth_date}
+
+
+def area_resident_issue(worker_type):
+    if worker_type == "area_resident":
+        return ("תושב האזור: לפי ביטוח לאומי, מעסיק של תושב הרשות הפלסטינית/יהודה ושומרון בתוך ישראל מדווח ומשלם דרך רשות האוכלוסין, "
+                "וביישובים ואתרים צבאיים באזור חלים שיעורים נפרדים (0.71%/2.49% מעסיק, 0.07%/0.61% עובד). מקום העבודה לא ידוע במערכת; נדרש טיפול ידני")
+    return None
 
 
 def is_start_month(start_date, year: int, month: int) -> bool:

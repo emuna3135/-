@@ -49,13 +49,21 @@ class TestAge(unittest.TestCase):
     def test_missing_birth(self):
         self.assertEqual(self.cat(None, "M", None), (None, None))
 
-    def test_foreign_worker_health_only(self):
-        r = el.ni_health_issue("1990-12-12", "M", "foreign_legal", 2026, 1)
-        self.assertTrue(r["health"])
+    def test_foreign_categories(self):
+        fc = el.foreign_category
+        self.assertEqual(fc("resident", None), (None, None))
+        self.assertEqual(fc("foreign_nursing", None), ("nursing_foreign", None))
+        self.assertEqual(fc("foreign_legal", "הודו"), ("nonresident", None))
+        self.assertEqual(fc("foreign_legal", "גרמניה"), ("treaty_no_health", None))
+        self.assertEqual(fc("foreign_other", "קנדה"), ("nonresident", None))        # קנדה כמו עובד זר שאינו ממדינת אמנה
+        self.assertEqual(fc("foreign_legal", "רוסיה"), ("treaty_no_health", None))
+        c, why = fc("foreign_legal", "פולין"); self.assertIsNone(c); self.assertTrue(why)
+        c, why = fc("foreign_legal", None); self.assertIsNone(c); self.assertTrue(why)
 
-    def test_area_resident_not_blocked(self):
-        r = el.ni_health_issue("1987-03-13", "M", "area_resident", 2026, 1)
-        self.assertEqual((r["ni"], r["health"]), (None, None))
+    def test_area_resident_manual(self):
+        self.assertTrue(el.area_resident_issue("area_resident"))
+        self.assertIsNone(el.area_resident_issue("resident"))
+
 
     def test_missing_birth_flagged_not_blocked(self):
         r = el.ni_health_issue(None, "M", None, 2026, 1)
@@ -154,3 +162,27 @@ class TestCategoryAmounts(unittest.TestCase):
         ni, h, er = self.run_cat(None) if False else (None, None, None)
         r = pe.compute_month(year=2026, month=1, gross=12000)
         self.assertAlmostEqual(float(r["items"]["national_insurance"]["value"]), 380.9012, places=4)
+
+
+class TestForeignAmounts(unittest.TestCase):
+    def run_cat(self, name, gross=12000):
+        r = pe.compute_month(year=2026, month=1, gross=gross, ni_category=el._CATEGORIES[name])
+        return (float(r["items"]["national_insurance"]["value"]), float(r["items"]["health"]["value"]),
+                float(r["employer"]["national_insurance"]["value"]))
+
+    def test_nonresident(self):
+        ni, h, er = self.run_cat("nonresident")
+        self.assertAlmostEqual(ni, 7703 * 0.001 + 4297 * 0.0087, places=6)
+        self.assertEqual(h, 0.0)
+        self.assertAlmostEqual(er, 7703 * 0.0075 + 4297 * 0.0265, places=6)
+
+    def test_treaty_no_health(self):
+        ni, h, er = self.run_cat("treaty_no_health")
+        self.assertAlmostEqual(ni, 7703 * 0.0104 + 4297 * 0.07, places=6)
+        self.assertEqual(h, 0.0)
+        self.assertAlmostEqual(er, 7703 * 0.0451 + 4297 * 0.076, places=6)
+
+    def test_nursing_employer_only(self):
+        ni, h, er = self.run_cat("nursing_foreign", 5000)
+        self.assertEqual((ni, h), (0.0, 0.0))
+        self.assertAlmostEqual(er, 180.0, places=6)
