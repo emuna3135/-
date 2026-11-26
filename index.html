@@ -1174,7 +1174,8 @@ function sourcesView() {
     const sel = rows.filter(r => (!stSel.value || r.status === stSel.value) &&
       (!t || [r.area, r.rule, r.value, r.law, r.ref].join(" ").includes(t)));
     const areas = [...new Set(sel.map(r => r.area))];
-    box.replaceChildren(h("p", {}, sel.length + " כללים"), ...areas.map(a => h("section", { class: "card" }, h("h3", {}, a),
+    const cnt = Object.entries(SRC_ST).map(([k, v]) => v[0] + ": " + rows.filter(r => r.status === k).length).join(" · ");
+    box.replaceChildren(h("p", {}, sel.length + " כללים מוצגים מתוך " + rows.length + ". סיכום כל הכללים: " + cnt), ...areas.map(a => h("section", { class: "card" }, h("h3", {}, a),
       h("table", { class: "t" }, h("thead", {}, h("tr", {}, ["כלל", "ערך", "חוק / מקור", "אסמכתא", "סטטוס"].map(c => h("th", {}, c)))),
         h("tbody", {}, sel.filter(r => r.area === a).map(r => h("tr", {},
           h("td", {}, r.rule), h("td", {}, h("span", { class: "num" }, r.value || "—")),
