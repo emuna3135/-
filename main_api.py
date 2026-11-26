@@ -4,7 +4,7 @@ import io
 import os
 import uuid
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import bcrypt
 import jwt
@@ -24,6 +24,7 @@ import intake
 import engine as pe  # מנוע החישוב המאומת (engine.py)
 import params
 import sources_catalog
+import accounting_export
 import eligibility
 import employee_import
 import authpolicy
@@ -2126,6 +2127,55 @@ def report_pension_file(company_id: str, body: ReportPensionIn, user: User = Dep
             z.writestr(f["name"], f["xml"].encode("utf-8"))
     hdr["Content-Disposition"] = f'attachment; filename="pension-{body.year}{body.month:02d}.zip"'
     return Response(content=buf.getvalue(), media_type="application/zip", headers=hdr)
+
+
+class AccountingExportIn(BaseModel):
+    year: int = Field(..., ge=2000, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    software: str = Field("", max_length=60)            # שם תוכנת הנהלת החשבונות (נכנס לקובץ ולשמו)
+    template: str = Field("xlsx", pattern="^(xlsx|csv_utf8|csv_1255)$")
+    per_employee: bool = False
+    accounts: Dict[str, str] = Field(default_factory=dict)   # מפתח שורה -> מספר חשבון
+
+
+def _export_rows(db, company_id, body):
+    stubs = [unseal(db, company_id, s.payload_enc) for s in
+             db.query(PaystubV2).filter(PaystubV2.company_id == company_id, PaystubV2.year == body.year,
+                                        PaystubV2.month == body.month).order_by(PaystubV2.created_at).all()]
+    latest = {}
+    for st in stubs:                       # התלוש האחרון לכל עובד בחודש
+        latest[st.get("emp_id_number")] = st
+    accounts = {k: v.strip()[:30] for k, v in body.accounts.items() if k in accounting_export.LABEL}
+    rows, issues = accounting_export.build_rows(list(latest.values()), accounts, body.per_employee)
+    return rows, issues, len(latest)
+
+
+@app.post("/companies/{company_id}/reports/accounting/check")
+def accounting_check(company_id: str, body: AccountingExportIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    require_company(company_id, user, db, "read")
+    rows, issues, n = _export_rows(db, company_id, body)
+    audit(db, user.id, company_id, "accounting_check", "report", None, f"{body.year}-{body.month:02d} stubs={n}")
+    db.commit()
+    return {"stubs": n, "rows": len(rows), "issues": issues,
+            "debit": float(sum(r["debit"] for r in rows)), "credit": float(sum(r["credit"] for r in rows)),
+            "ready": bool(rows) and not any(i["level"] == "block" for i in issues),
+            "lines": [{"key": k, "label": t} for k, t, side in accounting_export.LINES if side != "x"]}
+
+
+@app.post("/companies/{company_id}/reports/accounting/file")
+def accounting_file(company_id: str, body: AccountingExportIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """קובץ פקודת יומן להנהלת חשבונות. לא נשלח לשום מקום; חשבת השכר מעלה אותו לתוכנה בעצמה."""
+    require_company(company_id, user, db, "write")
+    rows, issues, n = _export_rows(db, company_id, body)
+    if not rows:
+        raise HTTPException(422, "אין תלושים תקינים לחודש הזה (תלושים עם סעיף ידני לא נכללים)")
+    name = db.query(Company).filter(Company.id == company_id).first()
+    data, fname, mime = accounting_export.build_file(rows, body.template, body.software, body.year, body.month,
+                                                      getattr(name, "name", "") or "")
+    audit(db, user.id, company_id, "accounting_download", "report", None,
+          f"{body.year}-{body.month:02d} rows={len(rows)} tpl={body.template}")
+    db.commit()
+    return Response(content=data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 class MonthlyPackageIn(BaseModel):

@@ -384,7 +384,7 @@ function enrollView() {
 }
 
 /* ---------- מעטפת ---------- */
-const NAV = [["hours", "קליטת נוכחות"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
+const NAV = [["hours", "קליטת נוכחות"], ["accounting", "ייצוא להנהלת חשבונות"], ["uploadadv", "העלאת אקסל (מתקדם)"], ["f101", "טופס 101"], ["term", "סיום העסקה"], ["slip", "הפקת תלוש"], ["emps", "עובדים"], ["props", "מסמכים לאישור"], ["rules", "כללי המשרד"], ["sources", "מקורות החוק"], ["params", "פרמטרים שנתיים"], ["audit", "יומן פעולות"]];
 function shell(view, title, content) {
   const navBtn = ([k, label]) => h("button", { class: "nav", "aria-current": k === view ? "page" : false, onclick: () => render(k) }, label);
   const nav = [navBtn(["home", "תהליך עבודה"]), navBtn(["calc", "חישוב"]), navBtn(["showcalc", "הצג חישוב"]), navBtn(["feedback", "משוב על המערכת"]),
@@ -1208,6 +1208,68 @@ function sourcesView() {
 
 
 /* ---------- משוב ---------- */
+function accountingView() {
+  const KEY = "acct_export_" + (state.companyId || "");
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { saved = {}; }
+  const out = h("div", { "aria-live": "polite" });
+  const now = new Date();
+  const year = h("input", { type: "number", min: "2024", max: "2100", value: String(saved.year || now.getFullYear()), "aria-label": "שנה" });
+  const month = h("select", { "aria-label": "חודש" }, Array.from({ length: 12 }, (_, i) => h("option", { value: String(i + 1) }, String(i + 1))));
+  month.value = String(saved.month || (now.getMonth() || 12));
+  const software = h("input", { type: "text", maxlength: "60", placeholder: "למשל: חשבשבת, פריוריטי, או שם אחר", value: saved.software || "", "aria-label": "שם תוכנת הנהלת החשבונות" });
+  const template = h("select", { "aria-label": "תבנית קובץ" },
+    h("option", { value: "xlsx" }, "אקסל כללי (פקודת יומן)"), h("option", { value: "csv_utf8" }, "CSV כללי (UTF-8)"), h("option", { value: "csv_1255" }, "CSV כללי (עברית חלונות 1255)"));
+  template.value = saved.template || "xlsx";
+  const per = h("input", { type: "checkbox", "aria-label": "שורות נפרדות לכל עובד" });
+  per.checked = !!saved.per_employee;
+  const LINES = [["gross", "שכר ברוטו"], ["er_pension", "הפרשת מעסיק לפנסיה"], ["er_severance", "הפרשת מעסיק לפיצויים"], ["er_study_fund", "הפרשת מעסיק להשתלמות"], ["er_ni", "ביטוח לאומי מעסיק"],
+    ["income_tax", "מס הכנסה לשלם"], ["ni", "ביטוח לאומי (ניכוי עובד)"], ["health", "ביטוח בריאות (ניכוי עובד)"], ["pension_employee", "פנסיה עובד"],
+    ["liab_er_pension", "פנסיה מעסיק לשלם"], ["liab_er_severance", "פיצויים לשלם"], ["liab_er_study_fund", "קרן השתלמות לשלם"], ["liab_er_ni", "ביטוח לאומי מעסיק לשלם"],
+    ["other_deductions", "ניכויים אחרים והטבות לא כספיות"], ["net", "שכר נטו לתשלום"], ["rounding", "הפרשי עיגול"]];
+  const acc = {};
+  const accRows = LINES.map(([k, t]) => { acc[k] = h("input", { type: "text", maxlength: "30", value: (saved.accounts || {})[k] || "", "aria-label": "מספר חשבון: " + t }); return h("label", {}, t, acc[k]); });
+  const body = () => {
+    const accounts = {};
+    LINES.forEach(([k]) => { if (acc[k].value.trim()) accounts[k] = acc[k].value.trim(); });
+    return { year: +year.value, month: +month.value, software: software.value.trim(), template: template.value, per_employee: per.checked, accounts };
+  };
+  const remember = () => { try { localStorage.setItem(KEY, JSON.stringify(Object.assign({}, body(), { year: +year.value }))); } catch (e) { /* אין אחסון */ } };
+  const issuesList = (r) => {
+    const li = (i) => h("li", {}, i.text);
+    const blocks = r.issues.filter(i => i.level === "block"), warns = r.issues.filter(i => i.level !== "block");
+    return [h("div", { class: "rep-status " + (r.ready ? "ok" : "warn"), role: r.ready ? "status" : "alert" },
+      h("strong", {}, r.ready ? "הקובץ מוכן להורדה" : "הקובץ עדיין לא מוכן"),
+      h("span", {}, r.stubs + " תלושים, חובה " + r.debit.toFixed(2) + " | זכות " + r.credit.toFixed(2))),
+      blocks.length ? h("ul", {}, blocks.map(li)) : null, warns.length ? h("details", { open: true }, h("summary", {}, "לבדיקה שלך (" + warns.length + ")"), h("ul", {}, warns.map(li))) : null];
+  };
+  const run = async () => {
+    remember();
+    out.replaceChildren(h("p", { class: "muted" }, "בודקת…"));
+    try {
+      const r = await api("POST", cp("/reports/accounting/check"), body());
+      const parts = issuesList(r).filter(Boolean);
+      if (r.ready) {
+        const res = await fetch(state.api + cp("/reports/accounting/file"), { method: "POST", headers: { "Authorization": "Bearer " + state.token, "Content-Type": "application/json" }, body: JSON.stringify(body()) });
+        if (!res.ok) { let m = "הפעולה נכשלה (" + res.status + ")"; try { const j = await res.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+        const cd = res.headers.get("Content-Disposition") || "";
+        const fname = (cd.match(/filename="([^"]+)"/) || [])[1] || "journal";
+        parts.push(h("a", { class: "btn", href: URL.createObjectURL(await res.blob()), download: fname }, "הורדת הקובץ"));
+      }
+      out.replaceChildren(...parts);
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  };
+  return h("section", {},
+    h("h1", {}, "ייצוא להנהלת חשבונות"),
+    h("p", { class: "muted" }, "פקודת יומן שכר לחודש שנבחר, מהתלושים שהופקו. הקובץ לא נשלח לשום מקום: את מעלה אותו לתוכנה בעצמך. תלוש עם סעיף שדורש טיפול ידני לא נכנס לקובץ."),
+    h("label", {}, "תוכנת הנהלת החשבונות", software),
+    h("p", { class: "muted" }, "התבנית המדויקת של כל תוכנה (עמודות וקידוד) תתווסף לפי קובץ דוגמה או מפרט ייבוא רשמי של אותה תוכנה. עד אז אפשר להוריד תבנית כללית, והשם נכנס לקובץ ולשמו."),
+    h("label", {}, "שנה", year), h("label", {}, "חודש", month), h("label", {}, "תבנית", template),
+    h("label", {}, per, " שורות נפרדות לכל עובד (במקום סיכום חודשי)"),
+    h("details", {}, h("summary", {}, "מספרי חשבון (אפשר להשאיר ריק ולמלא בתוכנה)"), accRows),
+    h("button", { class: "btn", type: "button", onclick: run }, "בדיקה והכנת קובץ"), out);
+}
+
 function feedbackView() {
   const area = h("select", {}, [["general", "כללי"], ["calc", "החישוב"], ["law", "החוק והמקורות"], ["screens", "המסכים והשימוש"], ["other", "אחר"]].map(([v, t]) => h("option", { value: v }, t)));
   const text = h("textarea", { rows: 6, required: true, minlength: 3, maxlength: 2000, placeholder: "מה לא נראה נכון, מה חסר, מה היה מבלבל. בלי שמות או ת״ז אמיתיים." });
@@ -1476,7 +1538,7 @@ function hoursView() {
 
 function render(view) {
   state.view = view;
-  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, prep: prepView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, showcalc: showCalcView, hours: hoursView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView };
+  const views = { home: homeView, f101: form101View, term: terminationView, slip: slipPageView, prep: prepView, upload: uploadView, uploadadv: uploadAdvancedView, review: reviewView, issue: issueView, reports: reportsView, login: () => loginView(), register: registerView, newco: newcoView, chpw: chpwView, enroll: enrollView, calc: calcView, showcalc: showCalcView, hours: hoursView, emps: empsView, props: propsView, prop: propView, rules: rulesView, audit: auditView, params: paramsView, sources: sourcesView, feedback: feedbackView, accounting: accountingView };
   mount(views[view]());
   window.scrollTo(0, 0);
 }
