@@ -18,11 +18,14 @@ SPECIAL = [("niptar", "הורה יחיד"), ("mezonut", "משלם מזונות")
 
 
 def make(n=30, month=1, year=2026):
-    emps = []
+    emps, used = [], set()
     for i in range(n):
         g = rng.choice("FM")
-        first = rng.choice(FIRST_F if g == "F" else FIRST_M)
-        last = rng.choice(LAST)
+        while True:      # שמות ייחודיים, כדי שבמסכים אפשר יהיה להבדיל בין עובדים
+            first = rng.choice(FIRST_F if g == "F" else FIRST_M)
+            last = rng.choice(LAST)
+            if (first, last) not in used:
+                used.add((first, last)); break
         married = rng.random() < .55
         flag = None
         if not married and rng.random() < .15:

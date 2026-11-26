@@ -1030,12 +1030,24 @@ function reviewView() {
     const dlt = (cur, prev) => (typeof cur === "number" && typeof prev === "number") ? ((cur - prev >= 0 ? "+" : "") + fmt(cur - prev)) : "אין נתון";
     /* מה דורש תשומת לב: רשימה ממוינת כדי שהחשבת תבדוק רק את החריגים; לכל שורה כתובה הסיבה המדויקת כפי שהמערכת רשמה אותה */
     const attn = [];
+    const infoNotes = new Map();   /* הערות על שיטת החישוב: אינן חריגים, ולכן מקובצות ולא נספרות ברשימת תשומת הלב */
+    const flagInfoKey = (f) => {
+      if (/^משרה עיקרית עם טופס 101 חתום/.test(f)) return "משרה עיקרית עם טופס 101 חתום";
+      if (/^נקודות זיכוי:/.test(f) && /מאומת מול/.test(f) && !/שימו לב/.test(f)) return "נקודות זיכוי: ההרכב מאומת מול סימולטור רשות המסים (הפירוט לכל עובד ב\"הצג חישוב\")";
+      if (/^בסיס פנסיה: שכר יסוד בלבד/.test(f)) return "בסיס פנסיה: שכר יסוד בלבד (עפ\"י החוק, צו הרחבה סעיף 6(ב)); הרחבה לשעות נוספות או בונוס דורשת אישור רואת חשבון";
+      if (/^שעות נוספות: חישוב לפי שכר יסוד\/182/.test(f)) return "שעות נוספות: חישוב לפי שכר יסוד לחלקי 182, לא אומת מול תלוש";
+      if (/^בונוס: ננוכה כשכר רגיל/.test(f)) return "בונוס: ננוכה כשכר רגיל, לא אומת טיפול מיוחד";
+      return null;
+    };
     rows.forEach(p => {
       const name = p.emp_name || "";
       const manual = Object.entries(p.items || {}).filter(([, v]) => v && (v.status === "נדרש טיפול ידני" || v.value == null));
       manual.forEach(([k, v]) => attn.push([0, name, (LABELS[k] || k) + ": " + (v.value == null ? "לא חושב. " : "") + "סיבה: " + (v.note || "לא צוינה סיבה במערכת") + " (סטטוס מקור: " + v.status + ")"]));
       if (!manual.length && !slipOk(p)) attn.push([0, name, p.net == null ? "הנטו לא חושב ואין בתלוש סעיף שמסביר זאת" : "התלוש מסומן כנדרש טיפול ידני: " + ((p.unresolved || []).join(", ") || "לא צוינה סיבה")]);
-      (p.flags || []).forEach(f => attn.push([1, name, "אזהרה: " + f]));
+      (p.flags || []).forEach(f => {
+        const k = flagInfoKey(f);
+        if (k) infoNotes.set(k, (infoNotes.get(k) || 0) + 1); else attn.push([1, name, "אזהרה: " + f]);
+      });
     });
     const pm = (() => { const [m, y] = sel.value.split("/").map(Number); return m === 1 ? [12, y - 1] : [m - 1, y]; })();
     all.filter(q => q.month === pm[0] && q.year === pm[1]).forEach(q => {
@@ -1049,10 +1061,14 @@ function reviewView() {
           h("ul", {}, attn.slice(0, 50).map(([, n, t]) => h("li", {}, (n ? n + ": " : "") + t))),
           attn.length > 50 ? h("p", { class: "muted" }, "מוצגים 50 הראשונים מתוך " + attn.length) : null)
       : h("p", { class: "muted" }, "לא נמצאו חריגים לחודש זה לפי הבדיקות של המערכת. עדיין יש לעבור על הסכומים לפני אישור.");
+    const notesBox = infoNotes.size
+      ? h("details", { class: "card" }, h("summary", {}, "הערות על שיטת החישוב (לא חריגים): " + infoNotes.size),
+          h("ul", {}, [...infoNotes].map(([t, n]) => h("li", {}, t + " (" + n + " תלושים)"))))
+      : null;
     const reviewed = h("input", { type: "checkbox", id: "rev-all", "aria-label": "עברתי על כל התלושים" });
     box.replaceChildren(
       h("p", {}, "בחודש " + sel.value + ": " + rows.length + " תלושים, " + okRows.length + " ללא סעיפים פתוחים, " + cnt + " אושרו."),
-      h("p", { class: "muted" }, "סיכום החודש (חייב להתאים לדוחות):"), totals, attnBox,
+      h("p", { class: "muted" }, "סיכום החודש (חייב להתאים לדוחות):"), totals, attnBox, notesBox,
       h("div", { class: "actions" },
         h("label", { class: "check" }, reviewed, h("span", {}, "עברתי על כל התלושים והסכומים")),
         h("button", { class: "btn", type: "button", onclick: () => { if (!reviewed.checked) { reviewed.focus(); return; } okRows.forEach(p => state.flow.approved[flowKey(p)] = true); draw(); } }, "אישור כל התלושים התקינים"),
