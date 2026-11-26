@@ -44,8 +44,11 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 # ---------------------------------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local_test.db")
 JWT_SECRET = os.getenv("JWT_SECRET", "")
+# Render נותן postgres:// או postgresql://. מפורשות psycopg2 (שב-requirements), כי SQLAlchemy 2.1 ברירת המחדל שלו היא psycopg (גרסה 3).
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 _cfg_errors, _cfg_warnings = authpolicy.production_config_problems(os.environ)
 for _w in _cfg_warnings:
     print("CONFIG WARNING:", _w)

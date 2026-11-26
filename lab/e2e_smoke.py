@@ -2,7 +2,7 @@
 import os, sys, json, tempfile
 sys.path.insert(0, ".")
 d = tempfile.mkdtemp()
-os.environ["DATABASE_URL"] = f"sqlite:///{d}/t.db"
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{d}/t.db")
 from cryptography.fernet import Fernet
 os.environ.setdefault("FIELD_KEY", Fernet.generate_key().decode())
 from fastapi.testclient import TestClient
