@@ -694,8 +694,21 @@ function addEmpForm() {
 function empImportForm() {
   const file = h("input", { type: "file", accept: ".xlsx", required: true });
   const out = h("div", { "aria-live": "polite" });
-  const form = h("form", { onsubmit: async (e) => {
-    e.preventDefault(); out.replaceChildren(h("p", {}, "טוענת…"));
+  const ST = { ok: "תקין", warn: "יש הערות", error: "לא ייקלט" };
+  const reviewNodes = (r) => {
+    if (r.error) return [h("div", { class: "err", role: "alert" }, r.error)];
+    const nodes = [h("div", { class: "rep-status " + (r.ready ? "ok" : "warn"), role: r.ready ? "status" : "alert" },
+      h("strong", {}, r.ready ? "אפשר להקים את העובדים" : "יש דברים לתקן או לבדוק"),
+      h("span", {}, r.counts.total + " עובדים: " + r.counts.ok + " תקינים, " + r.counts.warn + " עם הערות, " + r.counts.error + " לא ייקלטו"))];
+    (r.sheet_issues || []).forEach(x => nodes.push(h("div", { class: "unres", role: "alert" }, x.text)));
+    r.employees.forEach(x => nodes.push(h("details", { open: x.status !== "ok" },
+      h("summary", {}, "שורה " + x.row + " | " + (x.name || "") + " | " + x.id + " | " + ST[x.status]),
+      h("table", { class: "t" }, h("tbody", {}, x.fields.map(f => h("tr", {}, h("td", {}, f.label), h("td", { class: "num" }, String(f.value)), h("td", { class: "muted" }, f.source))))),
+      h("ul", {}, x.issues.map(i => h("li", {}, (i.level === "block" ? "חוסם: " : i.level === "warn" ? "לבדיקה: " : "") + i.text))))));
+    return nodes;
+  };
+  const commit = async () => {
+    out.replaceChildren(h("p", {}, "טוענת…"));
     const fd = new FormData(); fd.append("file", file.files[0]);
     try {
       const r = await api("POST", cp("/employees/upload-excel"), fd, true);
@@ -706,8 +719,19 @@ function empImportForm() {
       nodes.push(h("button", { class: "btn ghost", type: "button", onclick: () => render("emps") }, "הצגת רשימת העובדים"));
       out.replaceChildren(...nodes);
     } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
-  } }, h("label", {}, "קובץ אקסל עם גיליונות 'עובדים' ו'טופס 101'", file), h("button", { class: "btn", type: "submit" }, "הקמת עובדים מהקובץ"));
-  return h("details", { class: "card" }, h("summary", {}, "הקמת עובדים וטופס 101 מאקסל"), h("p", {}, "עובד שכבר קיים לא נדרס; טופס 101 שלו מתעדכן. נתוני דמה בלבד."), form, out);
+  };
+  const form = h("form", { onsubmit: async (e) => {
+    e.preventDefault(); out.replaceChildren(h("p", {}, "בודקת מה בקובץ…"));
+    const fd = new FormData(); fd.append("file", file.files[0]);
+    try {
+      const r = await api("POST", cp("/employees/upload-excel/preview"), fd, true);
+      const nodes = reviewNodes(r);
+      if (!r.error && r.counts.total > 0) nodes.push(h("button", { class: "btn", type: "button", onclick: commit },
+        r.ready ? "אישור והקמת העובדים" : "הקמת העובדים התקינים (השורות החוסמות לא ייקלטו)"));
+      out.replaceChildren(...nodes);
+    } catch (err) { out.replaceChildren(h("div", { class: "err", role: "alert" }, err.message)); }
+  } }, h("label", {}, "קובץ אקסל עם גיליונות 'עובדים' ו'טופס 101'", file), h("button", { class: "btn", type: "submit" }, "בדיקה: מה קראתי מהקובץ"));
+  return h("details", { class: "card" }, h("summary", {}, "הקמת עובדים וטופס 101 מאקסל"), h("p", {}, "קודם בודקים מה המערכת הבינה מהקובץ, ורק אחרי האישור שלך העובדים נשמרים. עובד שכבר קיים לא נדרס; טופס 101 שלו מתעדכן. נתוני דמה בלבד."), form, out);
 }
 
 const empsView = () => listView("emps", "עובדים", "/employees",

@@ -26,6 +26,7 @@ import params
 import sources_catalog
 import accounting_export
 import eligibility
+import import_preview
 import employee_import
 import authpolicy
 import proposals
@@ -1380,6 +1381,30 @@ def _save_form101(db: Session, company_id: str, employee_id: str, year: int, dat
     else:
         db.add(EmployeeYear(company_id=company_id, employee_id=employee_id, year=year,
                             payload_enc=seal(db, company_id, data)))
+
+
+@app.post("/companies/{company_id}/employees/upload-excel/preview")
+async def upload_employees_excel_preview(company_id: str, file: UploadFile = File(...),
+                                         user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """מסך 'מה קראתי': מה המערכת הבינה מכל שורה בקובץ. לא שומר דבר."""
+    require_company(company_id, user, db, "read")
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(400, "נדרש קובץ xlsx")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, "הקובץ גדול מדי (מעל 5MB)")
+    try:
+        sheets = employee_import.read_sheets(content)
+    except Exception:
+        raise HTTPException(400, "לא ניתן לקרוא את הקובץ")
+    if len(sheets.get(employee_import.SHEET_EMPLOYEES) or []) > 500:
+        raise HTTPException(400, "יותר מדי שורות (עד 500 עובדים)")
+    existing = {unseal(db, company_id, e.payload_enc).get("id_number")
+                for e in db.query(Employee).filter(Employee.company_id == company_id).all()}
+    res = import_preview.build(sheets, existing)
+    audit(db, user.id, company_id, "upload_preview", "employee", None, f"rows={res.get('counts', {}).get('total', 0)}")
+    db.commit()
+    return res
 
 
 @app.post("/companies/{company_id}/employees/upload-excel")
