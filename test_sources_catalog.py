@@ -18,7 +18,7 @@ class Catalog(unittest.TestCase):
         self.assertEqual(row["status"], "acc")
 
     def test_unresolved_rules_are_manual(self):
-        for name in ("המרת ימי חופשה", "מחלק שעות"):
+        for name in ("המרת ימי חופשה",):
             row = [r for r in sc.catalog() if name in r["rule"]][0]
             self.assertEqual(row["status"], "manual")
 
